@@ -2,17 +2,17 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { User } from '@supabase/supabase-js';
 
-// Mock authentication state for now
-// This will be replaced with Supabase Auth when integrated
-type User = {
+type Profile = {
   id: string;
-  email: string;
   nome: string;
 };
 
 interface AuthContextType {
   user: User | null;
+  profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -24,63 +24,84 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for session in localStorage (mock implementation)
-    const storedUser = localStorage.getItem('disparo-pro-user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Failed to parse stored user', error);
-        localStorage.removeItem('disparo-pro-user');
+    // Check active sessions and set up auth state listener
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
       }
-    }
-    setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Mock sign in
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return;
+      }
+
+      setProfile(data);
+    } catch (error) {
+      console.error('Profile fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      // Mock successful login
-      const mockUser = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
+      const { error } = await supabase.auth.signInWithPassword({
         email,
-        nome: email.split('@')[0],
-      };
+        password,
+      });
+
+      if (error) throw error;
       
-      localStorage.setItem('disparo-pro-user', JSON.stringify(mockUser));
-      setUser(mockUser);
       toast.success('Login realizado com sucesso!');
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      toast.error('Falha ao fazer login. Verifique suas credenciais.');
+      toast.error(error.message || 'Falha ao fazer login. Verifique suas credenciais.');
       throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  // Mock sign in with Google
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
-      // Mock successful Google login
-      const mockUser = {
-        id: '123e4567-e89b-12d3-a456-426614174001',
-        email: 'usuario.google@gmail.com',
-        nome: 'Usuário Google',
-      };
-      
-      localStorage.setItem('disparo-pro-user', JSON.stringify(mockUser));
-      setUser(mockUser);
-      toast.success('Login com Google realizado com sucesso!');
-      navigate('/dashboard');
-    } catch (error) {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+      });
+
+      if (error) throw error;
+    } catch (error: any) {
       console.error('Google login error:', error);
       toast.error('Falha ao fazer login com Google.');
       throw error;
@@ -89,39 +110,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Mock sign up
   const signUp = async (email: string, password: string, name: string) => {
     try {
       setLoading(true);
-      // Mock successful registration
-      const mockUser = {
-        id: '123e4567-e89b-12d3-a456-426614174002',
+      const { error } = await supabase.auth.signUp({
         email,
-        nome: name,
-      };
+        password,
+        options: {
+          data: {
+            name,
+          },
+        },
+      });
+
+      if (error) throw error;
       
-      localStorage.setItem('disparo-pro-user', JSON.stringify(mockUser));
-      setUser(mockUser);
       toast.success('Cadastro realizado com sucesso!');
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration error:', error);
-      toast.error('Falha ao realizar cadastro.');
+      toast.error(error.message || 'Falha ao realizar cadastro.');
       throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  // Mock sign out
   const signOut = async () => {
     try {
       setLoading(true);
-      localStorage.removeItem('disparo-pro-user');
-      setUser(null);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
       toast.success('Logout realizado com sucesso!');
       navigate('/login');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Logout error:', error);
       toast.error('Falha ao fazer logout.');
       throw error;
@@ -134,6 +157,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
+        profile,
         loading,
         signIn,
         signInWithGoogle,
