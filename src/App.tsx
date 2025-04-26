@@ -14,18 +14,22 @@ import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import Contatos from "./pages/Contatos";
 import NotFound from "./pages/NotFound";
+import { useEffect } from "react";
+import { supabase } from "./integrations/supabase/client";
 
 const queryClient = new QueryClient();
 
-// Protected route component
+// Protected route component that checks authentication status directly from Supabase
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = localStorage.getItem('disparo-pro-user');
+  // Get from localStorage for immediate check
+  const isAuthenticated = localStorage.getItem('sb-czinoycvwsjjxuqbuxtm-auth-token');
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 };
 
 // Non-authenticated route component (redirects to dashboard if logged in)
 const NonAuthRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = localStorage.getItem('disparo-pro-user');
+  // Get from localStorage for immediate check
+  const isAuthenticated = localStorage.getItem('sb-czinoycvwsjjxuqbuxtm-auth-token');
   return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" />;
 };
 

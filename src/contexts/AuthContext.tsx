@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 
 type Profile = {
   id: string;
@@ -24,33 +24,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Check active sessions and set up auth state listener
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  // Função para buscar o perfil do usuário
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -71,6 +50,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Estabelecer listener de autenticação primeiro
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      setUser(currentSession?.user ?? null);
+      setSession(currentSession);
+      
+      // Use setTimeout para evitar deadlock potencial
+      if (currentSession?.user) {
+        setTimeout(() => {
+          fetchProfile(currentSession.user.id);
+        }, 0);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+      
+      // Salvar o token de autenticação no localStorage para acesso rápido em outros componentes
+      if (currentSession) {
+        localStorage.setItem('sb-czinoycvwsjjxuqbuxtm-auth-token', JSON.stringify(currentSession));
+      } else {
+        localStorage.removeItem('sb-czinoycvwsjjxuqbuxtm-auth-token');
+      }
+    });
+
+    // Depois verificar a sessão existente
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setUser(currentSession?.user ?? null);
+      setSession(currentSession);
+      
+      if (currentSession?.user) {
+        fetchProfile(currentSession.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -98,6 +118,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(true);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
+        options: {
+          redirectTo: window.location.origin + '/dashboard'
+        }
       });
 
       if (error) throw error;
@@ -142,6 +165,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
+      localStorage.removeItem('sb-czinoycvwsjjxuqbuxtm-auth-token');
       toast.success('Logout realizado com sucesso!');
       navigate('/login');
     } catch (error: any) {

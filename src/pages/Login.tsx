@@ -1,6 +1,6 @@
 
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,12 +9,33 @@ import { Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, user } = useAuth();
+  const navigate = useNavigate();
+  
+  // Check for existing session on page load
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate('/dashboard');
+      }
+    };
+    
+    checkSession();
+  }, [navigate]);
+  
+  // If user becomes authenticated, redirect them
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +48,10 @@ export default function Login() {
     try {
       setIsSubmitting(true);
       await signIn(email, password);
+      // The redirect will be handled by the useEffect hook that watches the user state
     } catch (error) {
       console.error('Login error:', error);
+      // Toast is handled in the signIn function
     } finally {
       setIsSubmitting(false);
     }
@@ -38,6 +61,8 @@ export default function Login() {
     try {
       setIsSubmitting(true);
       await signInWithGoogle();
+      // The redirect will be handled automatically by Supabase 
+      // when the oauth callback returns
     } catch (error) {
       console.error('Google login error:', error);
     } finally {
