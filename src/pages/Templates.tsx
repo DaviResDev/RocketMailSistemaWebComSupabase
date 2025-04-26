@@ -2,205 +2,118 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { FileText, Mail, MessageSquare, MoreHorizontal, Plus, Search, Trash } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Mock templates data
-const mockTemplates = [
-  {
-    id: '1',
-    nome: 'Boas-vindas',
-    canal: 'email',
-    created_at: '2023-10-15T14:30:00',
-  },
-  {
-    id: '2',
-    nome: 'Promoção Semanal',
-    canal: 'email',
-    created_at: '2023-10-14T10:15:00',
-  },
-  {
-    id: '3',
-    nome: 'Lembrete de Aniversário',
-    canal: 'whatsapp',
-    created_at: '2023-10-13T08:45:00',
-  },
-  {
-    id: '4',
-    nome: 'Confirmação de Compra',
-    canal: 'whatsapp',
-    created_at: '2023-10-12T16:20:00',
-  },
-  {
-    id: '5',
-    nome: 'Newsletter Mensal',
-    canal: 'email',
-    created_at: '2023-10-11T09:30:00',
-  },
-  {
-    id: '6',
-    nome: 'Notificação de Entrega',
-    canal: 'whatsapp',
-    created_at: '2023-10-10T14:00:00',
-  },
-];
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Templates() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [templates, setTemplates] = useState(mockTemplates);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({
+    nome: '',
+    conteudo: '',
+    canal: 'email' // default to email
+  });
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const filteredTemplates = templates.filter((template) =>
-    template.nome.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleCreateTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user) {
+      toast.error('Você precisa estar logado para criar templates');
+      return;
+    }
 
-  const handleDeleteTemplate = (id: string) => {
-    setTemplates(templates.filter((template) => template.id !== id));
-    toast.success('Template excluído com sucesso!');
-  };
+    try {
+      const { error } = await supabase
+        .from('templates')
+        .insert([
+          {
+            nome: newTemplate.nome,
+            conteudo: newTemplate.conteudo,
+            canal: newTemplate.canal,
+            user_id: user.id
+          }
+        ]);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    }).format(date);
+      if (error) throw error;
+
+      toast.success('Template criado com sucesso!');
+      setIsCreating(false);
+      setNewTemplate({ nome: '', conteudo: '', canal: 'email' });
+      
+    } catch (error: any) {
+      toast.error('Erro ao criar template: ' + error.message);
+    }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Templates</h1>
-        <Button asChild>
-          <Link to="/templates/novo">
-            <Plus className="mr-2 h-4 w-4" /> Novo Template
-          </Link>
+        <Button onClick={() => setIsCreating(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Novo Template
         </Button>
       </div>
 
-      <div className="flex items-center space-x-2">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar templates..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full sm:max-w-sm"
-        />
-      </div>
-
-      {filteredTemplates.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12">
-          <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">Nenhum template encontrado</h3>
-          <p className="text-muted-foreground mt-2 text-center">
-            Não encontramos nenhum template com esse nome. Tente uma busca diferente ou crie um novo template.
-          </p>
-        </div>
+      {isCreating ? (
+        <Card>
+          <form onSubmit={handleCreateTemplate}>
+            <CardHeader>
+              <h3 className="text-lg font-semibold">Novo Template</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label htmlFor="nome" className="block text-sm font-medium mb-1">
+                  Nome do Template
+                </label>
+                <Input
+                  id="nome"
+                  value={newTemplate.nome}
+                  onChange={(e) => setNewTemplate({ ...newTemplate, nome: e.target.value })}
+                  placeholder="Ex: Template de Boas-vindas"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="conteudo" className="block text-sm font-medium mb-1">
+                  Conteúdo
+                </label>
+                <Textarea
+                  id="conteudo"
+                  value={newTemplate.conteudo}
+                  onChange={(e) => setNewTemplate({ ...newTemplate, conteudo: e.target.value })}
+                  placeholder="Digite o conteúdo do seu template..."
+                  className="min-h-[200px]"
+                  required
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsCreating(false)}
+                type="button"
+              >
+                Cancelar
+              </Button>
+              <Button type="submit">
+                Criar Template
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTemplates.map((template) => (
-            <Card key={template.id}>
-              <CardHeader className="p-0">
-                <div className={`h-2 w-full rounded-t-lg ${template.canal === 'email' ? 'bg-primary' : 'bg-success'}`} />
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-lg line-clamp-1">{template.nome}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Criado em {formatDate(template.created_at)}
-                    </p>
-                    <div className="mt-3">
-                      <Badge variant={template.canal === 'email' ? 'default' : 'outline'} className="flex items-center gap-1">
-                        {template.canal === 'email' ? (
-                          <Mail className="h-3 w-3" />
-                        ) : (
-                          <MessageSquare className="h-3 w-3" />
-                        )}
-                        {template.canal === 'email' ? 'Email' : 'WhatsApp'}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Mais opções</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link to={`/templates/${template.id}`}>Editar</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to={`/templates/${template.id}/visualizar`}>Visualizar</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to={`/agendamentos/novo?template=${template.id}`}>Agendar Envio</Link>
-                        </DropdownMenuItem>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <DropdownMenuItem 
-                              onSelect={(e) => e.preventDefault()}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              Excluir
-                            </DropdownMenuItem>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir template</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja excluir o template "{template.nome}"? Esta ação não pode ser desfeita.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteTemplate(template.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                <Trash className="h-4 w-4 mr-2" />
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="p-4 pt-0 flex justify-end">
-                <Button variant="secondary" asChild>
-                  <Link to={`/templates/${template.id}`}>
-                    Visualizar
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+        <div className="flex flex-col items-center justify-center py-12">
+          <Plus className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium">Nenhum template criado</h3>
+          <p className="text-muted-foreground mt-2 text-center">
+            Crie seu primeiro template clicando no botão "Novo Template" acima.
+          </p>
         </div>
       )}
     </div>
