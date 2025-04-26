@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,9 +30,10 @@ type Template = {
 
 export default function Templates() {
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newTemplate, setNewTemplate] = useState({
+  const [formData, setFormData] = useState({
     nome: '',
     conteudo: '',
     canal: 'email'
@@ -59,7 +60,7 @@ export default function Templates() {
     fetchTemplates();
   }, []);
 
-  const handleCreateTemplate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user) {
@@ -68,27 +69,58 @@ export default function Templates() {
     }
 
     try {
-      const { error } = await supabase
-        .from('templates')
-        .insert([
-          {
-            nome: newTemplate.nome,
-            conteudo: newTemplate.conteudo,
-            canal: newTemplate.canal,
-            user_id: user.id
-          }
-        ]);
+      if (isEditing) {
+        const { error } = await supabase
+          .from('templates')
+          .update({
+            nome: formData.nome,
+            conteudo: formData.conteudo,
+            canal: formData.canal,
+          })
+          .eq('id', isEditing);
 
-      if (error) throw error;
+        if (error) throw error;
+        toast.success('Template atualizado com sucesso!');
+      } else {
+        const { error } = await supabase
+          .from('templates')
+          .insert([
+            {
+              nome: formData.nome,
+              conteudo: formData.conteudo,
+              canal: formData.canal,
+              user_id: user.id
+            }
+          ]);
 
-      toast.success('Template criado com sucesso!');
+        if (error) throw error;
+        toast.success('Template criado com sucesso!');
+      }
+
       setIsCreating(false);
-      setNewTemplate({ nome: '', conteudo: '', canal: 'email' });
+      setIsEditing(null);
+      setFormData({ nome: '', conteudo: '', canal: 'email' });
       fetchTemplates();
       
     } catch (error: any) {
-      toast.error('Erro ao criar template: ' + error.message);
+      toast.error(`Erro ao ${isEditing ? 'atualizar' : 'criar'} template: ` + error.message);
     }
+  };
+
+  const handleEdit = (template: Template) => {
+    setFormData({
+      nome: template.nome,
+      conteudo: template.conteudo,
+      canal: template.canal
+    });
+    setIsEditing(template.id);
+    setIsCreating(true);
+  };
+
+  const handleCancel = () => {
+    setIsCreating(false);
+    setIsEditing(null);
+    setFormData({ nome: '', conteudo: '', canal: 'email' });
   };
 
   const handleDeleteTemplate = async (id: string) => {
@@ -111,16 +143,20 @@ export default function Templates() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Templates</h1>
-        <Button onClick={() => setIsCreating(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Novo Template
-        </Button>
+        {!isCreating && (
+          <Button onClick={() => setIsCreating(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Novo Template
+          </Button>
+        )}
       </div>
 
       {isCreating ? (
         <Card>
-          <form onSubmit={handleCreateTemplate}>
+          <form onSubmit={handleSubmit}>
             <CardHeader>
-              <h3 className="text-lg font-semibold">Novo Template</h3>
+              <h3 className="text-lg font-semibold">
+                {isEditing ? 'Editar Template' : 'Novo Template'}
+              </h3>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -129,8 +165,8 @@ export default function Templates() {
                 </label>
                 <Input
                   id="nome"
-                  value={newTemplate.nome}
-                  onChange={(e) => setNewTemplate({ ...newTemplate, nome: e.target.value })}
+                  value={formData.nome}
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                   placeholder="Ex: Template de Boas-vindas"
                   required
                 />
@@ -141,24 +177,25 @@ export default function Templates() {
                 </label>
                 <Textarea
                   id="conteudo"
-                  value={newTemplate.conteudo}
-                  onChange={(e) => setNewTemplate({ ...newTemplate, conteudo: e.target.value })}
+                  value={formData.conteudo}
+                  onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
                   placeholder="Digite o conteúdo do seu template..."
                   className="min-h-[200px]"
                   required
                 />
               </div>
             </CardContent>
-            <CardFooter className="flex justify-end space-x-2">
+            <CardFooter className="flex justify-between space-x-2">
               <Button 
-                variant="outline" 
-                onClick={() => setIsCreating(false)}
+                variant="ghost" 
                 type="button"
+                onClick={handleCancel}
               >
+                <X className="mr-2 h-4 w-4" />
                 Cancelar
               </Button>
               <Button type="submit">
-                Criar Template
+                {isEditing ? 'Atualizar' : 'Criar'} Template
               </Button>
             </CardFooter>
           </form>
@@ -185,7 +222,11 @@ export default function Templates() {
                 <div className="flex justify-between items-start">
                   <h3 className="text-lg font-semibold">{template.nome}</h3>
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="icon">
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => handleEdit(template)}
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
