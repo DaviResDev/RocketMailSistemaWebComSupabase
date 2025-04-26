@@ -9,6 +9,123 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      agendamentos: {
+        Row: {
+          contato_id: string
+          created_at: string
+          data_envio: string
+          id: string
+          status: string
+          template_id: string
+          user_id: string
+        }
+        Insert: {
+          contato_id: string
+          created_at?: string
+          data_envio: string
+          id?: string
+          status?: string
+          template_id: string
+          user_id: string
+        }
+        Update: {
+          contato_id?: string
+          created_at?: string
+          data_envio?: string
+          id?: string
+          status?: string
+          template_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendamentos_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contatos: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          nome: string
+          telefone: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          nome: string
+          telefone?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          nome?: string
+          telefone?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      envios: {
+        Row: {
+          contato_id: string
+          data_envio: string
+          erro: string | null
+          id: string
+          status: string
+          template_id: string
+          user_id: string
+        }
+        Insert: {
+          contato_id: string
+          data_envio?: string
+          erro?: string | null
+          id?: string
+          status: string
+          template_id: string
+          user_id: string
+        }
+        Update: {
+          contato_id?: string
+          data_envio?: string
+          erro?: string | null
+          id?: string
+          status?: string
+          template_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envios_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "envios_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
