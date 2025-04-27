@@ -19,9 +19,6 @@ export default function Landing() {
             <Link to="#features" className="text-sm font-medium hover:text-primary">
               Funcionalidades
             </Link>
-            <Link to="#pricing" className="text-sm font-medium hover:text-primary">
-              Preços
-            </Link>
             <Link to="#faq" className="text-sm font-medium hover:text-primary">
               FAQ
             </Link>
@@ -50,7 +47,7 @@ export default function Landing() {
             <div className="flex flex-col sm:flex-row gap-4">
               <Link to="/cadastro">
                 <Button size="lg" className="gap-2">
-                  Comece Grátis
+                  Comece Agora
                 </Button>
               </Link>
               <Link to="#features">
@@ -131,113 +128,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4">Planos Simples e Transparentes</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Escolha o plano ideal para o seu negócio, sem complicações ou taxas ocultas.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Basic Plan */}
-            <div className="bg-card border rounded-lg overflow-hidden transition-transform hover:scale-[1.01]">
-              <div className="p-6">
-                <h3 className="text-lg font-medium mb-2">Básico</h3>
-                <div className="flex items-baseline mb-4">
-                  <span className="text-4xl font-bold">R$49</span>
-                  <span className="text-muted-foreground ml-1">/mês</span>
-                </div>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Perfeito para quem está começando com automação de mensagens.
-                </p>
-                <ul className="space-y-3 mb-6">
-                  {['500 mensagens/mês', '100 contatos', 'Email + WhatsApp', 'Templates básicos'].map((feature, i) => (
-                    <li key={i} className="flex items-center">
-                      <CheckCircle className="h-5 w-5 text-primary mr-2 flex-shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="border-t p-6">
-                <Button className="w-full">Começar Grátis</Button>
-              </div>
-            </div>
-
-            {/* Pro Plan */}
-            <div className="bg-card border-2 border-primary rounded-lg overflow-hidden scale-[1.02] shadow-lg transition-transform hover:scale-[1.03]">
-              <div className="bg-primary text-primary-foreground text-center py-2 text-sm font-medium">
-                MAIS POPULAR
-              </div>
-              <div className="p-6">
-                <h3 className="text-lg font-medium mb-2">Profissional</h3>
-                <div className="flex items-baseline mb-4">
-                  <span className="text-4xl font-bold">R$99</span>
-                  <span className="text-muted-foreground ml-1">/mês</span>
-                </div>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Ideal para negócios em crescimento com necessidades de comunicação.
-                </p>
-                <ul className="space-y-3 mb-6">
-                  {[
-                    '2.000 mensagens/mês',
-                    '1.000 contatos',
-                    'Email + WhatsApp',
-                    'Templates avançados',
-                    'Sandbox para testes',
-                    'Relatórios detalhados'
-                  ].map((feature, i) => (
-                    <li key={i} className="flex items-center">
-                      <CheckCircle className="h-5 w-5 text-primary mr-2 flex-shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="border-t p-6">
-                <Button className="w-full">Escolher Plano</Button>
-              </div>
-            </div>
-
-            {/* Business Plan */}
-            <div className="bg-card border rounded-lg overflow-hidden transition-transform hover:scale-[1.01]">
-              <div className="p-6">
-                <h3 className="text-lg font-medium mb-2">Empresarial</h3>
-                <div className="flex items-baseline mb-4">
-                  <span className="text-4xl font-bold">R$249</span>
-                  <span className="text-muted-foreground ml-1">/mês</span>
-                </div>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Para empresas que precisam de recursos avançados e alto volume.
-                </p>
-                <ul className="space-y-3 mb-6">
-                  {[
-                    '10.000 mensagens/mês',
-                    'Contatos ilimitados',
-                    'Email + WhatsApp',
-                    'Templates personalizados',
-                    'Acesso multiusuário',
-                    'API completa',
-                    'Suporte prioritário'
-                  ].map((feature, i) => (
-                    <li key={i} className="flex items-center">
-                      <CheckCircle className="h-5 w-5 text-primary mr-2 flex-shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="border-t p-6">
-                <Button className="w-full">Contatar Vendas</Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="bg-card border-t py-12 px-4">
         <div className="container mx-auto max-w-5xl">
@@ -257,7 +147,6 @@ export default function Landing() {
               <h4 className="font-medium mb-4">Produto</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link to="#" className="hover:text-foreground">Funcionalidades</Link></li>
-                <li><Link to="#" className="hover:text-foreground">Preços</Link></li>
                 <li><Link to="#" className="hover:text-foreground">API</Link></li>
                 <li><Link to="#" className="hover:text-foreground">Integrações</Link></li>
               </ul>
@@ -268,7 +157,6 @@ export default function Landing() {
                 <li><Link to="#" className="hover:text-foreground">Sobre nós</Link></li>
                 <li><Link to="#" className="hover:text-foreground">Blog</Link></li>
                 <li><Link to="#" className="hover:text-foreground">Casos de Sucesso</Link></li>
-                <li><Link to="#" className="hover:text-foreground">Carreiras</Link></li>
               </ul>
             </div>
             <div>
