@@ -25,9 +25,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Trash } from 'lucide-react';
+import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { Contact, useContacts } from '@/hooks/useContacts';
-import { toast } from 'sonner';
+import { useState } from 'react';
+import { ContactForm } from './ContactForm';
 
 interface ContactsListProps {
   contacts: Contact[];
@@ -35,71 +36,91 @@ interface ContactsListProps {
 
 export function ContactsList({ contacts }: ContactsListProps) {
   const { deleteContact } = useContacts();
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
 
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Telefone</TableHead>
-            <TableHead className="w-[80px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {contacts.map((contact) => (
-            <TableRow key={contact.id}>
-              <TableCell className="font-medium">{contact.nome}</TableCell>
-              <TableCell>{contact.email}</TableCell>
-              <TableCell>{contact.telefone || '-'}</TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">Mais opções</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => toast.info('Em breve: Edição de contatos')}>
-                      Editar
-                    </DropdownMenuItem>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem 
-                          onSelect={(e) => e.preventDefault()}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          Excluir
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir contato</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tem certeza que deseja excluir o contato "{contact.nome}"? Esta ação não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteContact(contact.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+    <>
+      {editingContact && (
+        <div className="mb-6">
+          <ContactForm 
+            initialData={{
+              id: editingContact.id,
+              nome: editingContact.nome,
+              email: editingContact.email,
+              telefone: editingContact.telefone || ''
+            }}
+            isEditing={true}
+            onCancel={() => setEditingContact(null)}
+          />
+        </div>
+      )}
+
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Telefone</TableHead>
+              <TableHead className="w-[80px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {contacts.map((contact) => (
+              <TableRow key={contact.id}>
+                <TableCell className="font-medium">{contact.nome}</TableCell>
+                <TableCell>{contact.email}</TableCell>
+                <TableCell>{contact.telefone || '-'}</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Mais opções</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditingContact(contact)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem 
+                            onSelect={(e) => e.preventDefault()}
+                            className="text-destructive focus:text-destructive"
                           >
                             <Trash className="h-4 w-4 mr-2" />
                             Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir contato</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir o contato "{contact.nome}"? Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteContact(contact.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              <Trash className="h-4 w-4 mr-2" />
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }

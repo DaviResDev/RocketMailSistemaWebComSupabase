@@ -5,11 +5,11 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { X } from 'lucide-react';
-import { ContactFormData, useContacts } from '@/hooks/useContacts';
+import { ContactFormData, Contact, useContacts } from '@/hooks/useContacts';
 
 interface ContactFormProps {
   onCancel: () => void;
-  initialData?: ContactFormData;
+  initialData?: ContactFormData & { id?: string };
   isEditing?: boolean;
 }
 
@@ -27,8 +27,8 @@ export function ContactForm({ onCancel, initialData, isEditing = false }: Contac
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const success = isEditing && initialData
-      ? await updateContact(initialData.id!, formData)
+    const success = isEditing && initialData?.id
+      ? await updateContact(initialData.id, formData)
       : await createContact(formData);
 
     if (success) {
