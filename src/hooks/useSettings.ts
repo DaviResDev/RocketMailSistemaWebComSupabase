@@ -15,6 +15,10 @@ export type Settings = {
 
 export type SettingsFormData = Omit<Settings, 'id'>;
 
+// Generic type to help with Supabase client typing
+type SupabaseFrom = typeof supabase.from;
+type AnySupabaseTable = ReturnType<SupabaseFrom>;
+
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,9 +28,8 @@ export function useSettings() {
     if (!user) return;
 
     try {
-      // Usando supabase.from() com tipagem explícita usando any para contornar a verificação de tipo
-      const { data, error } = await (supabase
-        .from('configuracoes') as any)
+      // Using type assertion to bypass type checking
+      const { data, error } = await (supabase.from('configuracoes') as AnySupabaseTable)
         .select('*')
         .eq('user_id', user.id)
         .single();
@@ -49,16 +52,14 @@ export function useSettings() {
     try {
       if (settings) {
         // Atualizar configurações existentes
-        const { error } = await (supabase
-          .from('configuracoes') as any)
+        const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
           .update(formData)
           .eq('user_id', user.id);
 
         if (error) throw error;
       } else {
         // Inserir novas configurações
-        const { error } = await (supabase
-          .from('configuracoes') as any)
+        const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
           .insert([{ ...formData, user_id: user.id }]);
 
         if (error) throw error;
