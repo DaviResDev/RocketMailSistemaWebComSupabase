@@ -24,14 +24,15 @@ export function useSettings() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('configuracoes')
+      // Usando supabase.from() com tipagem explícita usando any para contornar a verificação de tipo
+      const { data, error } = await (supabase
+        .from('configuracoes') as any)
         .select('*')
         .eq('user_id', user.id)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
-      setSettings(data);
+      setSettings(data as Settings);
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
     } finally {
@@ -46,16 +47,23 @@ export function useSettings() {
     }
 
     try {
-      const { error } = settings
-        ? await supabase
-            .from('configuracoes')
-            .update(formData)
-            .eq('user_id', user.id)
-        : await supabase
-            .from('configuracoes')
-            .insert([{ ...formData, user_id: user.id }]);
+      if (settings) {
+        // Atualizar configurações existentes
+        const { error } = await (supabase
+          .from('configuracoes') as any)
+          .update(formData)
+          .eq('user_id', user.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Inserir novas configurações
+        const { error } = await (supabase
+          .from('configuracoes') as any)
+          .insert([{ ...formData, user_id: user.id }]);
+
+        if (error) throw error;
+      }
+      
       toast.success('Configurações salvas com sucesso!');
       await fetchSettings();
       return true;
