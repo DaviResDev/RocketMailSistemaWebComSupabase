@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -11,28 +11,48 @@ import {
 import { BarChart, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Bar, Line } from 'recharts';
 import { Calendar, Mail, MessageSquare, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-
-// Mock data for the dashboard
-const metricsData = [
-  { name: 'Jan', emails: 65, whatsapp: 28, aberturas: 40, cliques: 24 },
-  { name: 'Fev', emails: 59, whatsapp: 48, aberturas: 38, cliques: 26 },
-  { name: 'Mar', emails: 80, whatsapp: 40, aberturas: 45, cliques: 35 },
-  { name: 'Abr', emails: 81, whatsapp: 47, aberturas: 50, cliques: 40 },
-  { name: 'Mai', emails: 56, whatsapp: 65, aberturas: 42, cliques: 28 },
-  { name: 'Jun', emails: 55, whatsapp: 58, aberturas: 40, cliques: 29 },
-  { name: 'Jul', emails: 40, whatsapp: 44, aberturas: 35, cliques: 20 },
-];
-
-const statusData = [
-  { name: 'Enviados', value: 540 },
-  { name: 'Entregues', value: 520 },
-  { name: 'Lidos', value: 380 },
-  { name: 'Clicados', value: 120 },
-];
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Dashboard() {
   const [period, setPeriod] = useState('7d');
   const { user } = useAuth();
+  const [stats, setStats] = useState({
+    totalContatos: 0,
+    totalTemplates: 0,
+    totalEnvios: 0,
+    totalAgendamentos: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user) return;
+
+      try {
+        const [contatos, templates, envios, agendamentos] = await Promise.all([
+          supabase.from('contatos').select('id').eq('user_id', user.id),
+          supabase.from('templates').select('id').eq('user_id', user.id),
+          supabase.from('envios').select('id').eq('user_id', user.id),
+          supabase.from('agendamentos').select('id').eq('user_id', user.id)
+        ]);
+
+        setStats({
+          totalContatos: contatos.data?.length || 0,
+          totalTemplates: templates.data?.length || 0,
+          totalEnvios: envios.data?.length || 0,
+          totalAgendamentos: agendamentos.data?.length || 0
+        });
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [user]);
+
+  const emptyState = !stats.totalContatos && !stats.totalTemplates && !stats.totalEnvios && !stats.totalAgendamentos;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -57,115 +77,101 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Total de Envios</CardTitle>
-            <Mail className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">1,247</div>
-            <p className="text-xs text-muted-foreground">
-              +20.1% em relação ao período anterior
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Aberturas</CardTitle>
-            <Calendar className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">621</div>
-            <p className="text-xs text-muted-foreground">
-              +10.5% em relação ao período anterior
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Cliques</CardTitle>
-            <MessageSquare className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">289</div>
-            <p className="text-xs text-muted-foreground">
-              +18.2% em relação ao período anterior
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Contatos</CardTitle>
             <Users className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">573</div>
+            <div className="text-2xl font-bold">{stats.totalContatos}</div>
             <p className="text-xs text-muted-foreground">
-              +7.4% em relação ao período anterior
+              Total de contatos cadastrados
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Templates</CardTitle>
+            <Mail className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalTemplates}</div>
+            <p className="text-xs text-muted-foreground">
+              Total de templates criados
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Envios</CardTitle>
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalEnvios}</div>
+            <p className="text-xs text-muted-foreground">
+              Total de mensagens enviadas
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Agendamentos</CardTitle>
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalAgendamentos}</div>
+            <p className="text-xs text-muted-foreground">
+              Total de envios agendados
             </p>
           </CardContent>
         </Card>
       </div>
       
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="col-span-2 md:col-span-1">
-          <CardHeader>
-            <CardTitle>Envios por Canal</CardTitle>
-            <CardDescription>
-              Comparativo de mensagens enviadas via email e WhatsApp
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={metricsData}
-                margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="emails" fill="#3b82f6" name="Email" />
-                <Bar dataKey="whatsapp" fill="#10b981" name="WhatsApp" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
+      {emptyState ? (
+        <Card className="p-6">
+          <div className="text-center">
+            <h3 className="text-lg font-medium mb-2">Bem-vindo ao seu Dashboard!</h3>
+            <p className="text-muted-foreground mb-4">
+              Comece adicionando contatos e criando templates para visualizar suas estatísticas aqui.
+            </p>
+          </div>
         </Card>
-        <Card className="col-span-2 md:col-span-1">
-          <CardHeader>
-            <CardTitle>Engajamento</CardTitle>
-            <CardDescription>
-              Taxa de aberturas e cliques ao longo do tempo
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={metricsData}
-                margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="aberturas" 
-                  stroke="#8884d8" 
-                  activeDot={{ r: 8 }} 
-                  name="Aberturas"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="cliques" 
-                  stroke="#82ca9d" 
-                  name="Cliques" 
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {stats.totalEnvios > 0 ? (
+            <>
+              <Card className="col-span-2 md:col-span-1">
+                <CardHeader>
+                  <CardTitle>Envios por Canal</CardTitle>
+                  <CardDescription>
+                    Comparativo de mensagens enviadas via email e WhatsApp
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="h-80">
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-muted-foreground">
+                      Dados de envio serão exibidos conforme você realizar envios
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="col-span-2 md:col-span-1">
+                <CardHeader>
+                  <CardTitle>Engajamento</CardTitle>
+                  <CardDescription>
+                    Taxa de aberturas e cliques ao longo do tempo
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="h-80">
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-muted-foreground">
+                      Métricas de engajamento serão exibidas conforme suas mensagens forem abertas
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </div>
+      )}
       
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -175,45 +181,45 @@ export default function Dashboard() {
               Visualize os envios programados para os próximos dias
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {Array(3).fill(0).map((_, i) => (
-                <div key={i} className="p-4 flex justify-between items-center">
-                  <div>
-                    <div className="font-medium">Campanha de {i === 0 ? 'Black Friday' : i === 1 ? 'Novidades' : 'Aniversário'}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {i === 0 ? 'E-mail' : i === 1 ? 'WhatsApp' : 'E-mail + WhatsApp'} • {i === 0 ? '120' : i === 1 ? '85' : '230'} destinatários
-                    </div>
-                  </div>
-                  <div className="text-sm">
-                    {i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : 'Em 2 dias'}, {i === 0 ? '15:30' : i === 1 ? '10:00' : '08:45'}
-                  </div>
+          <CardContent>
+            {stats.totalAgendamentos === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">
+                  Nenhum envio agendado. Agende seu primeiro envio na página de agendamentos.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {/* Agendamentos will be loaded here when implemented */}
+                <div className="p-4 text-center text-muted-foreground">
+                  Carregando agendamentos...
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Status dos Envios Recentes</CardTitle>
             <CardDescription>
-              Resumo dos últimos 100 envios realizados
+              Resumo dos últimos envios realizados
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {statusData.map((item, i) => (
-                <div key={i} className="p-4 flex justify-between items-center">
-                  <div className="font-medium">{item.name}</div>
-                  <div>
-                    <div className="text-right font-bold">{item.value}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {Math.round((item.value / statusData[0].value) * 100)}%
-                    </div>
-                  </div>
+          <CardContent>
+            {stats.totalEnvios === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">
+                  Nenhum envio realizado ainda. Comece enviando sua primeira mensagem.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {/* Recent sends will be loaded here when implemented */}
+                <div className="p-4 text-center text-muted-foreground">
+                  Carregando envios recentes...
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
