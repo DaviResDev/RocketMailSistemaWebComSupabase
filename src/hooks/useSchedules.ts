@@ -1,0 +1,88 @@
+
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+
+export type Schedule = {
+  id: string;
+  contato_id: string;
+  template_id: string;
+  data_envio: string;
+  status: string;
+  created_at: string;
+};
+
+export type ScheduleFormData = {
+  contato_id: string;
+  template_id: string;
+  data_envio: string;
+};
+
+export function useSchedules() {
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  const fetchSchedules = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('agendamentos')
+        .select('*')
+        .order('data_envio', { ascending: true });
+
+      if (error) throw error;
+      setSchedules(data || []);
+    } catch (error: any) {
+      toast.error('Erro ao carregar agendamentos: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createSchedule = async (formData: ScheduleFormData) => {
+    if (!user) {
+      toast.error('Você precisa estar logado para criar agendamentos');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('agendamentos')
+        .insert([{ ...formData, user_id: user.id }]);
+
+      if (error) throw error;
+      toast.success('Agendamento criado com sucesso!');
+      await fetchSchedules();
+      return true;
+    } catch (error: any) {
+      toast.error('Erro ao criar agendamento: ' + error.message);
+      return false;
+    }
+  };
+
+  const deleteSchedule = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('agendamentos')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success('Agendamento excluído com sucesso!');
+      await fetchSchedules();
+      return true;
+    } catch (error: any) {
+      toast.error('Erro ao excluir agendamento: ' + error.message);
+      return false;
+    }
+  };
+
+  return {
+    schedules,
+    loading,
+    fetchSchedules,
+    createSchedule,
+    deleteSchedule,
+  };
+}
