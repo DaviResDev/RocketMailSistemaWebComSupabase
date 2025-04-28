@@ -54,6 +54,39 @@ export type Database = {
           },
         ]
       }
+      configuracoes: {
+        Row: {
+          created_at: string | null
+          email_porta: number | null
+          email_senha: string | null
+          email_smtp: string | null
+          email_usuario: string | null
+          id: string
+          user_id: string
+          whatsapp_token: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_porta?: number | null
+          email_senha?: string | null
+          email_smtp?: string | null
+          email_usuario?: string | null
+          id?: string
+          user_id: string
+          whatsapp_token?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_porta?: number | null
+          email_senha?: string | null
+          email_smtp?: string | null
+          email_usuario?: string | null
+          id?: string
+          user_id?: string
+          whatsapp_token?: string | null
+        }
+        Relationships: []
+      }
       contatos: {
         Row: {
           created_at: string

@@ -1,11 +1,11 @@
 
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X } from 'lucide-react';
+import { Mail, WhatsApp, X } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -25,8 +25,13 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
   );
 
   const { createSchedule } = useSchedules();
-  const { contacts } = useContacts();
-  const { templates } = useTemplates();
+  const { contacts, fetchContacts } = useContacts();
+  const { templates, fetchTemplates } = useTemplates();
+
+  useEffect(() => {
+    fetchContacts();
+    fetchTemplates();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +60,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
               <SelectContent>
                 {contacts.map((contact) => (
                   <SelectItem key={contact.id} value={contact.id}>
-                    {contact.nome}
+                    {contact.nome} ({contact.email})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -74,7 +79,14 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
               <SelectContent>
                 {templates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>
-                    {template.nome}
+                    <div className="flex items-center">
+                      {template.canal === 'email' ? (
+                        <Mail className="w-4 h-4 mr-2" />
+                      ) : (
+                        <WhatsApp className="w-4 h-4 mr-2" />
+                      )}
+                      {template.nome}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

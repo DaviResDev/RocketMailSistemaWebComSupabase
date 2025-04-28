@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSettings, Settings, SettingsFormData } from '@/hooks/useSettings';
+import { QrCode } from 'lucide-react';
 
 interface SettingsFormProps {
   initialData: Settings | null;
@@ -20,6 +21,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
   });
 
   const { saveSettings } = useSettings();
+  const [showQrCode, setShowQrCode] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,10 +86,10 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
           <CardHeader>
             <CardTitle>Configurações do WhatsApp</CardTitle>
             <CardDescription>
-              Configure seu token de acesso à API do WhatsApp
+              Configure seu token de acesso à API do WhatsApp e vincule seu dispositivo
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div>
               <Label htmlFor="whatsapp_token">Token de Acesso</Label>
               <Input
@@ -97,6 +99,23 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
                 placeholder="Seu token de acesso"
               />
             </div>
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowQrCode(!showQrCode)}
+              >
+                <QrCode className="mr-2 h-4 w-4" />
+                {showQrCode ? 'Ocultar QR Code' : 'Mostrar QR Code'}
+              </Button>
+            </div>
+            {showQrCode && (
+              <div className="flex justify-center p-4 border rounded-lg">
+                <p className="text-muted-foreground">
+                  QR Code será exibido aqui quando o token for configurado
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

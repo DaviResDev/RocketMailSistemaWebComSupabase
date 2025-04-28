@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Upload, X, Mail, WhatsApp } from 'lucide-react';
 import { TemplateFormData } from '@/hooks/useTemplates';
 
 interface TemplateFormProps {
@@ -15,6 +16,18 @@ interface TemplateFormProps {
 }
 
 export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEditing }: TemplateFormProps) {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        setFormData({ ...formData, conteudo: content });
+      };
+      reader.readAsText(file);
+    }
+  };
+
   return (
     <Card>
       <form onSubmit={onSubmit}>
@@ -37,17 +50,64 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
             />
           </div>
           <div>
+            <label htmlFor="canal" className="block text-sm font-medium mb-1">
+              Canal
+            </label>
+            <Select
+              value={formData.canal}
+              onValueChange={(value) => setFormData({ ...formData, canal: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o canal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">
+                  <div className="flex items-center">
+                    <Mail className="w-4 h-4 mr-2" />
+                    Email
+                  </div>
+                </SelectItem>
+                <SelectItem value="whatsapp">
+                  <div className="flex items-center">
+                    <WhatsApp className="w-4 h-4 mr-2" />
+                    WhatsApp
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
             <label htmlFor="conteudo" className="block text-sm font-medium mb-1">
               Conteúdo
             </label>
-            <Textarea
-              id="conteudo"
-              value={formData.conteudo}
-              onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
-              placeholder="Digite o conteúdo do seu template..."
-              className="min-h-[200px]"
-              required
-            />
+            <div className="space-y-2">
+              <Textarea
+                id="conteudo"
+                value={formData.conteudo}
+                onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
+                placeholder="Digite o conteúdo do seu template..."
+                className="min-h-[200px]"
+                required
+              />
+              <div className="flex justify-end">
+                <Input
+                  type="file"
+                  accept=".txt"
+                  className="hidden"
+                  id="file-upload"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Carregar arquivo
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex justify-between space-x-2">
