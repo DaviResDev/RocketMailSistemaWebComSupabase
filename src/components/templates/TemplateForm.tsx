@@ -81,11 +81,19 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
               Conteúdo
             </label>
             <div className="space-y-2">
+              <div className="text-sm text-muted-foreground mb-2 p-3 bg-muted rounded-md">
+                <p>Variáveis disponíveis:</p>
+                <ul className="list-disc list-inside mt-1">
+                  <li><code>{"{nome}"}</code> - Nome do contato</li>
+                  <li><code>{"{email}"}</code> - Email do contato</li>
+                  <li><code>{"{telefone}"}</code> - Telefone do contato</li>
+                </ul>
+              </div>
               <Textarea
                 id="conteudo"
                 value={formData.conteudo}
                 onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
-                placeholder="Digite o conteúdo do seu template..."
+                placeholder="Digite o conteúdo do seu template... Ex: Olá {nome}, tudo bem?"
                 className="min-h-[200px]"
                 required
               />

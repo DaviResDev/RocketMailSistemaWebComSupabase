@@ -22,6 +22,11 @@ interface TemplateCardProps {
 }
 
 export function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) {
+  const previewContent = template.conteudo
+    .replace(/{nome}/g, "João")
+    .replace(/{email}/g, "joao@exemplo.com")
+    .replace(/{telefone}/g, "(11) 99999-9999");
+
   return (
     <Card>
       <CardHeader>
@@ -63,11 +68,21 @@ export function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) 
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-          {template.conteudo.length > 200
-            ? template.conteudo.substring(0, 200) + '...'
-            : template.conteudo}
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {template.conteudo.length > 200
+              ? template.conteudo.substring(0, 200) + '...'
+              : template.conteudo}
+          </p>
+          <div className="mt-4 p-3 bg-muted rounded-md">
+            <p className="text-sm font-medium">Prévia:</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {previewContent.length > 200
+                ? previewContent.substring(0, 200) + '...'
+                : previewContent}
+            </p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
