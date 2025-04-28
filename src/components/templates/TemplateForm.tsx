@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, X, Mail, WhatsApp } from 'lucide-react';
+import { Upload, X, Mail, MessageSquare } from 'lucide-react';
 import { TemplateFormData } from '@/hooks/useTemplates';
 
 interface TemplateFormProps {
@@ -69,7 +69,7 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                 </SelectItem>
                 <SelectItem value="whatsapp">
                   <div className="flex items-center">
-                    <WhatsApp className="w-4 h-4 mr-2" />
+                    <MessageSquare className="w-4 h-4 mr-2" />
                     WhatsApp
                   </div>
                 </SelectItem>

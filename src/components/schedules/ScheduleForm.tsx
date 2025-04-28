@@ -1,11 +1,11 @@
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, WhatsApp, X } from 'lucide-react';
+import { Mail, MessageSquare, X } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -83,7 +83,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
                       {template.canal === 'email' ? (
                         <Mail className="w-4 h-4 mr-2" />
                       ) : (
-                        <WhatsApp className="w-4 h-4 mr-2" />
+                        <MessageSquare className="w-4 h-4 mr-2" />
                       )}
                       {template.nome}
                     </div>
