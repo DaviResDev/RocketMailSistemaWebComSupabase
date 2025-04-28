@@ -28,7 +28,8 @@ export function useSettings() {
     if (!user) return;
 
     try {
-      // Using type assertion to bypass type checking
+      // Using type assertion to bypass type checking since 'configuracoes' 
+      // is not defined in the TypeScript types
       const { data, error } = await (supabase.from('configuracoes') as AnySupabaseTable)
         .select('*')
         .eq('user_id', user.id)
