@@ -4,8 +4,10 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, X, Mail, MessageSquare } from 'lucide-react';
+import { Upload, X, Mail, MessageSquare, Send } from 'lucide-react';
 import { TemplateFormData } from '@/hooks/useTemplates';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface TemplateFormProps {
   formData: TemplateFormData;
@@ -16,6 +18,10 @@ interface TemplateFormProps {
 }
 
 export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEditing }: TemplateFormProps) {
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [showTestEmail, setShowTestEmail] = useState(false);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -29,6 +35,22 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
   };
   
   const acceptedFileTypes = ".ics,.xlsx,.xls,.ods,.docx,.doc,.cs,.pdf,.txt,.gif,.jpg,.jpeg,.png,.tif,.tiff,.rtf,.msg,.pub,.mobi,.ppt,.pptx,.eps";
+
+  const handleSendTestEmail = () => {
+    if (!testEmail) {
+      toast.error('Por favor, informe um email para envio do teste.');
+      return;
+    }
+
+    setIsSendingTest(true);
+    // Simulação de envio de teste
+    setTimeout(() => {
+      toast.success(`Email de teste enviado para ${testEmail}!`);
+      setIsSendingTest(false);
+      setShowTestEmail(false);
+      setTestEmail('');
+    }, 1500);
+  };
 
   return (
     <Card>
@@ -129,7 +151,7 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                 </Button>
                 
                 <div className="text-xs text-muted-foreground">
-                  Formatos aceitos: .ics, .xlsx, .xls, .ods, .docx, .doc, .pdf, etc.
+                  Tipos de Arquivos Aceitos: ics, xlsx, xls, ods, docx, doc, cs, pdf, txt, gif, jpg, jpeg, png, tif, tiff, rtf, msg, pub, mobi, ppt, pptx, eps
                 </div>
               </div>
             </div>
@@ -146,6 +168,44 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
               className="h-[100px]"
             />
           </div>
+          
+          {!showTestEmail ? (
+            <div className="pt-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowTestEmail(true)}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Enviar email de teste
+              </Button>
+            </div>
+          ) : (
+            <div className="flex space-x-2 pt-2">
+              <Input
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="Email para teste"
+                type="email"
+                className="flex-grow"
+              />
+              <Button 
+                type="button" 
+                onClick={handleSendTestEmail} 
+                disabled={isSendingTest}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {isSendingTest ? 'Enviando...' : 'Enviar'}
+              </Button>
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => setShowTestEmail(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="flex justify-between space-x-2">
           <Button 

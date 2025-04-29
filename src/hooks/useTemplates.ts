@@ -96,6 +96,23 @@ export function useTemplates() {
     }
   };
 
+  const sendTestEmail = async (templateId: string, email: string) => {
+    if (!user) {
+      toast.error('Você precisa estar logado para enviar emails de teste');
+      return false;
+    }
+
+    try {
+      // Simulação de envio de email de teste - Em um ambiente real, você implementaria
+      // uma chamada para uma função de backend que envie o email
+      toast.success(`Email de teste enviado para ${email}!`);
+      return true;
+    } catch (error: any) {
+      toast.error('Erro ao enviar email de teste: ' + error.message);
+      return false;
+    }
+  };
+
   return {
     templates,
     loading,
@@ -103,5 +120,6 @@ export function useTemplates() {
     createTemplate,
     updateTemplate,
     deleteTemplate,
+    sendTestEmail
   };
 }
