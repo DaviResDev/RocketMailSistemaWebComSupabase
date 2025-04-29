@@ -89,26 +89,32 @@ export type Database = {
       }
       contatos: {
         Row: {
+          cliente: string | null
           created_at: string
           email: string
           id: string
           nome: string
+          razao_social: string | null
           telefone: string | null
           user_id: string
         }
         Insert: {
+          cliente?: string | null
           created_at?: string
           email: string
           id?: string
           nome: string
+          razao_social?: string | null
           telefone?: string | null
           user_id: string
         }
         Update: {
+          cliente?: string | null
           created_at?: string
           email?: string
           id?: string
           nome?: string
+          razao_social?: string | null
           telefone?: string | null
           user_id?: string
         }

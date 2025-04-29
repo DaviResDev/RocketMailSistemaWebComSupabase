@@ -16,6 +16,8 @@ export type Envio = {
     nome: string;
     email: string;
     telefone: string | null;
+    razao_social?: string | null;
+    cliente?: string | null;
   };
   template?: {
     nome: string;
@@ -42,7 +44,7 @@ export function useEnvios() {
         .from('envios')
         .select(`
           *,
-          contato:contatos(nome, email, telefone),
+          contato:contatos(nome, email, telefone, razao_social, cliente),
           template:templates(nome, canal)
         `)
         .eq('user_id', user.id)
@@ -52,6 +54,7 @@ export function useEnvios() {
       setEnvios(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar histórico de envios:', error.message);
+      toast.error('Erro ao carregar histórico de envios: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -76,7 +79,7 @@ export function useEnvios() {
       // Verificar se o contato existe
       const { data: contato, error: contatoError } = await supabase
         .from('contatos')
-        .select('id, nome, email')
+        .select('id, nome, email, razao_social, cliente')
         .eq('id', formData.contato_id)
         .single();
       
@@ -88,7 +91,7 @@ export function useEnvios() {
       // Verificar se o template existe
       const { data: template, error: templateError } = await supabase
         .from('templates')
-        .select('id, nome')
+        .select('id, nome, canal')
         .eq('id', formData.template_id)
         .single();
       
