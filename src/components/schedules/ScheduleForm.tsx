@@ -5,7 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, MessageSquare, X, SendHorizontal } from 'lucide-react';
+import { Mail, MessageSquare, X, SendHorizontal, Loader2 } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -29,7 +29,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
   const { createSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
-  const { createEnvio } = useEnvios();
+  const { createEnvio, sending } = useEnvios();
 
   useEffect(() => {
     fetchContacts();
@@ -38,6 +38,11 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.contato_id || !formData.template_id) {
+      toast.error("Selecione um contato e um template para agendar");
+      return;
+    }
+    
     const success = await createSchedule(formData);
     if (success) {
       onCancel();
@@ -51,18 +56,36 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
     }
 
     try {
+      const selectedContact = contacts.find(c => c.id === formData.contato_id);
+      const selectedTemplate = templates.find(t => t.id === formData.template_id);
+      
+      toast.info(
+        `Iniciando envio para ${selectedContact?.nome || 'contato selecionado'}...`,
+        { duration: 3000 }
+      );
+      
       const result = await createEnvio({
         contato_id: formData.contato_id,
         template_id: formData.template_id
       });
       
       if (result) {
-        toast.success("Mensagem enviada com sucesso!");
         onCancel();
       }
     } catch (error: any) {
-      toast.error(`Erro ao enviar mensagem: ${error.message}`);
+      console.error("Erro durante o envio:", error);
+      toast.error(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
     }
+  };
+
+  const getSelectedContactName = () => {
+    const contact = contacts.find(c => c.id === formData.contato_id);
+    return contact ? `${contact.nome}${contact.email ? ` (${contact.email})` : ''}` : 'Selecione um contato';
+  };
+
+  const getSelectedTemplateName = () => {
+    const template = templates.find(t => t.id === formData.template_id);
+    return template ? template.nome : 'Selecione um template';
   };
 
   return (
@@ -79,7 +102,9 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
               onValueChange={(value) => setFormData({ ...formData, contato_id: value })}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um contato" />
+                <SelectValue placeholder="Selecione um contato">
+                  {getSelectedContactName()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {contacts.map((contact) => (
@@ -98,7 +123,9 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
               onValueChange={(value) => setFormData({ ...formData, template_id: value })}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um template" />
+                <SelectValue placeholder="Selecione um template">
+                  {getSelectedTemplateName()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {templates.map((template) => (
@@ -139,6 +166,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
             variant="ghost" 
             type="button"
             onClick={onCancel}
+            disabled={sending}
           >
             <X className="mr-2 h-4 w-4" />
             Cancelar
@@ -148,11 +176,19 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
               type="button" 
               variant="outline"
               onClick={handleSendNow}
+              disabled={sending || !formData.contato_id || !formData.template_id}
             >
-              <SendHorizontal className="mr-2 h-4 w-4" />
-              Enviar Agora
+              {sending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <SendHorizontal className="mr-2 h-4 w-4" />
+              )}
+              {sending ? 'Enviando...' : 'Enviar Agora'}
             </Button>
-            <Button type="submit">
+            <Button 
+              type="submit"
+              disabled={sending || !formData.contato_id || !formData.template_id}
+            >
               Criar Agendamento
             </Button>
           </div>

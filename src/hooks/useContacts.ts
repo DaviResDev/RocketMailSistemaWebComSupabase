@@ -36,7 +36,7 @@ export function useContacts() {
 
       if (error) throw error;
       
-      // Transform the data to match our Contact type if necessary
+      // Transform the data to match our Contact type, ensuring all required fields exist
       const transformedContacts: Contact[] = (data || []).map(contact => ({
         id: contact.id,
         nome: contact.nome,

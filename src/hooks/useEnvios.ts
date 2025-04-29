@@ -31,6 +31,7 @@ export type EnvioFormData = {
 export function useEnvios() {
   const [envios, setEnvios] = useState<Envio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const { user } = useAuth();
 
   const fetchEnvios = async () => {
@@ -62,29 +63,75 @@ export function useEnvios() {
       return false;
     }
 
+    if (!formData.contato_id || !formData.template_id) {
+      toast.error('Selecione um contato e um template para enviar a mensagem');
+      return false;
+    }
+
+    setSending(true);
+
     try {
-      const { error } = await supabase
+      console.log('Enviando mensagem com os dados:', formData);
+      
+      // Verificar se o contato existe
+      const { data: contato, error: contatoError } = await supabase
+        .from('contatos')
+        .select('id, nome, email')
+        .eq('id', formData.contato_id)
+        .single();
+      
+      if (contatoError) {
+        console.error('Erro ao verificar contato:', contatoError);
+        throw new Error('Contato não encontrado. Verifique se ele existe.');
+      }
+      
+      // Verificar se o template existe
+      const { data: template, error: templateError } = await supabase
+        .from('templates')
+        .select('id, nome')
+        .eq('id', formData.template_id)
+        .single();
+      
+      if (templateError) {
+        console.error('Erro ao verificar template:', templateError);
+        throw new Error('Template não encontrado. Verifique se ele existe.');
+      }
+      
+      console.log('Contato e template verificados com sucesso');
+
+      // Criar o registro de envio
+      const { data, error } = await supabase
         .from('envios')
         .insert([{
           ...formData,
           user_id: user.id,
           status: 'pendente',
           data_envio: new Date().toISOString()
-        }]);
+        }])
+        .select();
 
-      if (error) throw error;
-      toast.success('Mensagem enviada para processamento!');
+      if (error) {
+        console.error('Erro ao inserir envio no banco de dados:', error);
+        throw error;
+      }
+      
+      console.log('Envio registrado com sucesso:', data);
+      toast.success(`Mensagem "${template.nome}" enviada para ${contato.nome}!`);
       await fetchEnvios();
       return true;
     } catch (error: any) {
-      toast.error('Erro ao enviar mensagem: ' + error.message);
+      console.error('Erro completo ao enviar mensagem:', error);
+      toast.error(`Falha ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
       return false;
+    } finally {
+      setSending(false);
     }
   };
 
   return {
     envios,
     loading,
+    sending,
     fetchEnvios,
     createEnvio
   };
