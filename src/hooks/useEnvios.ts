@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 export type Envio = {
   id: string;
@@ -20,6 +21,11 @@ export type Envio = {
     nome: string;
     canal: string;
   };
+};
+
+export type EnvioFormData = {
+  contato_id: string;
+  template_id: string;
 };
 
 export function useEnvios() {
@@ -50,9 +56,36 @@ export function useEnvios() {
     }
   };
 
+  const createEnvio = async (formData: EnvioFormData) => {
+    if (!user) {
+      toast.error('Você precisa estar logado para enviar mensagens');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('envios')
+        .insert([{
+          ...formData,
+          user_id: user.id,
+          status: 'pendente',
+          data_envio: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+      toast.success('Mensagem enviada para processamento!');
+      await fetchEnvios();
+      return true;
+    } catch (error: any) {
+      toast.error('Erro ao enviar mensagem: ' + error.message);
+      return false;
+    }
+  };
+
   return {
     envios,
     loading,
-    fetchEnvios
+    fetchEnvios,
+    createEnvio
   };
 }

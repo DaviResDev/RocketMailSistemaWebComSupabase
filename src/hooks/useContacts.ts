@@ -35,7 +35,19 @@ export function useContacts() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setContacts(data || []);
+      
+      // Transform the data to match our Contact type if necessary
+      const transformedContacts: Contact[] = (data || []).map(contact => ({
+        id: contact.id,
+        nome: contact.nome,
+        email: contact.email,
+        telefone: contact.telefone,
+        razao_social: contact.razao_social || null,
+        cliente: contact.cliente || null,
+        created_at: contact.created_at
+      }));
+      
+      setContacts(transformedContacts);
     } catch (error: any) {
       toast.error('Erro ao carregar contatos: ' + error.message);
     } finally {
