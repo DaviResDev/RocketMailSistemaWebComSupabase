@@ -29,10 +29,22 @@ interface TemplateCardProps {
 }
 
 export function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) {
+  const currentDate = new Date();
+  const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+  const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
+
   const previewContent = template.conteudo
     .replace(/{nome}/g, "João")
     .replace(/{email}/g, "joao@exemplo.com")
-    .replace(/{telefone}/g, "(11) 99999-9999");
+    .replace(/{telefone}/g, "(11) 99999-9999")
+    .replace(/{cliente}/g, "Cliente Exemplo")
+    .replace(/{razao_social}/g, "Empresa Exemplo Ltda.")
+    .replace(/{data}/g, formattedDate)
+    .replace(/{hora}/g, formattedTime);
+
+  const previewFull = template.assinatura 
+    ? previewContent + "\n\n" + template.assinatura
+    : previewContent;
 
   return (
     <Card>
@@ -55,20 +67,31 @@ export function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) 
                     <h4 className="font-medium">Template Original:</h4>
                     <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
                       {template.conteudo}
+                      {template.assinatura && (
+                        <>
+                          <hr className="my-2" />
+                          <div className="text-sm font-medium mt-2">Assinatura:</div>
+                          {template.assinatura}
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <h4 className="font-medium">Prévia com Variáveis Substituídas:</h4>
                     <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
-                      {previewContent}
+                      {previewFull}
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     <p>Variáveis substituídas:</p>
-                    <ul className="list-disc list-inside mt-1">
+                    <ul className="list-disc list-inside mt-1 grid grid-cols-2">
                       <li>{"{nome}"} → João</li>
                       <li>{"{email}"} → joao@exemplo.com</li>
                       <li>{"{telefone}"} → (11) 99999-9999</li>
+                      <li>{"{cliente}"} → Cliente Exemplo</li>
+                      <li>{"{razao_social}"} → Empresa Exemplo Ltda.</li>
+                      <li>{"{data}"} → {formattedDate}</li>
+                      <li>{"{hora}"} → {formattedTime}</li>
                     </ul>
                   </div>
                 </div>

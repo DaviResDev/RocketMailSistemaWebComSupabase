@@ -5,10 +5,12 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, MessageSquare, X } from 'lucide-react';
+import { Mail, MessageSquare, X, SendHorizontal } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
+import { useEnvios } from '@/hooks/useEnvios';
+import { toast } from 'sonner';
 
 interface ScheduleFormProps {
   onCancel: () => void;
@@ -27,6 +29,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
   const { createSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
+  const { createEnvio } = useEnvios();
 
   useEffect(() => {
     fetchContacts();
@@ -38,6 +41,27 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
     const success = await createSchedule(formData);
     if (success) {
       onCancel();
+    }
+  };
+
+  const handleSendNow = async () => {
+    if (!formData.contato_id || !formData.template_id) {
+      toast.error("Selecione um contato e um template para enviar agora");
+      return;
+    }
+
+    try {
+      const result = await createEnvio({
+        contato_id: formData.contato_id,
+        template_id: formData.template_id
+      });
+      
+      if (result) {
+        toast.success("Mensagem enviada com sucesso!");
+        onCancel();
+      }
+    } catch (error: any) {
+      toast.error(`Erro ao enviar mensagem: ${error.message}`);
     }
   };
 
@@ -82,8 +106,13 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
                     <div className="flex items-center">
                       {template.canal === 'email' ? (
                         <Mail className="w-4 h-4 mr-2" />
-                      ) : (
+                      ) : template.canal === 'whatsapp' ? (
                         <MessageSquare className="w-4 h-4 mr-2" />
+                      ) : (
+                        <>
+                          <Mail className="w-4 h-4 mr-2" />
+                          <MessageSquare className="w-4 h-4 mr-2" />
+                        </>
                       )}
                       {template.nome}
                     </div>
@@ -114,9 +143,19 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
             <X className="mr-2 h-4 w-4" />
             Cancelar
           </Button>
-          <Button type="submit">
-            Criar Agendamento
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              type="button" 
+              variant="outline"
+              onClick={handleSendNow}
+            >
+              <SendHorizontal className="mr-2 h-4 w-4" />
+              Enviar Agora
+            </Button>
+            <Button type="submit">
+              Criar Agendamento
+            </Button>
+          </div>
         </CardFooter>
       </form>
     </Card>

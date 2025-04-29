@@ -47,7 +47,9 @@ export function ContactsList({ contacts }: ContactsListProps) {
               id: editingContact.id,
               nome: editingContact.nome,
               email: editingContact.email,
-              telefone: editingContact.telefone || ''
+              telefone: editingContact.telefone || '',
+              razao_social: editingContact.razao_social || '',
+              cliente: editingContact.cliente || ''
             }}
             isEditing={true}
             onCancel={() => setEditingContact(null)}
@@ -60,6 +62,8 @@ export function ContactsList({ contacts }: ContactsListProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Razão Social</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Telefone</TableHead>
               <TableHead className="w-[80px]"></TableHead>
@@ -69,6 +73,8 @@ export function ContactsList({ contacts }: ContactsListProps) {
             {contacts.map((contact) => (
               <TableRow key={contact.id}>
                 <TableCell className="font-medium">{contact.nome}</TableCell>
+                <TableCell>{contact.cliente || '-'}</TableCell>
+                <TableCell>{contact.razao_social || '-'}</TableCell>
                 <TableCell>{contact.email}</TableCell>
                 <TableCell>{contact.telefone || '-'}</TableCell>
                 <TableCell>

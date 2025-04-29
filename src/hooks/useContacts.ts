@@ -9,6 +9,8 @@ export type Contact = {
   nome: string;
   email: string;
   telefone: string | null;
+  razao_social: string | null;
+  cliente: string | null;
   created_at: string;
 };
 
@@ -16,6 +18,8 @@ export type ContactFormData = {
   nome: string;
   email: string;
   telefone?: string;
+  razao_social?: string;
+  cliente?: string;
 };
 
 export function useContacts() {

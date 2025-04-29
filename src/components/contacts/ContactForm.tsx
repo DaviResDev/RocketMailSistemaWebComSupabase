@@ -19,6 +19,8 @@ export function ContactForm({ onCancel, initialData, isEditing = false }: Contac
       nome: '',
       email: '',
       telefone: '',
+      razao_social: '',
+      cliente: ''
     }
   );
 
@@ -52,6 +54,22 @@ export function ContactForm({ onCancel, initialData, isEditing = false }: Contac
               value={formData.nome}
               onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
               required
+            />
+          </div>
+          <div>
+            <Label htmlFor="cliente">Nome do Cliente</Label>
+            <Input
+              id="cliente"
+              value={formData.cliente}
+              onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="razao_social">Razão Social</Label>
+            <Input
+              id="razao_social"
+              value={formData.razao_social}
+              onChange={(e) => setFormData({ ...formData, razao_social: e.target.value })}
             />
           </div>
           <div>

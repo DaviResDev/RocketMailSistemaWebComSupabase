@@ -27,6 +27,8 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
       reader.readAsText(file);
     }
   };
+  
+  const acceptedFileTypes = ".ics,.xlsx,.xls,.ods,.docx,.doc,.cs,.pdf,.txt,.gif,.jpg,.jpeg,.png,.tif,.tiff,.rtf,.msg,.pub,.mobi,.ppt,.pptx,.eps";
 
   return (
     <Card>
@@ -73,6 +75,13 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                     WhatsApp
                   </div>
                 </SelectItem>
+                <SelectItem value="ambos">
+                  <div className="flex items-center">
+                    <Mail className="w-4 h-4 mr-2" />
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Ambos
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -87,6 +96,10 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                   <li><code>{"{nome}"}</code> - Nome do contato</li>
                   <li><code>{"{email}"}</code> - Email do contato</li>
                   <li><code>{"{telefone}"}</code> - Telefone do contato</li>
+                  <li><code>{"{cliente}"}</code> - Nome do cliente</li>
+                  <li><code>{"{razao_social}"}</code> - Razão social</li>
+                  <li><code>{"{data}"}</code> - Data atual</li>
+                  <li><code>{"{hora}"}</code> - Hora atual</li>
                 </ul>
               </div>
               <Textarea
@@ -97,10 +110,10 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                 className="min-h-[200px]"
                 required
               />
-              <div className="flex justify-end">
+              <div className="flex justify-between">
                 <Input
                   type="file"
-                  accept=".txt"
+                  accept={acceptedFileTypes}
                   className="hidden"
                   id="file-upload"
                   onChange={handleFileUpload}
@@ -114,8 +127,24 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                   <Upload className="w-4 h-4 mr-2" />
                   Carregar arquivo
                 </Button>
+                
+                <div className="text-xs text-muted-foreground">
+                  Formatos aceitos: .ics, .xlsx, .xls, .ods, .docx, .doc, .pdf, etc.
+                </div>
               </div>
             </div>
+          </div>
+          <div>
+            <label htmlFor="assinatura" className="block text-sm font-medium mb-1">
+              Assinatura Digital
+            </label>
+            <Textarea
+              id="assinatura"
+              value={formData.assinatura || ''}
+              onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}
+              placeholder="Adicione sua assinatura digital aqui..."
+              className="h-[100px]"
+            />
           </div>
         </CardContent>
         <CardFooter className="flex justify-between space-x-2">

@@ -9,6 +9,7 @@ export type Template = {
   nome: string;
   conteudo: string;
   canal: string;
+  assinatura?: string;
   created_at: string;
 };
 
@@ -16,6 +17,7 @@ export type TemplateFormData = {
   nome: string;
   conteudo: string;
   canal: string;
+  assinatura?: string;
 };
 
 export function useTemplates() {
