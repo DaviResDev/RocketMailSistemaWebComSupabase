@@ -95,6 +95,7 @@ export type Database = {
           id: string
           nome: string
           razao_social: string | null
+          tags: string[] | null
           telefone: string | null
           user_id: string
         }
@@ -105,6 +106,7 @@ export type Database = {
           id?: string
           nome: string
           razao_social?: string | null
+          tags?: string[] | null
           telefone?: string | null
           user_id: string
         }
@@ -115,6 +117,7 @@ export type Database = {
           id?: string
           nome?: string
           razao_social?: string | null
+          tags?: string[] | null
           telefone?: string | null
           user_id?: string
         }
@@ -185,6 +188,7 @@ export type Database = {
       }
       templates: {
         Row: {
+          assinatura: string | null
           canal: string
           conteudo: string
           created_at: string
@@ -193,6 +197,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          assinatura?: string | null
           canal: string
           conteudo: string
           created_at?: string
@@ -201,6 +206,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          assinatura?: string | null
           canal?: string
           conteudo?: string
           created_at?: string
