@@ -33,17 +33,19 @@ export function useSettings() {
     }
 
     try {
+      setLoading(true);
       // Using type assertion to bypass type checking since 'configuracoes' 
       // is not defined in the TypeScript types
       const { data, error } = await (supabase.from('configuracoes') as AnySupabaseTable)
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
-      setSettings(data as Settings);
+      if (error) throw error;
+      setSettings(data as Settings | null);
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
+      toast.error('Erro ao carregar configurações: ' + error.message);
     } finally {
       setLoading(false);
     }
