@@ -103,12 +103,33 @@ export function useTemplates() {
     }
 
     try {
-      // Simulação de envio de email de teste - Em um ambiente real, você implementaria
-      // uma chamada para uma função de backend que envie o email
+      // Get the template first
+      const { data: template, error: templateError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+      
+      if (templateError) throw templateError;
+      
+      // Call our send-email edge function
+      const response = await supabase.functions.invoke('send-email', {
+        body: {
+          to: email,
+          subject: `[TESTE] ${template.nome}`,
+          content: template.conteudo,
+          isTest: true,
+          template_id: templateId
+        },
+      });
+      
+      if (response.error) throw new Error(response.error.message);
+      
       toast.success(`Email de teste enviado para ${email}!`);
       return true;
     } catch (error: any) {
-      toast.error('Erro ao enviar email de teste: ' + error.message);
+      console.error('Erro ao enviar email de teste:', error);
+      toast.error('Erro ao enviar email de teste: ' + (error.message || 'Falha na conexão com o servidor'));
       return false;
     }
   };

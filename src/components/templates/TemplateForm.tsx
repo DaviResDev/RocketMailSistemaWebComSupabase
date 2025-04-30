@@ -1,13 +1,13 @@
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, X, Mail, MessageSquare, Send } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { X, Mail, MessageSquare } from 'lucide-react';
 import { TemplateFormData } from '@/hooks/useTemplates';
-import { useState } from 'react';
-import { toast } from 'sonner';
 
 interface TemplateFormProps {
   formData: TemplateFormData;
@@ -18,39 +18,8 @@ interface TemplateFormProps {
 }
 
 export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEditing }: TemplateFormProps) {
-  const [isSendingTest, setIsSendingTest] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [showTestEmail, setShowTestEmail] = useState(false);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target?.result as string;
-        setFormData({ ...formData, conteudo: content });
-      };
-      reader.readAsText(file);
-    }
-  };
-  
-  const acceptedFileTypes = ".ics,.xlsx,.xls,.ods,.docx,.doc,.cs,.pdf,.txt,.gif,.jpg,.jpeg,.png,.tif,.tiff,.rtf,.msg,.pub,.mobi,.ppt,.pptx,.eps";
-
-  const handleSendTestEmail = () => {
-    if (!testEmail) {
-      toast.error('Por favor, informe um email para envio do teste.');
-      return;
-    }
-
-    setIsSendingTest(true);
-    // Simulação de envio de teste
-    setTimeout(() => {
-      toast.success(`Email de teste enviado para ${testEmail}!`);
-      setIsSendingTest(false);
-      setShowTestEmail(false);
-      setTestEmail('');
-    }, 1500);
-  };
 
   return (
     <Card>
@@ -62,150 +31,103 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label htmlFor="nome" className="block text-sm font-medium mb-1">
-              Nome do Template
-            </label>
+            <Label htmlFor="nome">Nome</Label>
             <Input
               id="nome"
               value={formData.nome}
               onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-              placeholder="Ex: Template de Boas-vindas"
               required
             />
           </div>
+
           <div>
-            <label htmlFor="canal" className="block text-sm font-medium mb-1">
-              Canal
-            </label>
-            <Select
+            <Label className="mb-2 block">Canal</Label>
+            <RadioGroup
               value={formData.canal}
               onValueChange={(value) => setFormData({ ...formData, canal: value })}
+              className="flex space-x-4"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o canal" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="email">
-                  <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-2" />
-                    Email
-                  </div>
-                </SelectItem>
-                <SelectItem value="whatsapp">
-                  <div className="flex items-center">
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    WhatsApp
-                  </div>
-                </SelectItem>
-                <SelectItem value="ambos">
-                  <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-2" />
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    Ambos
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label htmlFor="conteudo" className="block text-sm font-medium mb-1">
-              Conteúdo
-            </label>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground mb-2 p-3 bg-muted rounded-md">
-                <p>Variáveis disponíveis:</p>
-                <ul className="list-disc list-inside mt-1">
-                  <li><code>{"{nome}"}</code> - Nome do contato</li>
-                  <li><code>{"{email}"}</code> - Email do contato</li>
-                  <li><code>{"{telefone}"}</code> - Telefone do contato</li>
-                  <li><code>{"{cliente}"}</code> - Nome do cliente</li>
-                  <li><code>{"{razao_social}"}</code> - Razão social</li>
-                  <li><code>{"{data}"}</code> - Data atual</li>
-                  <li><code>{"{hora}"}</code> - Hora atual</li>
-                </ul>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="email" id="email" />
+                <Label htmlFor="email" className="flex items-center">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Email
+                </Label>
               </div>
-              <Textarea
-                id="conteudo"
-                value={formData.conteudo}
-                onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
-                placeholder="Digite o conteúdo do seu template... Ex: Olá {nome}, tudo bem?"
-                className="min-h-[200px]"
-                required
-              />
-              <div className="flex justify-between">
+              
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="whatsapp" id="whatsapp" />
+                <Label htmlFor="whatsapp" className="flex items-center">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  WhatsApp
+                </Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="ambos" id="ambos" />
+                <Label htmlFor="ambos" className="flex items-center">
+                  <Mail className="w-4 h-4 mr-1" />
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                  Ambos
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center">
+              <Label htmlFor="conteudo">Conteúdo</Label>
+              <Button 
+                type="button" 
+                variant="link" 
+                size="sm" 
+                className="h-auto p-0 text-xs"
+                onClick={() => setShowTestEmail(!showTestEmail)}
+              >
+                {showTestEmail ? 'Ocultar' : 'Enviar e-mail de teste'}
+              </Button>
+            </div>
+            <div className="text-sm text-muted-foreground mb-2">
+              Você pode usar as seguintes variáveis no conteúdo: {'{nome}'}, {'{email}'}, {'{telefone}'}, {'{razao_social}'}, {'{cliente}'}, {'{dia}'}
+            </div>
+            <Textarea
+              id="conteudo"
+              value={formData.conteudo}
+              onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
+              className="min-h-[200px]"
+              required
+            />
+          </div>
+          
+          {showTestEmail && (
+            <div className="p-4 border rounded bg-muted/50 space-y-2">
+              <Label htmlFor="test-email">E-mail para teste</Label>
+              <div className="flex gap-2">
                 <Input
-                  type="file"
-                  accept={acceptedFileTypes}
-                  className="hidden"
-                  id="file-upload"
-                  onChange={handleFileUpload}
+                  id="test-email"
+                  type="email"
+                  placeholder="Digite um e-mail para enviar um teste"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  className="flex-1"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Carregar arquivo
+                <Button type="button">
+                  Enviar teste
                 </Button>
-                
-                <div className="text-xs text-muted-foreground">
-                  Tipos de Arquivos Aceitos: ics, xlsx, xls, ods, docx, doc, cs, pdf, txt, gif, jpg, jpeg, png, tif, tiff, rtf, msg, pub, mobi, ppt, pptx, eps
-                </div>
               </div>
             </div>
-          </div>
+          )}
+          
           <div>
-            <label htmlFor="assinatura" className="block text-sm font-medium mb-1">
-              Assinatura Digital
-            </label>
+            <Label htmlFor="assinatura">Assinatura Digital</Label>
             <Textarea
               id="assinatura"
               value={formData.assinatura || ''}
               onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}
-              placeholder="Adicione sua assinatura digital aqui..."
-              className="h-[100px]"
+              className="min-h-[100px]"
+              placeholder="Exemplo: Atenciosamente, Equipe Disparo Pro"
             />
           </div>
-          
-          {!showTestEmail ? (
-            <div className="pt-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setShowTestEmail(true)}
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Enviar email de teste
-              </Button>
-            </div>
-          ) : (
-            <div className="flex space-x-2 pt-2">
-              <Input
-                value={testEmail}
-                onChange={(e) => setTestEmail(e.target.value)}
-                placeholder="Email para teste"
-                type="email"
-                className="flex-grow"
-              />
-              <Button 
-                type="button" 
-                onClick={handleSendTestEmail} 
-                disabled={isSendingTest}
-              >
-                <Send className="w-4 h-4 mr-2" />
-                {isSendingTest ? 'Enviando...' : 'Enviar'}
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                onClick={() => setShowTestEmail(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
         </CardContent>
         <CardFooter className="flex justify-between space-x-2">
           <Button 

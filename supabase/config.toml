@@ -1,1 +1,9 @@
+
 project_id = "czinoycvwsjjxuqbuxtm"
+
+[functions]
+[functions.send-email]
+verify_jwt = true
+
+[functions.handle-contact-delete]
+verify_jwt = true

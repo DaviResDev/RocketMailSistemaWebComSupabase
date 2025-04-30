@@ -22,6 +22,8 @@ export type Envio = {
   template?: {
     nome: string;
     canal: string;
+    conteudo: string;
+    assinatura?: string;
   };
 };
 
@@ -45,7 +47,7 @@ export function useEnvios() {
         .select(`
           *,
           contato:contatos(nome, email, telefone, razao_social, cliente),
-          template:templates(nome, canal)
+          template:templates(nome, canal, conteudo, assinatura)
         `)
         .eq('user_id', user.id)
         .order('data_envio', { ascending: false });
@@ -79,7 +81,7 @@ export function useEnvios() {
       // Verificar se o contato existe
       const { data: contato, error: contatoError } = await supabase
         .from('contatos')
-        .select('id, nome, email, razao_social, cliente')
+        .select('id, nome, email, telefone, razao_social, cliente')
         .eq('id', formData.contato_id)
         .single();
       
@@ -91,7 +93,7 @@ export function useEnvios() {
       // Verificar se o template existe
       const { data: template, error: templateError } = await supabase
         .from('templates')
-        .select('id, nome, canal')
+        .select('id, nome, canal, conteudo, assinatura')
         .eq('id', formData.template_id)
         .single();
       
@@ -103,7 +105,7 @@ export function useEnvios() {
       console.log('Contato e template verificados com sucesso');
 
       // Criar o registro de envio
-      const { data, error } = await supabase
+      const { data: envioData, error: envioError } = await supabase
         .from('envios')
         .insert([{
           ...formData,
@@ -113,12 +115,77 @@ export function useEnvios() {
         }])
         .select();
 
-      if (error) {
-        console.error('Erro ao inserir envio no banco de dados:', error);
-        throw error;
+      if (envioError) {
+        console.error('Erro ao inserir envio no banco de dados:', envioError);
+        throw envioError;
       }
       
-      console.log('Envio registrado com sucesso:', data);
+      const envio = envioData?.[0];
+      
+      if (!envio) {
+        throw new Error('Erro ao registrar o envio');
+      }
+      
+      console.log('Envio registrado com sucesso:', envioData);
+      
+      // Processar template com as variáveis do contato
+      let processedContent = template.conteudo
+        .replace(/{nome}/g, contato.nome || '')
+        .replace(/{email}/g, contato.email || '')
+        .replace(/{telefone}/g, contato.telefone || '')
+        .replace(/{razao_social}/g, contato.razao_social || '')
+        .replace(/{cliente}/g, contato.cliente || '')
+        .replace(/{dia}/g, new Date().toLocaleDateString('pt-BR'));
+        
+      // Adicionar assinatura se existir
+      if (template.assinatura) {
+        processedContent += `\n\n${template.assinatura}`;
+      }
+
+      // Enviar email através da edge function
+      if (template.canal === 'email' || template.canal === 'ambos') {
+        try {
+          const response = await supabase.functions.invoke('send-email', {
+            body: {
+              to: contato.email,
+              subject: template.nome,
+              content: processedContent,
+              contato_id: contato.id,
+              template_id: template.id
+            },
+          });
+          
+          if (response.error) {
+            throw new Error(`Erro no serviço de email: ${response.error.message}`);
+          }
+          
+          console.log('Email enviado com sucesso');
+          
+        } catch (emailError: any) {
+          console.error('Erro ao enviar email:', emailError);
+          
+          // Atualizar status do envio para erro
+          await supabase
+            .from('envios')
+            .update({ status: 'erro', erro: emailError.message })
+            .eq('id', envio.id);
+            
+          throw new Error(`Falha ao enviar email: ${emailError.message}`);
+        }
+      }
+      
+      // Envio de WhatsApp seria implementado de forma similar
+      if (template.canal === 'whatsapp' || template.canal === 'ambos') {
+        // A ser implementado com uma edge function para WhatsApp
+        console.log('Envio de WhatsApp não implementado ainda');
+      }
+      
+      // Atualizar status do envio para entregue
+      await supabase
+        .from('envios')
+        .update({ status: 'entregue' })
+        .eq('id', envio.id);
+      
       toast.success(`Mensagem "${template.nome}" enviada para ${contato.nome}!`);
       await fetchEnvios();
       return true;

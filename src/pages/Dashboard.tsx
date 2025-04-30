@@ -9,9 +9,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BarChart, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Bar, Line } from 'recharts';
-import { Calendar, Mail, MessageSquare, Users } from 'lucide-react';
+import { Calendar, Mail, MessageSquare, Users, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const [period, setPeriod] = useState('7d');
@@ -22,7 +26,10 @@ export default function Dashboard() {
     totalEnvios: 0,
     totalAgendamentos: 0
   });
+  const [pendingSchedules, setPendingSchedules] = useState<any[]>([]);
+  const [recentEnvios, setRecentEnvios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -50,6 +57,54 @@ export default function Dashboard() {
     };
 
     fetchStats();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchPendingSchedules = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('agendamentos')
+          .select(`
+            *,
+            contato:contatos(nome, email),
+            template:templates(nome)
+          `)
+          .eq('status', 'pendente')
+          .order('data_envio', { ascending: true })
+          .limit(5);
+
+        if (error) throw error;
+        setPendingSchedules(data || []);
+      } catch (error) {
+        console.error('Error fetching pending schedules:', error);
+      }
+    };
+
+    const fetchRecentEnvios = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('envios')
+          .select(`
+            *,
+            contato:contatos(nome, email),
+            template:templates(nome)
+          `)
+          .order('data_envio', { ascending: false })
+          .limit(5);
+
+        if (error) throw error;
+        setRecentEnvios(data || []);
+      } catch (error) {
+        console.error('Error fetching recent envios:', error);
+      }
+    };
+
+    fetchPendingSchedules();
+    fetchRecentEnvios();
   }, [user]);
 
   const emptyState = !stats.totalContatos && !stats.totalTemplates && !stats.totalEnvios && !stats.totalAgendamentos;
@@ -175,14 +230,17 @@ export default function Dashboard() {
       
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle>Próximos Agendamentos</CardTitle>
-            <CardDescription>
-              Visualize os envios programados para os próximos dias
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Próximos Agendamentos</CardTitle>
+              <CardDescription>
+                Visualize os envios programados para os próximos dias
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/agendamentos')}>Ver todos</Button>
           </CardHeader>
           <CardContent>
-            {stats.totalAgendamentos === 0 ? (
+            {pendingSchedules.length === 0 ? (
               <div className="text-center py-6">
                 <p className="text-muted-foreground">
                   Nenhum envio agendado. Agende seu primeiro envio na página de agendamentos.
@@ -190,23 +248,40 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="divide-y">
-                {/* Agendamentos will be loaded here when implemented */}
-                <div className="p-4 text-center text-muted-foreground">
-                  Carregando agendamentos...
-                </div>
+                {pendingSchedules.map((schedule) => (
+                  <div key={schedule.id} className="py-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-medium">{schedule.template?.nome}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Para: {schedule.contato?.nome}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm">
+                        {format(new Date(schedule.data_envio), "dd/MM/yyyy", { locale: ptBR })}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(schedule.data_envio), "HH:mm", { locale: ptBR })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle>Status dos Envios Recentes</CardTitle>
-            <CardDescription>
-              Resumo dos últimos envios realizados
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Status dos Envios Recentes</CardTitle>
+              <CardDescription>
+                Resumo dos últimos envios realizados
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/envios')}>Ver todos</Button>
           </CardHeader>
           <CardContent>
-            {stats.totalEnvios === 0 ? (
+            {recentEnvios.length === 0 ? (
               <div className="text-center py-6">
                 <p className="text-muted-foreground">
                   Nenhum envio realizado ainda. Comece enviando sua primeira mensagem.
@@ -214,10 +289,29 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="divide-y">
-                {/* Recent sends will be loaded here when implemented */}
-                <div className="p-4 text-center text-muted-foreground">
-                  Carregando envios recentes...
-                </div>
+                {recentEnvios.map((envio) => (
+                  <div key={envio.id} className="py-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-medium">{envio.template?.nome}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Para: {envio.contato?.nome}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm">
+                        {format(new Date(envio.data_envio), "dd/MM/yyyy", { locale: ptBR })}
+                      </p>
+                      <div className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center ${
+                        envio.status === 'entregue' ? 'bg-green-100 text-green-800' : 
+                        envio.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' : 
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        <Clock className="h-3 w-3 mr-1" />
+                        {envio.status}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>

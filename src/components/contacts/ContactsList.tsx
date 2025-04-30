@@ -29,14 +29,21 @@ import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { Contact, useContacts } from '@/hooks/useContacts';
 import { useState } from 'react';
 import { ContactForm } from './ContactForm';
+import { Badge } from '@/components/ui/badge';
 
 interface ContactsListProps {
   contacts: Contact[];
+  selectedTags?: string[];
 }
 
-export function ContactsList({ contacts }: ContactsListProps) {
+export function ContactsList({ contacts, selectedTags = [] }: ContactsListProps) {
   const { deleteContact } = useContacts();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+
+  const filteredContacts = selectedTags.length > 0
+    ? contacts.filter(contact => 
+        contact.tags && contact.tags.some(tag => selectedTags.includes(tag)))
+    : contacts;
 
   return (
     <>
@@ -49,7 +56,8 @@ export function ContactsList({ contacts }: ContactsListProps) {
               email: editingContact.email,
               telefone: editingContact.telefone || '',
               razao_social: editingContact.razao_social || '',
-              cliente: editingContact.cliente || ''
+              cliente: editingContact.cliente || '',
+              tags: editingContact.tags || []
             }}
             isEditing={true}
             onCancel={() => setEditingContact(null)}
@@ -66,17 +74,27 @@ export function ContactsList({ contacts }: ContactsListProps) {
               <TableHead>Razão Social</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Telefone</TableHead>
+              <TableHead>Tags</TableHead>
               <TableHead className="w-[80px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {contacts.map((contact) => (
+            {filteredContacts.map((contact) => (
               <TableRow key={contact.id}>
                 <TableCell className="font-medium">{contact.nome}</TableCell>
                 <TableCell>{contact.cliente || '-'}</TableCell>
                 <TableCell>{contact.razao_social || '-'}</TableCell>
                 <TableCell>{contact.email}</TableCell>
                 <TableCell>{contact.telefone || '-'}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {(contact.tags || []).map(tag => (
+                      <Badge key={tag} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -104,7 +122,7 @@ export function ContactsList({ contacts }: ContactsListProps) {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Excluir contato</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Tem certeza que deseja excluir o contato "{contact.nome}"? Esta ação não pode ser desfeita.
+                              Tem certeza que deseja excluir o contato "{contact.nome}"? Esta ação excluirá também todos os envios e agendamentos associados a este contato.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -115,7 +133,7 @@ export function ContactsList({ contacts }: ContactsListProps) {
                             >
                               <Trash className="h-4 w-4 mr-2" />
                               Excluir
-                            </AlertDialogAction>
+                            </DropdownAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>

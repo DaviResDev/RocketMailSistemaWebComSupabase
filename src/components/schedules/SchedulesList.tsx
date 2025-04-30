@@ -39,7 +39,7 @@ interface SchedulesListProps {
 }
 
 export function SchedulesList({ schedules }: SchedulesListProps) {
-  const { deleteSchedule } = useSchedules();
+  const { deleteSchedule, updateSchedule } = useSchedules();
   const { createEnvio } = useEnvios();
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [sending, setSending] = useState<string | null>(null);
@@ -80,6 +80,7 @@ export function SchedulesList({ schedules }: SchedulesListProps) {
               data_envio: new Date(editingSchedule.data_envio).toISOString().slice(0, 16)
             }}
             onCancel={() => setEditingSchedule(null)}
+            isEditing={true}
           />
         </div>
       )}

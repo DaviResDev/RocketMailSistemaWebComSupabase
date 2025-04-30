@@ -1,23 +1,24 @@
-
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, MessageSquare, X, SendHorizontal, Loader2 } from 'lucide-react';
+import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useEnvios } from '@/hooks/useEnvios';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ScheduleFormProps {
   onCancel: () => void;
   initialData?: ScheduleFormData & { id?: string };
+  isEditing?: boolean;
 }
 
-export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
+export function ScheduleForm({ onCancel, initialData, isEditing = false }: ScheduleFormProps) {
   const [formData, setFormData] = useState<ScheduleFormData>(
     initialData || {
       contato_id: '',
@@ -25,8 +26,14 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
       data_envio: new Date().toISOString().slice(0, 16)
     }
   );
+  
+  const [selectedContacts, setSelectedContacts] = useState<string[]>(
+    initialData?.contato_id ? [initialData.contato_id] : []
+  );
+  
+  const [bulkMode, setBulkMode] = useState(false);
 
-  const { createSchedule } = useSchedules();
+  const { createSchedule, updateSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
   const { createEnvio, sending } = useEnvios();
@@ -38,25 +45,102 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.contato_id || !formData.template_id) {
-      toast.error("Selecione um contato e um template para agendar");
+    
+    if (!formData.template_id) {
+      toast.error("Selecione um template para agendar");
       return;
     }
     
-    const success = await createSchedule(formData);
+    if (selectedContacts.length === 0) {
+      toast.error("Selecione pelo menos um contato para agendar");
+      return;
+    }
+    
+    // Bulk scheduling
+    if (bulkMode && selectedContacts.length > 1) {
+      let successCount = 0;
+      const totalCount = selectedContacts.length;
+      
+      for (const contactId of selectedContacts) {
+        const singleFormData = {
+          ...formData,
+          contato_id: contactId
+        };
+        
+        const success = isEditing && initialData?.id
+          ? await updateSchedule(initialData.id, singleFormData)
+          : await createSchedule(singleFormData);
+          
+        if (success) successCount++;
+      }
+      
+      if (successCount === totalCount) {
+        toast.success(`${totalCount} agendamentos criados com sucesso!`);
+        onCancel();
+      } else {
+        toast.warning(`${successCount} de ${totalCount} agendamentos foram criados com sucesso.`);
+      }
+      
+      return;
+    }
+    
+    // Single scheduling
+    const singleFormData = {
+      ...formData,
+      contato_id: selectedContacts[0]
+    };
+    
+    const success = isEditing && initialData?.id
+      ? await updateSchedule(initialData.id, singleFormData)
+      : await createSchedule(singleFormData);
+      
     if (success) {
       onCancel();
     }
   };
 
   const handleSendNow = async () => {
-    if (!formData.contato_id || !formData.template_id) {
-      toast.error("Selecione um contato e um template para enviar agora");
+    if (!formData.template_id) {
+      toast.error("Selecione um template para enviar agora");
+      return;
+    }
+    
+    if (selectedContacts.length === 0) {
+      toast.error("Selecione pelo menos um contato para enviar agora");
       return;
     }
 
     try {
-      const selectedContact = contacts.find(c => c.id === formData.contato_id);
+      if (bulkMode && selectedContacts.length > 1) {
+        let successCount = 0;
+        const totalCount = selectedContacts.length;
+        
+        toast.info(
+          `Iniciando envio para ${totalCount} contatos...`,
+          { duration: 3000 }
+        );
+        
+        for (const contactId of selectedContacts) {
+          const result = await createEnvio({
+            contato_id: contactId,
+            template_id: formData.template_id
+          });
+          
+          if (result) successCount++;
+        }
+        
+        if (successCount === totalCount) {
+          toast.success(`Mensagens enviadas com sucesso para todos os ${totalCount} contatos!`);
+          onCancel();
+        } else {
+          toast.warning(`${successCount} de ${totalCount} mensagens foram enviadas com sucesso.`);
+        }
+        
+        return;
+      }
+      
+      // Single send
+      const selectedContact = contacts.find(c => c.id === selectedContacts[0]);
       const selectedTemplate = templates.find(t => t.id === formData.template_id);
       
       toast.info(
@@ -65,7 +149,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
       );
       
       const result = await createEnvio({
-        contato_id: formData.contato_id,
+        contato_id: selectedContacts[0],
         template_id: formData.template_id
       });
       
@@ -78,42 +162,67 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
     }
   };
 
-  const getSelectedContactName = () => {
-    const contact = contacts.find(c => c.id === formData.contato_id);
-    return contact ? `${contact.nome}${contact.email ? ` (${contact.email})` : ''}` : 'Selecione um contato';
+  const handleContactSelection = (contactId: string) => {
+    setSelectedContacts(prev => {
+      if (prev.includes(contactId)) {
+        return prev.filter(id => id !== contactId);
+      } else {
+        if (!bulkMode) {
+          // In single mode, replace the selection
+          return [contactId];
+        }
+        // In bulk mode, add to selection
+        return [...prev, contactId];
+      }
+    });
   };
 
-  const getSelectedTemplateName = () => {
-    const template = templates.find(t => t.id === formData.template_id);
-    return template ? template.nome : 'Selecione um template';
+  const toggleBulkMode = () => {
+    setBulkMode(!bulkMode);
+    // When switching to single mode, keep only the first selection
+    if (bulkMode && selectedContacts.length > 1) {
+      setSelectedContacts([selectedContacts[0]]);
+    }
   };
 
   return (
     <Card>
       <form onSubmit={handleSubmit}>
         <CardHeader>
-          <h3 className="text-lg font-semibold">Novo Agendamento</h3>
+          <h3 className="text-lg font-semibold">{isEditing ? 'Editar Agendamento' : 'Novo Agendamento'}</h3>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="contato">Contato</Label>
-            <Select 
-              value={formData.contato_id} 
-              onValueChange={(value) => setFormData({ ...formData, contato_id: value })}
+          <div className="flex items-center space-x-2 mb-4">
+            <Checkbox 
+              id="bulkMode" 
+              checked={bulkMode} 
+              onCheckedChange={toggleBulkMode}
+            />
+            <label
+              htmlFor="bulkMode"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um contato">
-                  {getSelectedContactName()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {contacts.map((contact) => (
-                  <SelectItem key={contact.id} value={contact.id}>
+              Selecionar múltiplos contatos
+            </label>
+          </div>
+
+          <div>
+            <Label htmlFor="contato">Contato{bulkMode ? 's' : ''}</Label>
+            <div className="mt-2 max-h-32 overflow-y-auto border rounded-md p-2">
+              {contacts.map((contact) => (
+                <div key={contact.id} className="flex items-center mb-2">
+                  <Checkbox
+                    id={`contact-${contact.id}`}
+                    checked={selectedContacts.includes(contact.id)}
+                    onCheckedChange={() => handleContactSelection(contact.id)}
+                    className="mr-2"
+                  />
+                  <label htmlFor={`contact-${contact.id}`}>
                     {contact.nome} ({contact.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -123,9 +232,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
               onValueChange={(value) => setFormData({ ...formData, template_id: value })}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um template">
-                  {getSelectedTemplateName()}
-                </SelectValue>
+                <SelectValue placeholder="Selecione um template" />
               </SelectTrigger>
               <SelectContent>
                 {templates.map((template) => (
@@ -135,12 +242,12 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
                         <Mail className="w-4 h-4 mr-2" />
                       ) : template.canal === 'whatsapp' ? (
                         <MessageSquare className="w-4 h-4 mr-2" />
-                      ) : (
+                      ) : template.canal === 'ambos' ? (
                         <>
                           <Mail className="w-4 h-4 mr-2" />
                           <MessageSquare className="w-4 h-4 mr-2" />
                         </>
-                      )}
+                      ) : null}
                       {template.nome}
                     </div>
                   </SelectItem>
@@ -176,7 +283,7 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
               type="button" 
               variant="outline"
               onClick={handleSendNow}
-              disabled={sending || !formData.contato_id || !formData.template_id}
+              disabled={sending || selectedContacts.length === 0 || !formData.template_id}
             >
               {sending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -187,9 +294,16 @@ export function ScheduleForm({ onCancel, initialData }: ScheduleFormProps) {
             </Button>
             <Button 
               type="submit"
-              disabled={sending || !formData.contato_id || !formData.template_id}
+              disabled={sending || selectedContacts.length === 0 || !formData.template_id}
             >
-              Criar Agendamento
+              {isEditing ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Atualizar
+                </>
+              ) : (
+                'Criar Agendamento'
+              )}
             </Button>
           </div>
         </CardFooter>

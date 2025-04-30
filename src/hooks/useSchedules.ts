@@ -61,6 +61,23 @@ export function useSchedules() {
     }
   };
 
+  const updateSchedule = async (id: string, formData: ScheduleFormData) => {
+    try {
+      const { error } = await supabase
+        .from('agendamentos')
+        .update(formData)
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success('Agendamento atualizado com sucesso!');
+      await fetchSchedules();
+      return true;
+    } catch (error: any) {
+      toast.error('Erro ao atualizar agendamento: ' + error.message);
+      return false;
+    }
+  };
+
   const deleteSchedule = async (id: string) => {
     try {
       const { error } = await supabase
@@ -83,6 +100,7 @@ export function useSchedules() {
     loading,
     fetchSchedules,
     createSchedule,
+    updateSchedule,
     deleteSchedule,
   };
 }

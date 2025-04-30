@@ -12,6 +12,7 @@ export type Contact = {
   razao_social: string | null;
   cliente: string | null;
   created_at: string;
+  tags?: string[];
 };
 
 export type ContactFormData = {
@@ -20,6 +21,7 @@ export type ContactFormData = {
   telefone?: string;
   razao_social?: string;
   cliente?: string;
+  tags?: string[];
 };
 
 export function useContacts() {
@@ -44,7 +46,8 @@ export function useContacts() {
         telefone: contact.telefone,
         razao_social: contact.razao_social || null,
         cliente: contact.cliente || null,
-        created_at: contact.created_at
+        created_at: contact.created_at,
+        tags: contact.tags || []
       }));
       
       setContacts(transformedContacts);
@@ -95,19 +98,37 @@ export function useContacts() {
 
   const deleteContact = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('contatos')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      toast.loading('Removendo contato e registros relacionados...');
+      
+      // Usar a edge function para excluir o contato e registros relacionados
+      const response = await supabase.functions.invoke('handle-contact-delete', {
+        body: { contactId: id },
+      });
+      
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      
+      toast.dismiss();
       toast.success('Contato excluído com sucesso!');
       await fetchContacts();
       return true;
     } catch (error: any) {
+      toast.dismiss();
       toast.error('Erro ao excluir contato: ' + error.message);
       return false;
     }
+  };
+  
+  const getTags = () => {
+    // Extract all unique tags from contacts
+    const allTags = new Set<string>();
+    contacts.forEach(contact => {
+      if (contact.tags && contact.tags.length) {
+        contact.tags.forEach(tag => allTags.add(tag));
+      }
+    });
+    return Array.from(allTags);
   };
 
   return {
@@ -117,5 +138,6 @@ export function useContacts() {
     createContact,
     updateContact,
     deleteContact,
+    getTags,
   };
 }
