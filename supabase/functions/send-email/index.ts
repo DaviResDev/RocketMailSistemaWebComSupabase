@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ serve(async (req) => {
     // Get settings from database
     const { data: settings, error: settingsError } = await supabaseClient
       .from('configuracoes')
-      .select('email_smtp, email_porta, email_usuario, email_senha')
+      .select('email_smtp, email_porta, email_usuario, email_senha, foto_perfil, area_negocio')
       .single();
       
     if (settingsError || !settings) {
@@ -69,21 +70,53 @@ serve(async (req) => {
       );
     }
     
-    // Set up email configuration
-    const emailConfig = {
-      host: settings.email_smtp,
-      port: settings.email_porta,
-      username: settings.email_usuario,
-      password: settings.email_senha,
+    // Configurar cliente SMTP
+    const client = new SMTPClient({
+      connection: {
+        hostname: settings.email_smtp,
+        port: settings.email_porta,
+        tls: true,
+        auth: {
+          username: settings.email_usuario,
+          password: settings.email_senha,
+        },
+      },
+    });
+
+    // Gerar assinatura com foto do perfil se disponível
+    let assinatura = "";
+    if (settings.foto_perfil) {
+      assinatura += `<div><img src="${settings.foto_perfil}" alt="Foto de perfil" style="max-width: 100px; max-height: 100px; border-radius: 50%;"></div>`;
+    }
+
+    if (settings.area_negocio) {
+      assinatura += `<div style="margin-top: 5px;"><strong>${settings.area_negocio}</strong></div>`;
+    }
+
+    assinatura += `<div style="margin-top: 5px;">${settings.email_usuario}</div>`;
+
+    // Criar corpo HTML do email
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="padding: 20px;">
+          ${content.replace(/\n/g, '<br>')}
+        </div>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <div style="padding: 10px; font-size: 12px; color: #666;">
+          ${assinatura}
+        </div>
+      </div>
+    `;
+    
+    // Enviar email
+    await client.send({
       from: settings.email_usuario,
       to: to,
       subject: subject,
-      body: content
-    };
+      html: htmlContent,
+    });
     
-    // For now, we'll just log that we would send an email
-    // In a real implementation, you would use a library like smtp to send the email
-    console.log("Enviando email:", emailConfig);
+    await client.close();
     
     // Return success response
     return new Response(

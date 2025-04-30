@@ -1,24 +1,28 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, MessageSquare, Save } from 'lucide-react';
+import { Mail, MessageSquare, Save, User } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
+import { ProfileForm } from './ProfileForm';
 
 interface SettingsFormProps {
   onSave?: () => void;
 }
 
 export function SettingsForm({ onSave }: SettingsFormProps) {
-  const { settings, loading, saveSettings } = useSettings();
+  const { settings, loading, fetchSettings, saveSettings } = useSettings();
   const [formData, setFormData] = useState<SettingsFormData>({
     email_smtp: '',
     email_porta: null,
     email_usuario: '',
     email_senha: '',
-    whatsapp_token: null
+    whatsapp_token: null,
+    foto_perfil: null,
+    area_negocio: null
   });
 
   useEffect(() => {
@@ -28,7 +32,9 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         email_porta: settings.email_porta,
         email_usuario: settings.email_usuario || '',
         email_senha: settings.email_senha || '',
-        whatsapp_token: settings.whatsapp_token
+        whatsapp_token: settings.whatsapp_token,
+        foto_perfil: settings.foto_perfil,
+        area_negocio: settings.area_negocio
       });
     }
   }, [settings]);
@@ -54,6 +60,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
   return (
     <Tabs defaultValue="email">
       <TabsList className="mb-4">
+        <TabsTrigger value="personal" className="flex items-center">
+          <User className="h-4 w-4 mr-2" />
+          Dados Pessoais
+        </TabsTrigger>
         <TabsTrigger value="email" className="flex items-center">
           <Mail className="h-4 w-4 mr-2" />
           Email
@@ -63,6 +73,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
           WhatsApp
         </TabsTrigger>
       </TabsList>
+      
+      <TabsContent value="personal">
+        <ProfileForm onSave={onSave} />
+      </TabsContent>
       
       <TabsContent value="email">
         <Card>

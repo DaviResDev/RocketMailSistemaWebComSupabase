@@ -56,31 +56,37 @@ export type Database = {
       }
       configuracoes: {
         Row: {
+          area_negocio: string | null
           created_at: string | null
           email_porta: number | null
           email_senha: string | null
           email_smtp: string | null
           email_usuario: string | null
+          foto_perfil: string | null
           id: string
           user_id: string
           whatsapp_token: string | null
         }
         Insert: {
+          area_negocio?: string | null
           created_at?: string | null
           email_porta?: number | null
           email_senha?: string | null
           email_smtp?: string | null
           email_usuario?: string | null
+          foto_perfil?: string | null
           id?: string
           user_id: string
           whatsapp_token?: string | null
         }
         Update: {
+          area_negocio?: string | null
           created_at?: string | null
           email_porta?: number | null
           email_senha?: string | null
           email_smtp?: string | null
           email_usuario?: string | null
+          foto_perfil?: string | null
           id?: string
           user_id?: string
           whatsapp_token?: string | null

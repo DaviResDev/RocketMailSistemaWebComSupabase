@@ -11,6 +11,8 @@ export type Settings = {
   email_usuario: string | null;
   email_senha: string | null;
   whatsapp_token: string | null;
+  foto_perfil: string | null;
+  area_negocio: string | null;
 };
 
 export type SettingsFormData = Omit<Settings, 'id'>;
@@ -75,10 +77,38 @@ export function useSettings() {
     }
   };
 
+  const uploadProfilePhoto = async (file: File): Promise<string | null> => {
+    if (!user) {
+      toast.error('Você precisa estar logado para fazer upload de fotos');
+      return null;
+    }
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${user.id}/profile.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('profile_photos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('profile_photos')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error: any) {
+      toast.error('Erro ao fazer upload da foto: ' + error.message);
+      return null;
+    }
+  };
+
   return {
     settings,
     loading,
     fetchSettings,
-    saveSettings
+    saveSettings,
+    uploadProfilePhoto
   };
 }
