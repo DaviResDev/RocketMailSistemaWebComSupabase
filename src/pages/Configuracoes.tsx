@@ -1,18 +1,16 @@
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { SettingsForm } from '@/components/settings/SettingsForm';
 import { useSettings } from '@/hooks/useSettings';
 import { WhatsAppQrCode } from '@/components/settings/WhatsAppQrCode';
 import { toast } from 'sonner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, MessageSquare, User } from 'lucide-react';
 
 export default function Configuracoes() {
   const { fetchSettings } = useSettings();
 
   useEffect(() => {
     fetchSettings();
-  }, []);
+  }, [fetchSettings]);
 
   return (
     <div className="space-y-6 animate-fade-in">

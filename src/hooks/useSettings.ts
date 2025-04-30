@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,8 +26,11 @@ export function useSettings() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  const fetchSettings = async () => {
-    if (!user) return;
+  const fetchSettings = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     try {
       // Using type assertion to bypass type checking since 'configuracoes' 
@@ -44,7 +47,7 @@ export function useSettings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   const saveSettings = async (formData: SettingsFormData) => {
     if (!user) {

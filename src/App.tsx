@@ -1,4 +1,5 @@
 
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -36,38 +37,40 @@ const NonAuthRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <ThemeProvider>
-          <AuthProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<NonAuthRoute><Login /></NonAuthRoute>} />
-              <Route path="/cadastro" element={<NonAuthRoute><Signup /></NonAuthRoute>} />
-              
-              {/* Protected routes with layout */}
-              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/contatos" element={<Contatos />} />
-                <Route path="/agendamentos" element={<Agendamentos />} />
-                <Route path="/envios" element={<Envios />} />
-                <Route path="/metricas" element={<Metricas />} />
-                <Route path="/configuracoes" element={<Configuracoes />} />
-              </Route>
-              
-              {/* Fallback for 404 */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <ThemeProvider>
+            <AuthProvider>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/" element={<Landing />} />
+                <Route path="/login" element={<NonAuthRoute><Login /></NonAuthRoute>} />
+                <Route path="/cadastro" element={<NonAuthRoute><Signup /></NonAuthRoute>} />
+                
+                {/* Protected routes with layout */}
+                <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/contatos" element={<Contatos />} />
+                  <Route path="/agendamentos" element={<Agendamentos />} />
+                  <Route path="/envios" element={<Envios />} />
+                  <Route path="/metricas" element={<Metricas />} />
+                  <Route path="/configuracoes" element={<Configuracoes />} />
+                </Route>
+                
+                {/* Fallback for 404 */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </AuthProvider>
+          </ThemeProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </React.StrictMode>
 );
 
 export default App;
