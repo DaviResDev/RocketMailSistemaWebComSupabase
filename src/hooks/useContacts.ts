@@ -31,6 +31,7 @@ export function useContacts() {
 
   const fetchContacts = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('contatos')
         .select('*')

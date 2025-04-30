@@ -42,6 +42,7 @@ export function useEnvios() {
     if (!user) return;
 
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('envios')
         .select(`
@@ -53,7 +54,21 @@ export function useEnvios() {
         .order('data_envio', { ascending: false });
 
       if (error) throw error;
-      setEnvios(data || []);
+      
+      // Ensure data conforms to our type
+      const processedData: Envio[] = (data || []).map(item => ({
+        id: item.id,
+        contato_id: item.contato_id,
+        template_id: item.template_id,
+        data_envio: item.data_envio,
+        status: item.status,
+        erro: item.erro,
+        user_id: item.user_id,
+        contato: item.contato as Envio['contato'],
+        template: item.template as Envio['template']
+      }));
+      
+      setEnvios(processedData);
     } catch (error: any) {
       console.error('Erro ao carregar histórico de envios:', error.message);
       toast.error('Erro ao carregar histórico de envios: ' + error.message);

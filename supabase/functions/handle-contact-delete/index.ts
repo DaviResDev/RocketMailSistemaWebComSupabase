@@ -1,84 +1,76 @@
 
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.5";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const handler = async (req: Request): Promise<Response> => {
-  // Handle CORS preflight requests
+serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const { contactId } = await req.json();
 
     if (!contactId) {
-      return new Response(
-        JSON.stringify({ error: "Contact ID is required" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
-      );
+      throw new Error("ID do contato é obrigatório");
     }
 
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+    );
 
-    // Delete related envios first
-    const { error: enviosError } = await supabase
-      .from("envios")
+    // First delete related records from envios
+    const { error: enviosError } = await supabaseClient
+      .from('envios')
       .delete()
-      .eq("contato_id", contactId);
+      .eq('contato_id', contactId);
 
     if (enviosError) {
-      throw new Error(`Error deleting related envios: ${enviosError.message}`);
+      throw new Error(`Erro ao excluir envios relacionados: ${enviosError.message}`);
     }
 
-    // Delete related agendamentos
-    const { error: agendamentosError } = await supabase
-      .from("agendamentos")
+    // Then delete related records from agendamentos
+    const { error: agendamentosError } = await supabaseClient
+      .from('agendamentos')
       .delete()
-      .eq("contato_id", contactId);
+      .eq('contato_id', contactId);
 
     if (agendamentosError) {
-      throw new Error(`Error deleting related agendamentos: ${agendamentosError.message}`);
+      throw new Error(`Erro ao excluir agendamentos relacionados: ${agendamentosError.message}`);
     }
 
-    // Now delete the contact
-    const { error: contatoError } = await supabase
-      .from("contatos")
+    // Finally delete the contact
+    const { error: contatoError } = await supabaseClient
+      .from('contatos')
       .delete()
-      .eq("id", contactId);
+      .eq('id', contactId);
 
     if (contatoError) {
-      throw new Error(`Error deleting contact: ${contatoError.message}`);
+      throw new Error(`Erro ao excluir contato: ${contatoError.message}`);
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: "Contact and related records deleted successfully" }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+      JSON.stringify({ success: true, message: "Contato e registros relacionados excluídos com sucesso" }),
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
-  } catch (error: any) {
-    console.error("Error in handle-contact-delete function:", error);
+
+  } catch (error) {
+    console.error("Erro na exclusão de contato:", error);
+    
     return new Response(
-      JSON.stringify({ error: error.message || "An unknown error occurred" }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+      JSON.stringify({ error: error.message }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
   }
-};
-
-serve(handler);
+});
