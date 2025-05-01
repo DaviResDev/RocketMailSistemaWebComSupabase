@@ -14,11 +14,14 @@ import {
   Moon,
   Sun,
   Menu,
-  X
+  X,
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useSettings } from '@/hooks/useSettings';
 
 interface SidebarItemProps {
   to: string;
@@ -51,7 +54,8 @@ export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const isMobile = useIsMobile();
   const { theme, toggleTheme } = useTheme();
-  const { signOut } = useAuth();
+  const { signOut, user, profile } = useAuth();
+  const { settings } = useSettings();
 
   const navigation = [
     { to: '/dashboard', label: 'Dashboard', icon: Home },
@@ -72,6 +76,13 @@ export function Sidebar() {
       setIsOpen(false);
     }
   };
+
+  // Get user initials for avatar fallback
+  const userInitials = profile?.nome 
+    ? profile.nome.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
+    : user?.email?.charAt(0).toUpperCase() || 'U';
+    
+  const userDisplayName = profile?.nome || user?.email?.split('@')[0] || 'Usuário';
 
   return (
     <>
@@ -138,6 +149,28 @@ export function Sidebar() {
           </nav>
 
           <div className="p-4 border-t">
+            <div className="flex items-center gap-3 mb-3">
+              <Link 
+                to="/configuracoes" 
+                onClick={handleItemClick}
+                className="flex items-center gap-3 w-full"
+              >
+                <Avatar className="h-8 w-8">
+                  {settings?.foto_perfil ? (
+                    <AvatarImage src={settings.foto_perfil} alt="Foto de perfil" />
+                  ) : (
+                    <AvatarFallback>{userInitials}</AvatarFallback>
+                  )}
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{userDisplayName}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {user?.email}
+                  </p>
+                </div>
+              </Link>
+            </div>
+
             <div className="flex justify-between items-center">
               <Button 
                 variant="ghost" 

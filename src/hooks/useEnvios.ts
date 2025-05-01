@@ -70,7 +70,7 @@ export function useEnvios() {
       
       setEnvios(processedData);
     } catch (error: any) {
-      console.error('Erro ao carregar histórico de envios:', error.message);
+      console.error('Erro ao carregar histórico de envios:', error);
       toast.error('Erro ao carregar histórico de envios: ' + error.message);
     } finally {
       setLoading(false);
@@ -158,52 +158,49 @@ export function useEnvios() {
       }
 
       // Enviar email através da edge function
-      if (template.canal === 'email' || template.canal === 'ambos') {
-        try {
-          const response = await supabase.functions.invoke('send-email', {
-            body: {
-              to: contato.email,
-              subject: template.nome,
-              content: processedContent,
-              contato_id: contato.id,
-              template_id: template.id
-            },
-          });
-          
-          if (response.error) {
-            throw new Error(`Erro no serviço de email: ${response.error.message}`);
-          }
-          
-          console.log('Email enviado com sucesso');
-          
-        } catch (emailError: any) {
-          console.error('Erro ao enviar email:', emailError);
-          
-          // Atualizar status do envio para erro
-          await supabase
-            .from('envios')
-            .update({ status: 'erro', erro: emailError.message })
-            .eq('id', envio.id);
-            
-          throw new Error(`Falha ao enviar email: ${emailError.message}`);
+      try {
+        const response = await supabase.functions.invoke('send-email', {
+          body: {
+            to: contato.email,
+            subject: template.nome,
+            content: processedContent,
+            contato_id: contato.id,
+            template_id: template.id
+          },
+        });
+        
+        if (response.error) {
+          console.error('Erro na resposta da edge function:', response.error);
+          throw new Error(`Erro no serviço de email: ${response.error}`);
         }
+        
+        console.log('Resposta da edge function:', response);
+        console.log('Email enviado com sucesso');
+        
+        // Atualizar status do envio para entregue
+        await supabase
+          .from('envios')
+          .update({ status: 'entregue' })
+          .eq('id', envio.id);
+        
+        toast.success(`Mensagem "${template.nome}" enviada para ${contato.nome}!`);
+        await fetchEnvios();
+        return true;
+        
+      } catch (emailError: any) {
+        console.error('Erro completo ao enviar email:', emailError);
+        
+        // Atualizar status do envio para erro
+        await supabase
+          .from('envios')
+          .update({ 
+            status: 'erro', 
+            erro: emailError.message || 'Erro desconhecido no envio'
+          })
+          .eq('id', envio.id);
+          
+        throw new Error(`Falha ao enviar email: ${emailError.message || 'Erro desconhecido'}`);
       }
-      
-      // Envio de WhatsApp seria implementado de forma similar
-      if (template.canal === 'whatsapp' || template.canal === 'ambos') {
-        // A ser implementado com uma edge function para WhatsApp
-        console.log('Envio de WhatsApp não implementado ainda');
-      }
-      
-      // Atualizar status do envio para entregue
-      await supabase
-        .from('envios')
-        .update({ status: 'entregue' })
-        .eq('id', envio.id);
-      
-      toast.success(`Mensagem "${template.nome}" enviada para ${contato.nome}!`);
-      await fetchEnvios();
-      return true;
     } catch (error: any) {
       console.error('Erro completo ao enviar mensagem:', error);
       toast.error(`Falha ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);

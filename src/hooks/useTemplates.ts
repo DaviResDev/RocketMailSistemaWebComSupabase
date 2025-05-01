@@ -27,6 +27,7 @@ export function useTemplates() {
 
   const fetchTemplates = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('templates')
         .select('*')
@@ -35,6 +36,7 @@ export function useTemplates() {
       if (error) throw error;
       setTemplates(data || []);
     } catch (error: any) {
+      console.error('Erro ao carregar templates:', error);
       toast.error('Erro ao carregar templates: ' + error.message);
     } finally {
       setLoading(false);
@@ -48,15 +50,23 @@ export function useTemplates() {
     }
 
     try {
+      // Always set canal to 'email' as we removed WhatsApp functionality
+      const templateData = {
+        ...formData, 
+        canal: 'email',
+        user_id: user.id
+      };
+      
       const { error } = await supabase
         .from('templates')
-        .insert([{ ...formData, user_id: user.id }]);
+        .insert([templateData]);
 
       if (error) throw error;
       toast.success('Template criado com sucesso!');
       await fetchTemplates();
       return true;
     } catch (error: any) {
+      console.error('Erro ao criar template:', error);
       toast.error('Erro ao criar template: ' + error.message);
       return false;
     }
@@ -64,9 +74,15 @@ export function useTemplates() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
+      // Always set canal to 'email' as we removed WhatsApp functionality
+      const templateData = {
+        ...formData, 
+        canal: 'email'
+      };
+      
       const { error } = await supabase
         .from('templates')
-        .update(formData)
+        .update(templateData)
         .eq('id', id);
 
       if (error) throw error;
@@ -74,6 +90,7 @@ export function useTemplates() {
       await fetchTemplates();
       return true;
     } catch (error: any) {
+      console.error('Erro ao atualizar template:', error);
       toast.error('Erro ao atualizar template: ' + error.message);
       return false;
     }
@@ -91,6 +108,7 @@ export function useTemplates() {
       await fetchTemplates();
       return true;
     } catch (error: any) {
+      console.error('Erro ao excluir template:', error);
       toast.error('Erro ao excluir template: ' + error.message);
       return false;
     }

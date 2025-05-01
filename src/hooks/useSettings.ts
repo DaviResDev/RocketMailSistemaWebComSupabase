@@ -41,11 +41,18 @@ export function useSettings() {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching settings:', error);
+        throw error;
+      }
+      
       setSettings(data as Settings | null);
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
-      toast.error('Erro ao carregar configurações: ' + error.message);
+      // Don't show toast on initial load if settings don't exist yet
+      if (error.code !== 'PGRST116') {
+        toast.error('Erro ao carregar configurações: ' + error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -58,6 +65,8 @@ export function useSettings() {
     }
 
     try {
+      setLoading(true);
+      
       if (settings) {
         // Atualizar configurações existentes
         const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
@@ -77,8 +86,11 @@ export function useSettings() {
       await fetchSettings();
       return true;
     } catch (error: any) {
+      console.error('Error saving settings:', error);
       toast.error('Erro ao salvar configurações: ' + error.message);
       return false;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -92,18 +104,25 @@ export function useSettings() {
       const fileExt = file.name.split('.').pop();
       const filePath = `${user.id}/profile.${fileExt}`;
       
-      const { error: uploadError } = await supabase.storage
+      console.log("Uploading profile photo:", filePath);
+      
+      const { error: uploadError, data } = await supabase.storage
         .from('profile_photos')
         .upload(filePath, file, { upsert: true });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
 
-      const { data } = supabase.storage
+      const { data: publicUrlData } = supabase.storage
         .from('profile_photos')
         .getPublicUrl(filePath);
-
-      return data.publicUrl;
+      
+      console.log("Profile photo uploaded successfully:", publicUrlData.publicUrl);
+      return publicUrlData.publicUrl;
     } catch (error: any) {
+      console.error('Error uploading profile photo:', error);
       toast.error('Erro ao fazer upload da foto: ' + error.message);
       return null;
     }

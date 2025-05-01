@@ -2,7 +2,6 @@
 import React, { useEffect } from 'react';
 import { SettingsForm } from '@/components/settings/SettingsForm';
 import { useSettings } from '@/hooks/useSettings';
-import { WhatsAppQrCode } from '@/components/settings/WhatsAppQrCode';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -34,14 +33,6 @@ export default function Configuracoes() {
           toast.success('Configurações atualizadas com sucesso!');
         }}
       />
-      
-      <div className="mt-6">
-        <WhatsAppQrCode 
-          onConnect={() => {
-            toast.success('WhatsApp conectado com sucesso!');
-          }}
-        />
-      </div>
     </div>
   );
 }

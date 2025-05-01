@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Upload, Save } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProfileFormProps {
   onSave?: () => void;
@@ -14,6 +16,7 @@ interface ProfileFormProps {
 
 export function ProfileForm({ onSave }: ProfileFormProps) {
   const { settings, loading, saveSettings, uploadProfilePhoto } = useSettings();
+  const { user, profile } = useAuth();
   const [formData, setFormData] = useState<Pick<SettingsFormData, 'area_negocio' | 'foto_perfil'>>({
     area_negocio: '',
     foto_perfil: null
@@ -57,6 +60,8 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
         setFormData({ ...formData, foto_perfil: photoUrl });
         // Não salvamos ainda, apenas quando o usuário clicar em salvar
       }
+    } catch (error) {
+      console.error("Upload error:", error);
     } finally {
       setUploading(false);
     }
@@ -70,6 +75,8 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       ...settings as SettingsFormData,
       area_negocio: formData.area_negocio,
       foto_perfil: formData.foto_perfil,
+      // Remove whatsapp_token as we're removing WhatsApp functionality
+      whatsapp_token: null
     };
     
     const success = await saveSettings(updatedSettings);
@@ -80,13 +87,38 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <p className="text-muted-foreground">Carregando configurações...</p>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Dados Pessoais</CardTitle>
+          <CardDescription>
+            Configure sua foto de perfil e área de negócio.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <Label>Foto de Perfil</Label>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <Skeleton className="h-24 w-24 rounded-full" />
+              <div className="flex flex-col gap-2 w-full">
+                <Skeleton className="h-10 w-full max-w-xs" />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Área de Negócio</Label>
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Skeleton className="h-10 w-32" />
+        </CardFooter>
+      </Card>
     );
   }
+
+  const userInitials = profile?.nome 
+    ? profile.nome.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
+    : 'US';
 
   return (
     <Card>
@@ -105,7 +137,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
                 {previewUrl ? (
                   <AvatarImage src={previewUrl} alt="Foto de perfil" />
                 ) : (
-                  <AvatarFallback>DP</AvatarFallback>
+                  <AvatarFallback>{userInitials}</AvatarFallback>
                 )}
               </Avatar>
               

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, MessageSquare, Save, User } from 'lucide-react';
+import { Mail, Save, User } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { ProfileForm } from './ProfileForm';
 
@@ -32,7 +32,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         email_porta: settings.email_porta,
         email_usuario: settings.email_usuario || '',
         email_senha: settings.email_senha || '',
-        whatsapp_token: settings.whatsapp_token,
+        whatsapp_token: null, // Remove WhatsApp token
         foto_perfil: settings.foto_perfil,
         area_negocio: settings.area_negocio
       });
@@ -58,7 +58,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
   }
 
   return (
-    <Tabs defaultValue="email">
+    <Tabs defaultValue="personal">
       <TabsList className="mb-4">
         <TabsTrigger value="personal" className="flex items-center">
           <User className="h-4 w-4 mr-2" />
@@ -67,10 +67,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         <TabsTrigger value="email" className="flex items-center">
           <Mail className="h-4 w-4 mr-2" />
           Email
-        </TabsTrigger>
-        <TabsTrigger value="whatsapp" className="flex items-center">
-          <MessageSquare className="h-4 w-4 mr-2" />
-          WhatsApp
         </TabsTrigger>
       </TabsList>
       
@@ -136,36 +132,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
               <Button type="submit">
                 <Save className="h-4 w-4 mr-2" />
                 Salvar configurações
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="whatsapp">
-        <Card>
-          <form onSubmit={handleSubmit}>
-            <CardHeader>
-              <CardTitle>Token da API WhatsApp</CardTitle>
-              <CardDescription>
-                Configure o token de acesso para integração com o WhatsApp Business API.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="whatsapp_token">Token de Acesso</Label>
-                <Input
-                  id="whatsapp_token"
-                  placeholder="Insira o token da API WhatsApp Business"
-                  value={formData.whatsapp_token || ''}
-                  onChange={(e) => setFormData({ ...formData, whatsapp_token: e.target.value })}
-                />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit">
-                <Save className="h-4 w-4 mr-2" />
-                Salvar token
               </Button>
             </CardFooter>
           </form>
