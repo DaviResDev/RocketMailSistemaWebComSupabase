@@ -20,7 +20,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     email_porta: null,
     email_usuario: '',
     email_senha: '',
-    whatsapp_token: null,
     foto_perfil: null,
     area_negocio: null
   });
@@ -32,7 +31,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         email_porta: settings.email_porta,
         email_usuario: settings.email_usuario || '',
         email_senha: settings.email_senha || '',
-        whatsapp_token: null, // Remove WhatsApp token
         foto_perfil: settings.foto_perfil,
         area_negocio: settings.area_negocio
       });

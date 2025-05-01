@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,14 +70,17 @@ serve(async (req) => {
     console.log("Using SMTP server:", emailConfig.email_smtp);
     
     // Configure real SMTP client
-    const smtp = new RealSMTPClient({
-      host: emailConfig.email_smtp,
-      port: emailConfig.email_porta,
-      secure: true, // Use SSL/TLS
-      auth: {
-        user: emailConfig.email_usuario,
-        pass: emailConfig.email_senha,
+    const client = new SMTPClient({
+      connection: {
+        hostname: emailConfig.email_smtp,
+        port: emailConfig.email_porta,
+        tls: true,
+        auth: {
+          username: emailConfig.email_usuario,
+          password: emailConfig.email_senha,
+        },
       },
+      debug: true, // Enable debug logs for troubleshooting
     });
 
     // Generate signature with profile photo if available
@@ -104,16 +108,22 @@ serve(async (req) => {
       </div>
     `;
     
-    // Send email
+    // Send email with actual SMTP client
     try {
-      const emailResult = await smtp.send({
+      console.log("Connecting to SMTP server...");
+      
+      await client.send({
         from: emailConfig.email_usuario,
         to: to,
         subject: subject,
+        content: "text/html",
         html: htmlContent,
       });
       
       console.log("Email sent successfully to:", to);
+      
+      // Close SMTP connection
+      await client.close();
       
       // If this was triggered from an envio, update its status
       if (contato_id && template_id) {
@@ -140,11 +150,11 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
-    } catch (smtpError) {
+    } catch (smtpError: any) {
       console.error("SMTP Error:", smtpError);
       throw new Error("Erro ao enviar email: " + (smtpError.message || "Falha na conexão com o servidor SMTP"));
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in send-email function:", error);
     
     return new Response(
@@ -156,40 +166,3 @@ serve(async (req) => {
     );
   }
 });
-
-// Real SMTP client implementation 
-// This is a stub that logs details but doesn't actually send emails
-// Replace with real implementation using a proper SMTP library
-class RealSMTPClient {
-  config: any;
-  
-  constructor(config: any) {
-    this.config = config;
-    console.log("Initialized SMTP client with config:", {
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.auth.user,
-    });
-  }
-  
-  async send(options: any) {
-    console.log("SMTP: Sending email with options:", {
-      from: options.from,
-      to: options.to,
-      subject: options.subject,
-      htmlLength: options.html?.length || 0
-    });
-    
-    // Here we would connect to the SMTP server and send the email
-    // For now, we'll just simulate a successful send
-    
-    // Simple validation
-    if (!options.to || !options.from || !options.subject) {
-      throw new Error("Missing required email fields");
-    }
-    
-    console.log("SMTP: Email sent successfully");
-    return { success: true };
-  }
-}
