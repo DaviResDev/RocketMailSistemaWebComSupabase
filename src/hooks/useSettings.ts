@@ -24,31 +24,40 @@ type AnySupabaseTable = ReturnType<SupabaseFrom>;
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   const fetchSettings = useCallback(async () => {
     if (!user) {
       setLoading(false);
+      setError("Você precisa estar logado para acessar as configurações");
       return;
     }
 
     try {
       setLoading(true);
+      setError(null);
       // Using type assertion to bypass type checking since 'configuracoes' 
       // is not defined in the TypeScript types
       const { data, error } = await (supabase.from('configuracoes') as AnySupabaseTable)
         .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Error fetching settings:', error);
+        setError(`Erro ao carregar configurações: ${error.message}`);
         throw error;
       }
       
-      setSettings(data as Settings | null);
+      if (data && data.length > 0) {
+        setSettings(data[0] as Settings);
+      } else {
+        // No settings found, but that's ok - we'll create them when the user saves
+        setSettings(null);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
+      setError(`Erro ao carregar configurações: ${error.message}`);
       // Don't show toast on initial load if settings don't exist yet
       if (error.code !== 'PGRST116') {
         toast.error('Erro ao carregar configurações: ' + error.message);
@@ -131,6 +140,7 @@ export function useSettings() {
   return {
     settings,
     loading,
+    error,
     fetchSettings,
     saveSettings,
     uploadProfilePhoto

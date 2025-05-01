@@ -32,28 +32,35 @@ serve(async (req) => {
     
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Get settings from database
-    const { data: settings, error: settingsError } = await supabaseClient
-      .from('configuracoes')
-      .select('email_smtp, email_porta, email_usuario, email_senha, foto_perfil, area_negocio')
-      .maybeSingle();
-      
-    if (settingsError) {
-      console.error("Error fetching settings:", settingsError);
-      throw new Error("Erro ao buscar configurações de email: " + settingsError.message);
-    }
-    
-    if (!settings || !settings.email_smtp || !settings.email_porta || !settings.email_usuario || !settings.email_senha) {
-      console.error("Incomplete email settings:", settings);
-      throw new Error("Configurações de email incompletas. Por favor, configure seu SMTP corretamente.");
-    }
-    
     const requestData = await req.json();
-    const { to, subject, content } = requestData as EmailRequest;
+    const { to, subject, content, contato_id, template_id } = requestData as EmailRequest;
     
     if (!to || !subject || !content) {
       console.error("Incomplete request data:", requestData);
       throw new Error("Dados incompletos para envio de email");
+    }
+
+    // Get settings from database - use single() to get exactly one row
+    const { data: allSettings, error: settingsQueryError } = await supabaseClient
+      .from('configuracoes')
+      .select('*');
+      
+    if (settingsQueryError) {
+      console.error("Error fetching settings:", settingsQueryError);
+      throw new Error("Erro ao buscar configurações de email: " + settingsQueryError.message);
+    }
+    
+    if (!allSettings || allSettings.length === 0) {
+      console.error("No email settings found");
+      throw new Error("Configurações de email não encontradas. Por favor, configure seu SMTP corretamente.");
+    }
+    
+    // Use the first settings record found
+    const settings = allSettings[0];
+    
+    if (!settings.email_smtp || !settings.email_porta || !settings.email_usuario || !settings.email_senha) {
+      console.error("Incomplete email settings:", settings);
+      throw new Error("Configurações de email incompletas. Por favor, configure seu SMTP corretamente.");
     }
     
     console.log("Sending email to:", to);
@@ -109,6 +116,24 @@ serve(async (req) => {
       
       await client.close();
       console.log("Email sent successfully to:", to);
+      
+      // If this was triggered from an envio, update its status
+      if (contato_id && template_id) {
+        const { data: envios } = await supabaseClient
+          .from('envios')
+          .select('id')
+          .eq('contato_id', contato_id)
+          .eq('template_id', template_id)
+          .order('data_envio', { ascending: false })
+          .limit(1);
+          
+        if (envios && envios.length > 0) {
+          await supabaseClient
+            .from('envios')
+            .update({ status: 'entregue' })
+            .eq('id', envios[0].id);
+        }
+      }
       
       return new Response(
         JSON.stringify({ success: true, message: "Email enviado com sucesso!" }),

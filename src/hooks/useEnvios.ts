@@ -159,6 +159,7 @@ export function useEnvios() {
 
       // Enviar email através da edge function
       try {
+        console.log('Preparando para enviar email...');
         const response = await supabase.functions.invoke('send-email', {
           body: {
             to: contato.email,
@@ -169,12 +170,17 @@ export function useEnvios() {
           },
         });
         
+        console.log('Resposta da edge function:', response);
+        
         if (response.error) {
           console.error('Erro na resposta da edge function:', response.error);
-          throw new Error(`Erro no serviço de email: ${response.error}`);
+          throw new Error(`Erro no serviço de email: ${response.error.message || JSON.stringify(response.error)}`);
         }
         
-        console.log('Resposta da edge function:', response);
+        if (!response.data || !response.data.success) {
+          throw new Error('Resposta do servidor sem confirmação de sucesso');
+        }
+        
         console.log('Email enviado com sucesso');
         
         // Atualizar status do envio para entregue
