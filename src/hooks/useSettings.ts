@@ -10,7 +10,6 @@ export type Settings = {
   email_porta: number | null;
   email_usuario: string | null;
   email_senha: string | null;
-  whatsapp_token: string | null;
   foto_perfil: string | null;
   area_negocio: string | null;
 };
@@ -23,7 +22,7 @@ type AnySupabaseTable = ReturnType<SupabaseFrom>;
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
@@ -52,8 +51,17 @@ export function useSettings() {
       if (data && data.length > 0) {
         setSettings(data[0] as Settings);
       } else {
-        // No settings found, but that's ok - we'll create them when the user saves
-        setSettings(null);
+        // No settings found, create empty settings
+        console.log("No settings found, using empty defaults");
+        setSettings({
+          id: 'new',
+          email_smtp: '',
+          email_porta: null,
+          email_usuario: '',
+          email_senha: '',
+          foto_perfil: null,
+          area_negocio: null
+        });
       }
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
@@ -76,7 +84,7 @@ export function useSettings() {
     try {
       setLoading(true);
       
-      if (settings) {
+      if (settings && settings.id !== 'new') {
         // Atualizar configurações existentes
         const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
           .update(formData)

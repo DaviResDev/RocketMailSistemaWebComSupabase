@@ -5,9 +5,11 @@ import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { RefreshCcw } from 'lucide-react';
 
 export default function Configuracoes() {
-  const { fetchSettings, loading, error } = useSettings();
+  const { fetchSettings, settings, loading, error } = useSettings();
 
   useEffect(() => {
     fetchSettings();
@@ -26,19 +28,20 @@ export default function Configuracoes() {
           </CardHeader>
           <CardContent>
             <p className="text-destructive">{error}</p>
-            <button 
-              className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded"
+            <Button 
+              className="mt-4"
               onClick={() => fetchSettings()}
             >
+              <RefreshCcw className="mr-2 h-4 w-4" />
               Tentar novamente
-            </button>
+            </Button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (loading) {
+  if (loading && !settings) {
     return (
       <div className="space-y-6 animate-fade-in">
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>

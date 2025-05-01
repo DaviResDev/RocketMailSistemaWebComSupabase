@@ -157,6 +157,18 @@ export function useEnvios() {
         processedContent += `\n\n${template.assinatura}`;
       }
 
+      // Check if we have email settings configured
+      const { data: configData, error: configError } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+        
+      if (configError || !configData || !configData.email_smtp || !configData.email_usuario || !configData.email_senha) {
+        console.error('Erro ou configurações incompletas:', configError || 'Faltam configurações de email');
+        throw new Error('Configurações de email incompletas. Por favor, configure seu email em Configurações antes de enviar.');
+      }
+
       // Enviar email através da edge function
       try {
         console.log('Preparando para enviar email...');
