@@ -84,31 +84,34 @@ export function useSettings() {
       setLoading(true);
       console.log("Saving settings:", formData);
       
-      // First delete any duplicate settings (to fix the multiple rows issue)
-      // This is a one-time cleanup that will ensure we only have one settings record per user
-      const { error: deleteError } = await supabase
-        .from('configuracoes')
-        .delete()
-        .eq('user_id', user.id);
-        
-      if (deleteError) {
-        console.error("Error cleaning up existing settings:", deleteError);
-        // Continue anyway, we'll try to insert new settings
+      let result;
+      
+      // Check if settings already exist for this user
+      if (settings && settings.id !== 'new') {
+        // Settings exist, update them
+        console.log("Updating existing settings with ID:", settings.id);
+        result = await supabase
+          .from('configuracoes')
+          .update({ ...formData })
+          .eq('id', settings.id)
+          .eq('user_id', user.id)
+          .select('*')
+          .single();
+      } else {
+        // No settings exist, insert new ones
+        console.log("Inserting new settings for user:", user.id);
+        result = await supabase
+          .from('configuracoes')
+          .insert([{ ...formData, user_id: user.id }])
+          .select('*')
+          .single();
       }
       
-      // After cleanup, insert new settings
-      const { data: newData, error: insertError } = await supabase
-        .from('configuracoes')
-        .insert([{ 
-          ...formData, 
-          user_id: user.id 
-        }])
-        .select('*')
-        .single();
+      const { data: newData, error: saveError } = result;
       
-      if (insertError) {
-        console.error("Error saving settings:", insertError);
-        throw insertError;
+      if (saveError) {
+        console.error("Error saving settings:", saveError);
+        throw saveError;
       }
       
       console.log("Settings saved successfully:", newData);

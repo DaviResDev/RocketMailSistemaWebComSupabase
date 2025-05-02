@@ -20,7 +20,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     email_porta: null,
     email_usuario: '',
     email_senha: '',
-    area_negocio: null
+    area_negocio: null,
+    foto_perfil: null
   });
 
   // Update form data when settings change
@@ -32,7 +33,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         email_porta: settings.email_porta,
         email_usuario: settings.email_usuario || '',
         email_senha: settings.email_senha || '',
-        area_negocio: settings.area_negocio
+        area_negocio: settings.area_negocio,
+        foto_perfil: settings.foto_perfil
       });
     }
   }, [settings]);

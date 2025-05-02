@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCcw } from 'lucide-react';
+import { ProfileForm } from '@/components/settings/ProfileForm';
 
 export default function Configuracoes() {
   const { fetchSettings, settings, loading, error } = useSettings();
@@ -67,6 +68,12 @@ export default function Configuracoes() {
       <SettingsForm
         onSave={() => {
           toast.success('Configurações atualizadas com sucesso!');
+        }}
+      />
+
+      <ProfileForm
+        onSave={() => {
+          toast.success('Perfil atualizado com sucesso!');
         }}
       />
     </div>

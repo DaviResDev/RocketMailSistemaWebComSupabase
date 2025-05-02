@@ -45,23 +45,23 @@ serve(async (req) => {
     console.log("Fetching settings for user ID:", user_id);
     
     // Get settings from database for the specified user
-    const { data: settings, error: settingsError } = await supabaseClient
+    const { data: settingsData, error: settingsError } = await supabaseClient
       .from('configuracoes')
       .select('*')
       .eq('user_id', user_id)
-      .maybeSingle();
+      .limit(1);
       
     if (settingsError) {
       console.error("Error fetching settings:", settingsError);
       throw new Error("Erro ao buscar configurações de email: " + settingsError.message);
     }
     
-    if (!settings) {
+    if (!settingsData || settingsData.length === 0) {
       console.error("No email settings found for user:", user_id);
       throw new Error("Configurações de email não encontradas. Por favor, configure seu SMTP corretamente.");
     }
     
-    const emailConfig = settings;
+    const emailConfig = settingsData[0];
     
     if (!emailConfig.email_smtp || !emailConfig.email_porta || !emailConfig.email_usuario || !emailConfig.email_senha) {
       console.error("Incomplete email settings:", emailConfig);
