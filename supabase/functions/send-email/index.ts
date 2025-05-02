@@ -14,6 +14,7 @@ interface EmailRequest {
   content: string;
   contato_id?: string;
   template_id?: string;
+  user_id: string; // Add user_id to the request
 }
 
 serve(async (req) => {
@@ -34,18 +35,21 @@ serve(async (req) => {
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     
     const requestData = await req.json();
-    const { to, subject, content, contato_id, template_id } = requestData as EmailRequest;
+    const { to, subject, content, contato_id, template_id, user_id } = requestData as EmailRequest;
     
-    if (!to || !subject || !content) {
+    if (!to || !subject || !content || !user_id) {
       console.error("Incomplete request data:", requestData);
       throw new Error("Dados incompletos para envio de email");
     }
 
-    // Get settings from database
+    console.log("Fetching settings for user ID:", user_id);
+    
+    // Get settings from database for the specified user
     const { data: settings, error: settingsError } = await supabaseClient
       .from('configuracoes')
       .select('*')
-      .single();
+      .eq('user_id', user_id)
+      .maybeSingle();
       
     if (settingsError) {
       console.error("Error fetching settings:", settingsError);
@@ -53,7 +57,7 @@ serve(async (req) => {
     }
     
     if (!settings) {
-      console.error("No email settings found");
+      console.error("No email settings found for user:", user_id);
       throw new Error("Configurações de email não encontradas. Por favor, configure seu SMTP corretamente.");
     }
     

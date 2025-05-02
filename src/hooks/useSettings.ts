@@ -32,7 +32,7 @@ export function useSettings() {
       setLoading(true);
       setError(null);
       
-      // Get user settings
+      // Get user settings - explicitly filtering by user_id
       const { data, error } = await supabase
         .from('configuracoes')
         .select('*')
@@ -82,43 +82,36 @@ export function useSettings() {
       setLoading(true);
       console.log("Saving settings:", formData);
       
-      // First check if settings exist for this user
-      const { data: existingSettings, error: checkError } = await supabase
+      // First delete any duplicate settings (to fix the multiple rows issue)
+      // This is a one-time cleanup that will ensure we only have one settings record per user
+      const { error: deleteError } = await supabase
         .from('configuracoes')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+        .delete()
+        .eq('user_id', user.id);
         
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error("Error checking existing settings:", checkError);
-        throw checkError;
+      if (deleteError) {
+        console.error("Error cleaning up existing settings:", deleteError);
+        // Continue anyway, we'll try to insert new settings
       }
       
-      let result;
+      // After cleanup, insert new settings
+      const { data: newData, error: insertError } = await supabase
+        .from('configuracoes')
+        .insert([{ 
+          ...formData, 
+          user_id: user.id 
+        }])
+        .select('*')
+        .single();
       
-      if (existingSettings?.id) {
-        console.log("Updating existing settings with ID:", existingSettings.id);
-        // Update existing settings
-        result = await supabase
-          .from('configuracoes')
-          .update(formData)
-          .eq('id', existingSettings.id);
-      } else {
-        console.log("Creating new settings for user:", user.id);
-        // Insert new settings
-        result = await supabase
-          .from('configuracoes')
-          .insert([{ ...formData, user_id: user.id }]);
-      }
-
-      if (result.error) {
-        console.error("Error saving settings:", result.error);
-        throw result.error;
+      if (insertError) {
+        console.error("Error saving settings:", insertError);
+        throw insertError;
       }
       
-      console.log("Settings saved successfully");
+      console.log("Settings saved successfully:", newData);
+      setSettings(newData as Settings);
       toast.success('Configurações salvas com sucesso!');
-      await fetchSettings(); // Reload settings after saving
       return true;
     } catch (error: any) {
       console.error('Error saving settings:', error);

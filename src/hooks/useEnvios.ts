@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -183,7 +182,8 @@ export function useEnvios() {
             subject: template.nome,
             content: processedContent,
             contato_id: contato.id,
-            template_id: template.id
+            template_id: template.id,
+            user_id: user.id  // Pass the user_id to the edge function
           },
         });
         

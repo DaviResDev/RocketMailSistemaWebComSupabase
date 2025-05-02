@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -156,11 +155,7 @@ export function Sidebar() {
                 className="flex items-center gap-3 w-full"
               >
                 <Avatar className="h-8 w-8">
-                  {settings?.foto_perfil ? (
-                    <AvatarImage src={settings.foto_perfil} alt="Foto de perfil" />
-                  ) : (
-                    <AvatarFallback>{userInitials}</AvatarFallback>
-                  )}
+                  <AvatarFallback>{userInitials}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{userDisplayName}</p>
