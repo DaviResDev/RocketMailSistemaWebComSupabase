@@ -1,15 +1,16 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { X, Mail, Upload, File } from 'lucide-react';
-import { TemplateFormData } from '@/hooks/useTemplates';
+import { X, Mail, Upload, File, Copy, SendIcon } from 'lucide-react';
+import { TemplateFormData, useTemplates } from '@/hooks/useTemplates';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface TemplateFormProps {
   formData: TemplateFormData;
@@ -25,8 +26,35 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
   const [uploading, setUploading] = useState(false);
   const [attachments, setAttachments] = useState<Array<{name: string, size: number, type: string}>>([]);
   const { user } = useAuth();
+  const { sendTestEmail } = useTemplates();
+  const [previewContent, setPreviewContent] = useState('');
+  
+  const currentDate = new Date();
+  const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+  const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
 
   const acceptedFileTypes = "ics, xlsx, xls, ods, docx, doc, cs, pdf, txt, gif, jpg, jpeg, png, tif, tiff, rtf, msg, pub, mobi, ppt, pptx, eps";
+
+  useEffect(() => {
+    // Update preview when template content changes
+    updatePreviewContent();
+  }, [formData.conteudo, formData.assinatura]);
+
+  const updatePreviewContent = () => {
+    const templatedContent = (formData.conteudo || '')
+      .replace(/{nome}/g, "João Silva")
+      .replace(/{email}/g, "joao.silva@exemplo.com")
+      .replace(/{telefone}/g, "(11) 99999-9999")
+      .replace(/{cliente}/g, "Empresa Demo")
+      .replace(/{razao_social}/g, "Empresa Demo Ltda.")
+      .replace(/{dia}/g, formattedDate);
+      
+    const fullContent = formData.assinatura 
+      ? templatedContent + "\n\n" + formData.assinatura
+      : templatedContent;
+      
+    setPreviewContent(fullContent);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -78,13 +106,50 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
     else return (bytes / 1048576).toFixed(1) + ' MB';
   };
 
+  const handleDuplicateTemplate = () => {
+    // Create a new template with the current form data but with a different name
+    const duplicatedData = {
+      ...formData,
+      nome: `${formData.nome} (Cópia)`
+    };
+    setFormData(duplicatedData);
+    toast.success('Template duplicado! Salve para confirmar.');
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail) {
+      toast.error('Digite um e-mail para enviar o teste');
+      return;
+    }
+
+    if (isEditing) {
+      // For existing templates, we have the ID and can send a test
+      await sendTestEmail(formData.id as string, testEmail);
+    } else {
+      toast.info('Salve o template primeiro antes de enviar o teste');
+    }
+  };
+
   return (
     <Card>
       <form onSubmit={onSubmit}>
         <CardHeader>
-          <h3 className="text-lg font-semibold">
-            {isEditing ? 'Editar Template' : 'Novo Template'}
-          </h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">
+              {isEditing ? 'Editar Template' : 'Novo Template'}
+            </h3>
+            {isEditing && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDuplicateTemplate}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Duplicar
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -112,30 +177,75 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
             </div>
           </div>
 
-          <div>
-            <div className="flex justify-between items-center">
-              <Label htmlFor="conteudo">Conteúdo</Label>
-              <Button 
-                type="button" 
-                variant="link" 
-                size="sm" 
-                className="h-auto p-0 text-xs"
-                onClick={() => setShowTestEmail(!showTestEmail)}
-              >
-                {showTestEmail ? 'Ocultar' : 'Enviar e-mail de teste'}
-              </Button>
-            </div>
-            <div className="text-sm text-muted-foreground mb-2">
-              Você pode usar as seguintes variáveis no conteúdo: {'{nome}'}, {'{email}'}, {'{telefone}'}, {'{razao_social}'}, {'{cliente}'}, {'{dia}'}
-            </div>
-            <Textarea
-              id="conteudo"
-              value={formData.conteudo}
-              onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
-              className="min-h-[200px]"
-              required
-            />
-          </div>
+          <Tabs defaultValue="editor">
+            <TabsList className="mb-4">
+              <TabsTrigger value="editor">Editor</TabsTrigger>
+              <TabsTrigger value="preview">Prévia</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="editor">
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="conteudo">Conteúdo</Label>
+                    <Button 
+                      type="button" 
+                      variant="link" 
+                      size="sm" 
+                      className="h-auto p-0 text-xs"
+                      onClick={() => setShowTestEmail(!showTestEmail)}
+                    >
+                      {showTestEmail ? 'Ocultar' : 'Enviar e-mail de teste'}
+                    </Button>
+                  </div>
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Você pode usar as seguintes variáveis no conteúdo: {'{nome}'}, {'{email}'}, {'{telefone}'}, {'{razao_social}'}, {'{cliente}'}, {'{dia}'}
+                  </div>
+                  <Textarea
+                    id="conteudo"
+                    value={formData.conteudo}
+                    onChange={(e) => setFormData({ ...formData, conteudo: e.target.value })}
+                    className="min-h-[200px]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="assinatura">Assinatura Digital</Label>
+                  <Textarea
+                    id="assinatura"
+                    value={formData.assinatura || ''}
+                    onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}
+                    className="min-h-[100px]"
+                    placeholder="Exemplo: Atenciosamente, Equipe Disparo Pro"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="preview">
+              <div className="border rounded-md p-4 min-h-[350px] whitespace-pre-wrap">
+                <div className="mb-2 pb-2 border-b">
+                  <div><strong>Assunto:</strong> {formData.nome}</div>
+                  <div><strong>Para:</strong> joao.silva@exemplo.com</div>
+                </div>
+                {previewContent.split('\n').map((line, i) => (
+                  <p key={i}>{line || <br />}</p>
+                ))}
+              </div>
+              <div className="mt-4 text-sm text-muted-foreground">
+                <p>Esta é uma prévia de como seu e-mail aparecerá para o destinatário. Variáveis substituídas:</p>
+                <ul className="list-disc list-inside mt-1 grid grid-cols-2 gap-1">
+                  <li>{"{nome}"} → João Silva</li>
+                  <li>{"{email}"} → joao.silva@exemplo.com</li>
+                  <li>{"{telefone}"} → (11) 99999-9999</li>
+                  <li>{"{cliente}"} → Empresa Demo</li>
+                  <li>{"{razao_social}"} → Empresa Demo Ltda.</li>
+                  <li>{"{dia}"} → {formattedDate}</li>
+                </ul>
+              </div>
+            </TabsContent>
+          </Tabs>
           
           <div>
             <Label className="block mb-2">Anexos</Label>
@@ -197,23 +307,22 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                   onChange={(e) => setTestEmail(e.target.value)}
                   className="flex-1"
                 />
-                <Button type="button">
+                <Button 
+                  type="button"
+                  onClick={handleSendTestEmail}
+                  disabled={!isEditing}
+                >
+                  <SendIcon className="h-4 w-4 mr-2" />
                   Enviar teste
                 </Button>
               </div>
+              {!isEditing && (
+                <p className="text-xs text-muted-foreground italic">
+                  Salve o template primeiro para poder enviar um email de teste.
+                </p>
+              )}
             </div>
           )}
-          
-          <div>
-            <Label htmlFor="assinatura">Assinatura Digital</Label>
-            <Textarea
-              id="assinatura"
-              value={formData.assinatura || ''}
-              onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}
-              className="min-h-[100px]"
-              placeholder="Exemplo: Atenciosamente, Equipe Disparo Pro"
-            />
-          </div>
         </CardContent>
         <CardFooter className="flex justify-between space-x-2">
           <Button 

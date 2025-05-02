@@ -5,9 +5,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, Save, User } from 'lucide-react';
+import { Mail, Save, User, KeyRound } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { ProfileForm } from './ProfileForm';
+import { SecuritySettingsForm } from './SecuritySettingsForm';
 
 interface SettingsFormProps {
   onSave?: () => void;
@@ -20,7 +21,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     email_porta: null,
     email_usuario: '',
     email_senha: '',
-    foto_perfil: null,
     area_negocio: null
   });
 
@@ -31,7 +31,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         email_porta: settings.email_porta,
         email_usuario: settings.email_usuario || '',
         email_senha: settings.email_senha || '',
-        foto_perfil: settings.foto_perfil,
         area_negocio: settings.area_negocio
       });
     }
@@ -65,6 +64,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         <TabsTrigger value="email" className="flex items-center">
           <Mail className="h-4 w-4 mr-2" />
           Email
+        </TabsTrigger>
+        <TabsTrigger value="security" className="flex items-center">
+          <KeyRound className="h-4 w-4 mr-2" />
+          Segurança
         </TabsTrigger>
       </TabsList>
       
@@ -125,6 +128,16 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                   />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="area_negocio">Área de Negócio</Label>
+                <Input
+                  id="area_negocio"
+                  placeholder="Ex: Marketing Digital"
+                  value={formData.area_negocio || ''}
+                  onChange={(e) => setFormData({ ...formData, area_negocio: e.target.value })}
+                />
+              </div>
             </CardContent>
             <CardFooter>
               <Button type="submit">
@@ -134,6 +147,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
             </CardFooter>
           </form>
         </Card>
+      </TabsContent>
+      
+      <TabsContent value="security">
+        <SecuritySettingsForm />
       </TabsContent>
     </Tabs>
   );

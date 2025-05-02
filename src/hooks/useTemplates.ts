@@ -14,6 +14,7 @@ export type Template = {
 };
 
 export type TemplateFormData = {
+  id?: string;
   nome: string;
   conteudo: string;
   canal: string;
@@ -96,6 +97,42 @@ export function useTemplates() {
     }
   };
 
+  const duplicateTemplate = async (id: string) => {
+    try {
+      // Get the original template
+      const { data: template, error: getError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (getError) throw getError;
+      
+      // Create a new template with the same content but different name
+      const newTemplate = {
+        nome: `${template.nome} (Cópia)`,
+        conteudo: template.conteudo,
+        canal: template.canal,
+        assinatura: template.assinatura,
+        user_id: user?.id
+      };
+      
+      const { error: insertError } = await supabase
+        .from('templates')
+        .insert([newTemplate]);
+        
+      if (insertError) throw insertError;
+      
+      toast.success('Template duplicado com sucesso!');
+      await fetchTemplates();
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao duplicar template:', error);
+      toast.error('Erro ao duplicar template: ' + error.message);
+      return false;
+    }
+  };
+
   const deleteTemplate = async (id: string) => {
     try {
       const { error } = await supabase
@@ -121,6 +158,8 @@ export function useTemplates() {
     }
 
     try {
+      toast.info('Enviando email de teste...');
+      
       // Get the template first
       const { data: template, error: templateError } = await supabase
         .from('templates')
@@ -130,14 +169,30 @@ export function useTemplates() {
       
       if (templateError) throw templateError;
       
+      // Process template with sample data
+      const currentDate = new Date();
+      const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+      
+      let processedContent = template.conteudo
+        .replace(/{nome}/g, "Usuário Teste")
+        .replace(/{email}/g, email)
+        .replace(/{telefone}/g, "(00) 00000-0000")
+        .replace(/{razao_social}/g, "Empresa Teste")
+        .replace(/{cliente}/g, "Cliente Teste")
+        .replace(/{dia}/g, formattedDate);
+        
+      // Add signature if it exists
+      if (template.assinatura) {
+        processedContent += `\n\n${template.assinatura}`;
+      }
+      
       // Call our send-email edge function
       const response = await supabase.functions.invoke('send-email', {
         body: {
           to: email,
           subject: `[TESTE] ${template.nome}`,
-          content: template.conteudo,
-          isTest: true,
-          template_id: templateId
+          content: processedContent,
+          isTest: true
         },
       });
       
@@ -158,6 +213,7 @@ export function useTemplates() {
     fetchTemplates,
     createTemplate,
     updateTemplate,
+    duplicateTemplate,
     deleteTemplate,
     sendTestEmail
   };

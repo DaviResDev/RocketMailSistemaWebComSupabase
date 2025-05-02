@@ -10,7 +10,6 @@ export type Settings = {
   email_porta: number | null;
   email_usuario: string | null;
   email_senha: string | null;
-  foto_perfil: string | null;
   area_negocio: string | null;
 };
 
@@ -59,7 +58,6 @@ export function useSettings() {
           email_porta: null,
           email_usuario: '',
           email_senha: '',
-          foto_perfil: null,
           area_negocio: null
         });
       }
@@ -84,15 +82,24 @@ export function useSettings() {
     try {
       setLoading(true);
       
-      if (settings && settings.id !== 'new') {
-        // Atualizar configurações existentes
+      // First check if settings exist for this user
+      const { data: existingSettings, error: checkError } = await (supabase.from('configuracoes') as AnySupabaseTable)
+        .select('id')
+        .eq('user_id', user.id);
+        
+      if (checkError) {
+        throw checkError;
+      }
+      
+      if (existingSettings && existingSettings.length > 0) {
+        // Update existing settings
         const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
           .update(formData)
-          .eq('user_id', user.id);
+          .eq('id', existingSettings[0].id);
 
         if (error) throw error;
       } else {
-        // Inserir novas configurações
+        // Insert new settings
         const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
           .insert([{ ...formData, user_id: user.id }]);
 
@@ -111,46 +118,11 @@ export function useSettings() {
     }
   };
 
-  const uploadProfilePhoto = async (file: File): Promise<string | null> => {
-    if (!user) {
-      toast.error('Você precisa estar logado para fazer upload de fotos');
-      return null;
-    }
-
-    try {
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${user.id}/profile.${fileExt}`;
-      
-      console.log("Uploading profile photo:", filePath);
-      
-      const { error: uploadError, data } = await supabase.storage
-        .from('profile_photos')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw uploadError;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('profile_photos')
-        .getPublicUrl(filePath);
-      
-      console.log("Profile photo uploaded successfully:", publicUrlData.publicUrl);
-      return publicUrlData.publicUrl;
-    } catch (error: any) {
-      console.error('Error uploading profile photo:', error);
-      toast.error('Erro ao fazer upload da foto: ' + error.message);
-      return null;
-    }
-  };
-
   return {
     settings,
     loading,
     error,
     fetchSettings,
-    saveSettings,
-    uploadProfilePhoto
+    saveSettings
   };
 }
