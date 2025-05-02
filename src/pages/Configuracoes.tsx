@@ -15,6 +15,12 @@ export default function Configuracoes() {
     fetchSettings();
   }, [fetchSettings]);
 
+  // Retry loading if there was an error
+  const handleRetry = () => {
+    toast.info('Recarregando configurações...');
+    fetchSettings();
+  };
+
   if (error) {
     return (
       <div className="space-y-6 animate-fade-in">
@@ -30,7 +36,7 @@ export default function Configuracoes() {
             <p className="text-destructive">{error}</p>
             <Button 
               className="mt-4"
-              onClick={() => fetchSettings()}
+              onClick={handleRetry}
             >
               <RefreshCcw className="mr-2 h-4 w-4" />
               Tentar novamente

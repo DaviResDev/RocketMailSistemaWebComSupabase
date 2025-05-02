@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,10 +69,6 @@ serve(async (req) => {
     console.log("Subject:", subject);
     console.log("Using SMTP server:", emailConfig.email_smtp);
     
-    // Since we can't use the SMTP module directly in Deno, we'll simulate a successful send for demo purposes
-    // In a real production environment, you would need to use a third-party email service API
-    console.log("Simulating successful email send (for demo purposes)");
-    
     // Generate signature with area_negocio if available
     let assinatura = "";
     if (emailConfig.area_negocio) {
@@ -92,39 +89,67 @@ serve(async (req) => {
         </div>
       </div>
     `;
-    
-    // If this was triggered from an envio, update its status
-    if (contato_id && template_id) {
-      const { data: envios } = await supabaseClient
-        .from('envios')
-        .select('id')
-        .eq('contato_id', contato_id)
-        .eq('template_id', template_id)
-        .order('data_envio', { ascending: false })
-        .limit(1);
-        
-      if (envios && envios.length > 0) {
-        await supabaseClient
+
+    try {
+      // Create SMTP client with user configuration
+      const client = new SMTPClient({
+        connection: {
+          hostname: emailConfig.email_smtp,
+          port: emailConfig.email_porta || 587,
+          tls: true,
+          auth: {
+            username: emailConfig.email_usuario,
+            password: emailConfig.email_senha,
+          },
+        },
+      });
+
+      // Send the email
+      await client.send({
+        from: emailConfig.email_usuario,
+        to: to,
+        subject: subject,
+        content: "text/html",
+        html: htmlContent,
+      });
+      
+      // Close the connection
+      await client.close();
+      
+      console.log("Email sent successfully to:", to);
+      
+      // If this was triggered from an envio, update its status
+      if (contato_id && template_id) {
+        const { data: envios } = await supabaseClient
           .from('envios')
-          .update({ status: 'entregue' })
-          .eq('id', envios[0].id);
+          .select('id')
+          .eq('contato_id', contato_id)
+          .eq('template_id', template_id)
+          .order('data_envio', { ascending: false })
+          .limit(1);
+          
+        if (envios && envios.length > 0) {
+          await supabaseClient
+            .from('envios')
+            .update({ status: 'entregue' })
+            .eq('id', envios[0].id);
+        }
       }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Email enviado com sucesso!"
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    } catch (smtpError: any) {
+      console.error("SMTP Error:", smtpError);
+      throw new Error(`Erro ao enviar email: ${smtpError.message}`);
     }
-    
-    // For a real implementation, you would use a third-party email service here
-    // such as SendGrid, Mailgun, AWS SES, etc. via their respective APIs
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Email simulado com sucesso! Em um ambiente de produção, você precisaria conectar com um serviço de email real.",
-        note: "Esta é uma simulação para fins de demonstração."
-      }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
-    );
   } catch (error: any) {
     console.error("Error in send-email function:", error);
     

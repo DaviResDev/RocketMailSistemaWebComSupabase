@@ -39,27 +39,32 @@ export function useSettings() {
       // is not defined in the TypeScript types
       const { data, error } = await (supabase.from('configuracoes') as AnySupabaseTable)
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .single();
 
       if (error) {
+        // If no settings exist yet, don't treat as an error
+        if (error.code === 'PGRST116') {
+          // No settings found, create empty settings
+          console.log("No settings found, using empty defaults");
+          setSettings({
+            id: 'new',
+            email_smtp: '',
+            email_porta: null,
+            email_usuario: '',
+            email_senha: '',
+            area_negocio: null
+          });
+          return;
+        }
+        
         console.error('Error fetching settings:', error);
         setError(`Erro ao carregar configurações: ${error.message}`);
         throw error;
       }
       
-      if (data && data.length > 0) {
-        setSettings(data[0] as Settings);
-      } else {
-        // No settings found, create empty settings
-        console.log("No settings found, using empty defaults");
-        setSettings({
-          id: 'new',
-          email_smtp: '',
-          email_porta: null,
-          email_usuario: '',
-          email_senha: '',
-          area_negocio: null
-        });
+      if (data) {
+        setSettings(data as Settings);
       }
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
@@ -95,7 +100,7 @@ export function useSettings() {
         // Update existing settings
         const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
           .update(formData)
-          .eq('id', existingSettings[0].id);
+          .eq('user_id', user.id);
 
         if (error) throw error;
       } else {

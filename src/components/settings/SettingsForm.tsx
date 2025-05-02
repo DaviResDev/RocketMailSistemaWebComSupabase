@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Mail, Save, User, KeyRound } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
-import { ProfileForm } from './ProfileForm';
 import { SecuritySettingsForm } from './SecuritySettingsForm';
 
 interface SettingsFormProps {
@@ -55,12 +54,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
   }
 
   return (
-    <Tabs defaultValue="personal">
+    <Tabs defaultValue="email">
       <TabsList className="mb-4">
-        <TabsTrigger value="personal" className="flex items-center">
-          <User className="h-4 w-4 mr-2" />
-          Dados Pessoais
-        </TabsTrigger>
         <TabsTrigger value="email" className="flex items-center">
           <Mail className="h-4 w-4 mr-2" />
           Email
@@ -70,10 +65,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
           Segurança
         </TabsTrigger>
       </TabsList>
-      
-      <TabsContent value="personal">
-        <ProfileForm onSave={onSave} />
-      </TabsContent>
       
       <TabsContent value="email">
         <Card>
