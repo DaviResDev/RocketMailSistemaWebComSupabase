@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -54,7 +55,14 @@ export function Sidebar() {
   const isMobile = useIsMobile();
   const { theme, toggleTheme } = useTheme();
   const { signOut, user, profile } = useAuth();
-  const { settings } = useSettings();
+  const { settings, fetchSettings } = useSettings();
+  
+  // Fetch user settings when component mounts
+  useEffect(() => {
+    if (user) {
+      fetchSettings();
+    }
+  }, [user, fetchSettings]);
 
   const navigation = [
     { to: '/dashboard', label: 'Dashboard', icon: Home },
@@ -155,7 +163,11 @@ export function Sidebar() {
                 className="flex items-center gap-3 w-full"
               >
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback>{userInitials}</AvatarFallback>
+                  {settings?.foto_perfil ? (
+                    <AvatarImage src={settings.foto_perfil} />
+                  ) : (
+                    <AvatarFallback>{userInitials}</AvatarFallback>
+                  )}
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{userDisplayName}</p>

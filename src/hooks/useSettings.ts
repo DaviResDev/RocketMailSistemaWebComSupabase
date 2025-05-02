@@ -11,6 +11,7 @@ export type Settings = {
   email_usuario: string | null;
   email_senha: string | null;
   area_negocio: string | null;
+  foto_perfil: string | null;
 };
 
 export type SettingsFormData = Omit<Settings, 'id'>;
@@ -57,7 +58,8 @@ export function useSettings() {
           email_porta: null,
           email_usuario: '',
           email_senha: '',
-          area_negocio: null
+          area_negocio: null,
+          foto_perfil: null
         });
       }
     } catch (error: any) {
@@ -122,11 +124,47 @@ export function useSettings() {
     }
   };
 
+  const uploadProfilePhoto = async (file: File): Promise<string | null> => {
+    if (!user) {
+      toast.error('Você precisa estar logado para fazer upload de fotos');
+      return null;
+    }
+
+    try {
+      // Upload the photo to Supabase Storage
+      const filePath = `profile-photos/${user.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get the public URL
+      const { data: urlData } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
+
+      if (!urlData || !urlData.publicUrl) {
+        throw new Error('Failed to get public URL for uploaded file');
+      }
+
+      // Return the public URL
+      return urlData.publicUrl;
+    } catch (error: any) {
+      console.error('Error uploading profile photo:', error);
+      toast.error('Erro ao fazer upload da foto de perfil: ' + error.message);
+      return null;
+    }
+  };
+
   return {
     settings,
     loading,
     error,
     fetchSettings,
-    saveSettings
+    saveSettings,
+    uploadProfilePhoto
   };
 }

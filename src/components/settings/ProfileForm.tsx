@@ -17,7 +17,6 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
   const { settings, loading, fetchSettings, saveSettings, uploadProfilePhoto } = useSettings();
   const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<SettingsFormData>>({
-    foto_perfil: null,
     area_negocio: null
   });
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -64,8 +63,8 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       email_porta: settings?.email_porta || null,
       email_usuario: settings?.email_usuario || null,
       email_senha: settings?.email_senha || null,
-      foto_perfil: formData.foto_perfil,
-      area_negocio: formData.area_negocio
+      foto_perfil: formData.foto_perfil || null,
+      area_negocio: formData.area_negocio || null
     };
     
     const success = await saveSettings(updatedSettings);
