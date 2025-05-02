@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -69,7 +68,7 @@ export function useEnvios() {
 
       if (error) throw error;
       
-      // Ensure data conforms to our type
+      // Ensure data conforms to our type with optional fields
       const processedData: Envio[] = (data || []).map(item => ({
         id: item.id,
         contato_id: item.contato_id,
@@ -78,9 +77,9 @@ export function useEnvios() {
         status: item.status,
         erro: item.erro,
         user_id: item.user_id,
-        cc: item.cc,
-        bcc: item.bcc,
-        attachments: item.attachments,
+        cc: item.cc || null,
+        bcc: item.bcc || null,
+        attachments: item.attachments || null,
         contato: item.contato as Envio['contato'],
         template: item.template as Envio['template']
       }));

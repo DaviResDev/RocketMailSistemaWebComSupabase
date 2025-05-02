@@ -34,38 +34,55 @@ serve(async (req) => {
     console.log("User:", smtp_user);
     console.log("Security type:", smtp_security);
     
-    // Create SMTP client with user configuration
-    const client = new SMTPClient({
-      connection: {
-        hostname: smtp_server,
-        port: smtp_port,
-        tls: smtp_security !== 'none',
-        auth: {
-          username: smtp_user,
-          password: smtp_password,
+    // Configure TLS/SSL based on security setting
+    const useTLS = smtp_security === 'tls';
+    const useSSL = smtp_security === 'ssl';
+    
+    try {
+      // Create SMTP client with user configuration
+      const client = new SMTPClient({
+        connection: {
+          hostname: smtp_server,
+          port: smtp_port,
+          tls: useTLS,
+          secure: useSSL,
+          auth: {
+            username: smtp_user,
+            password: smtp_password,
+          },
         },
-      },
-      debug: true, // Enable debug mode for troubleshooting
-    });
+        debug: true, // Enable debug mode for troubleshooting
+      });
 
-    // Just try to connect to verify credentials
-    await client.connect();
-    
-    // Close the connection
-    await client.close();
-    
-    console.log("SMTP connection successful");
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Conexão SMTP estabelecida com sucesso!"
-      }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
-    );
+      // The denomailer library works differently than expected
+      // Instead of just connecting, we'll try to send a test email to verify connection
+      await client.send({
+        from: smtp_user,
+        to: smtp_user, // Send to self as a test
+        subject: "SMTP Test Connection",
+        content: "text/plain",
+        text: "This is a test email to verify SMTP connection.",
+      });
+      
+      // Close the connection
+      await client.close();
+      
+      console.log("SMTP connection successful");
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Conexão SMTP estabelecida com sucesso!"
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    } catch (smtpError: any) {
+      console.error("SMTP Connection Error:", smtpError);
+      throw new Error(`Falha na conexão SMTP: ${smtpError.message}`);
+    }
   } catch (error: any) {
     console.error("Error in test-smtp function:", error);
     

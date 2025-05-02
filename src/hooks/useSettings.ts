@@ -14,9 +14,12 @@ export type Settings = {
   foto_perfil: string | null;
   smtp_seguranca: string | null; // TLS/SSL
   smtp_nome: string | null; // Nome da conta SMTP
+  whatsapp_token?: string | null;
+  created_at?: string | null;
+  user_id?: string;
 };
 
-export type SettingsFormData = Omit<Settings, 'id'>;
+export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -50,7 +53,21 @@ export function useSettings() {
       
       if (data) {
         console.log("Settings loaded:", data);
-        setSettings(data as Settings);
+        // Make sure to transform the data to match our Settings type
+        setSettings({
+          id: data.id,
+          email_smtp: data.email_smtp,
+          email_porta: data.email_porta,
+          email_usuario: data.email_usuario,
+          email_senha: data.email_senha,
+          area_negocio: data.area_negocio,
+          foto_perfil: data.foto_perfil,
+          smtp_seguranca: data.smtp_seguranca || 'tls',
+          smtp_nome: data.smtp_nome || '',
+          whatsapp_token: data.whatsapp_token,
+          created_at: data.created_at,
+          user_id: data.user_id
+        });
       } else {
         // No settings found, create empty settings object
         console.log("No settings found, using empty defaults");

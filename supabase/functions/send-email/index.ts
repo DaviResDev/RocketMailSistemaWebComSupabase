@@ -106,15 +106,18 @@ serve(async (req) => {
     `;
 
     try {
-      // Determine TLS setting based on configuration
-      const useTls = emailConfig.smtp_seguranca !== "none";
+      // Configure TLS/SSL based on security setting
+      const useTLS = emailConfig.smtp_seguranca === 'tls';
+      const useSSL = emailConfig.smtp_seguranca === 'ssl';
+      const noSecurity = emailConfig.smtp_seguranca === 'none';
       
       // Create SMTP client with user configuration
       const client = new SMTPClient({
         connection: {
           hostname: emailConfig.email_smtp,
           port: emailConfig.email_porta,
-          tls: useTls,
+          tls: useTLS,
+          secure: useSSL,
           auth: {
             username: emailConfig.email_usuario,
             password: emailConfig.email_senha,
