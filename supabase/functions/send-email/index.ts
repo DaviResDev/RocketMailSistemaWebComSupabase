@@ -45,20 +45,19 @@ serve(async (req) => {
     const { data: settings, error: settingsError } = await supabaseClient
       .from('configuracoes')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .single();
       
     if (settingsError) {
       console.error("Error fetching settings:", settingsError);
       throw new Error("Erro ao buscar configurações de email: " + settingsError.message);
     }
     
-    if (!settings || settings.length === 0) {
+    if (!settings) {
       console.error("No email settings found");
       throw new Error("Configurações de email não encontradas. Por favor, configure seu SMTP corretamente.");
     }
     
-    const emailConfig = settings[0];
+    const emailConfig = settings;
     
     if (!emailConfig.email_smtp || !emailConfig.email_porta || !emailConfig.email_usuario || !emailConfig.email_senha) {
       console.error("Incomplete email settings:", emailConfig);
@@ -68,6 +67,8 @@ serve(async (req) => {
     console.log("Sending email to:", to);
     console.log("Subject:", subject);
     console.log("Using SMTP server:", emailConfig.email_smtp);
+    console.log("Using SMTP port:", emailConfig.email_porta);
+    console.log("Using SMTP username:", emailConfig.email_usuario);
     
     // Generate signature with area_negocio if available
     let assinatura = "";
@@ -95,14 +96,17 @@ serve(async (req) => {
       const client = new SMTPClient({
         connection: {
           hostname: emailConfig.email_smtp,
-          port: emailConfig.email_porta || 587,
+          port: emailConfig.email_porta,
           tls: true,
           auth: {
             username: emailConfig.email_usuario,
             password: emailConfig.email_senha,
           },
         },
+        debug: true, // Enable debug mode for troubleshooting
       });
+
+      console.log("SMTP client configured, attempting to send email...");
 
       // Send the email
       await client.send({
@@ -133,6 +137,8 @@ serve(async (req) => {
             .from('envios')
             .update({ status: 'entregue' })
             .eq('id', envios[0].id);
+            
+          console.log("Updated envio status to 'entregue'");
         }
       }
       

@@ -162,10 +162,15 @@ export function useEnvios() {
         .from('configuracoes')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
         
-      if (configError || !configData || !configData.email_smtp || !configData.email_usuario || !configData.email_senha) {
-        console.error('Erro ou configurações incompletas:', configError || 'Faltam configurações de email');
+      if (configError) {
+        console.error('Erro ao buscar configurações:', configError);
+        throw new Error('Erro ao buscar configurações de email: ' + configError.message);
+      }
+
+      if (!configData || !configData.email_smtp || !configData.email_usuario || !configData.email_senha) {
+        console.error('Configurações incompletas:', configData);
         throw new Error('Configurações de email incompletas. Por favor, configure seu email em Configurações antes de enviar.');
       }
 

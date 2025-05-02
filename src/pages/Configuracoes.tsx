@@ -12,6 +12,7 @@ export default function Configuracoes() {
   const { fetchSettings, settings, loading, error } = useSettings();
 
   useEffect(() => {
+    console.log("Configuracoes page - Fetching settings");
     fetchSettings();
   }, [fetchSettings]);
 

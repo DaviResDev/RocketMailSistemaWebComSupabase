@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,10 +14,6 @@ export type Settings = {
 };
 
 export type SettingsFormData = Omit<Settings, 'id'>;
-
-// Generic type to help with Supabase client typing
-type SupabaseFrom = typeof supabase.from;
-type AnySupabaseTable = ReturnType<SupabaseFrom>;
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -35,36 +31,34 @@ export function useSettings() {
     try {
       setLoading(true);
       setError(null);
-      // Using type assertion to bypass type checking since 'configuracoes' 
-      // is not defined in the TypeScript types
-      const { data, error } = await (supabase.from('configuracoes') as AnySupabaseTable)
+      
+      // Get user settings
+      const { data, error } = await supabase
+        .from('configuracoes')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // Using maybeSingle instead of single to avoid errors when no settings exist
 
-      if (error) {
-        // If no settings exist yet, don't treat as an error
-        if (error.code === 'PGRST116') {
-          // No settings found, create empty settings
-          console.log("No settings found, using empty defaults");
-          setSettings({
-            id: 'new',
-            email_smtp: '',
-            email_porta: null,
-            email_usuario: '',
-            email_senha: '',
-            area_negocio: null
-          });
-          return;
-        }
-        
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching settings:', error);
         setError(`Erro ao carregar configurações: ${error.message}`);
         throw error;
       }
       
       if (data) {
+        console.log("Settings loaded:", data);
         setSettings(data as Settings);
+      } else {
+        // No settings found, create empty settings object
+        console.log("No settings found, using empty defaults");
+        setSettings({
+          id: 'new',
+          email_smtp: '',
+          email_porta: null,
+          email_usuario: '',
+          email_senha: '',
+          area_negocio: null
+        });
       }
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
@@ -86,33 +80,45 @@ export function useSettings() {
 
     try {
       setLoading(true);
+      console.log("Saving settings:", formData);
       
       // First check if settings exist for this user
-      const { data: existingSettings, error: checkError } = await (supabase.from('configuracoes') as AnySupabaseTable)
+      const { data: existingSettings, error: checkError } = await supabase
+        .from('configuracoes')
         .select('id')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .maybeSingle();
         
-      if (checkError) {
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error("Error checking existing settings:", checkError);
         throw checkError;
       }
       
-      if (existingSettings && existingSettings.length > 0) {
+      let result;
+      
+      if (existingSettings?.id) {
+        console.log("Updating existing settings with ID:", existingSettings.id);
         // Update existing settings
-        const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
+        result = await supabase
+          .from('configuracoes')
           .update(formData)
-          .eq('user_id', user.id);
-
-        if (error) throw error;
+          .eq('id', existingSettings.id);
       } else {
+        console.log("Creating new settings for user:", user.id);
         // Insert new settings
-        const { error } = await (supabase.from('configuracoes') as AnySupabaseTable)
+        result = await supabase
+          .from('configuracoes')
           .insert([{ ...formData, user_id: user.id }]);
+      }
 
-        if (error) throw error;
+      if (result.error) {
+        console.error("Error saving settings:", result.error);
+        throw result.error;
       }
       
+      console.log("Settings saved successfully");
       toast.success('Configurações salvas com sucesso!');
-      await fetchSettings();
+      await fetchSettings(); // Reload settings after saving
       return true;
     } catch (error: any) {
       console.error('Error saving settings:', error);

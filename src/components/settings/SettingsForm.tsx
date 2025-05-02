@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, Save, User, KeyRound } from 'lucide-react';
+import { Mail, Save, KeyRound } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { SecuritySettingsForm } from './SecuritySettingsForm';
 
@@ -14,7 +14,7 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ onSave }: SettingsFormProps) {
-  const { settings, loading, fetchSettings, saveSettings } = useSettings();
+  const { settings, loading, saveSettings } = useSettings();
   const [formData, setFormData] = useState<SettingsFormData>({
     email_smtp: '',
     email_porta: null,
@@ -23,8 +23,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     area_negocio: null
   });
 
+  // Update form data when settings change
   useEffect(() => {
     if (settings) {
+      console.log("Setting form data from settings:", settings);
       setFormData({
         email_smtp: settings.email_smtp || '',
         email_porta: settings.email_porta,
@@ -37,6 +39,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Submitting form data:", formData);
     const success = await saveSettings(formData);
     if (success && onSave) {
       onSave();
