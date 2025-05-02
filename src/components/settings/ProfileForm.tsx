@@ -1,75 +1,86 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { UserRound, Upload, Save, User } from 'lucide-react';
+import { Upload, Save } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
-import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface ProfileFormProps {
   onSave?: () => void;
 }
 
 export function ProfileForm({ onSave }: ProfileFormProps) {
-  const { settings, loading, fetchSettings, saveSettings, uploadProfilePhoto } = useSettings();
-  const { user } = useAuth();
-  const [formData, setFormData] = useState<Partial<SettingsFormData>>({
-    area_negocio: null
+  const { settings, loading, saveSettings, uploadProfilePhoto } = useSettings();
+  const [profileData, setProfileData] = useState<Partial<SettingsFormData>>({
+    area_negocio: '',
+    foto_perfil: null
   });
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchSettings();
-  }, [fetchSettings]);
-
+  // Update form data when settings change
   useEffect(() => {
     if (settings) {
-      setFormData({
-        foto_perfil: settings.foto_perfil,
-        area_negocio: settings.area_negocio
+      setProfileData({
+        area_negocio: settings.area_negocio || '',
+        foto_perfil: settings.foto_perfil || null
       });
     }
   }, [settings]);
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    
-    const file = e.target.files[0];
-    setUploadingPhoto(true);
-    
-    try {
-      const url = await uploadProfilePhoto(file);
-      if (url) {
-        setFormData({ ...formData, foto_perfil: url });
-      }
-    } finally {
-      setUploadingPhoto(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const updatedSettings: SettingsFormData = {
-      email_smtp: settings?.email_smtp || null,
-      email_porta: settings?.email_porta || null,
-      email_usuario: settings?.email_usuario || null,
-      email_senha: settings?.email_senha || null,
-      foto_perfil: formData.foto_perfil || null,
-      area_negocio: formData.area_negocio || null
+    if (!settings) return;
+    
+    // Create complete form data from current settings plus updated profile data
+    const formData: SettingsFormData = {
+      email_smtp: settings.email_smtp,
+      email_porta: settings.email_porta,
+      email_usuario: settings.email_usuario,
+      email_senha: settings.email_senha,
+      area_negocio: profileData.area_negocio || null,
+      foto_perfil: profileData.foto_perfil,
+      smtp_seguranca: settings.smtp_seguranca || null,
+      smtp_nome: settings.smtp_nome || null
     };
     
-    const success = await saveSettings(updatedSettings);
+    const success = await saveSettings(formData);
+    
     if (success && onSave) {
       onSave();
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 2MB');
+      return;
+    }
+    
+    // Check file type
+    if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
+      toast.error('Formato de arquivo não suportado. Use JPG, PNG ou GIF');
+      return;
+    }
+    
+    try {
+      const photoUrl = await uploadProfilePhoto(file);
+      if (photoUrl) {
+        setProfileData({
+          ...profileData,
+          foto_perfil: photoUrl
+        });
+        toast.success('Foto de perfil carregada com sucesso!');
+      }
+    } catch (error: any) {
+      toast.error('Erro ao enviar a foto: ' + error.message);
     }
   };
 
@@ -87,64 +98,47 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
     <Card>
       <form onSubmit={handleSubmit}>
         <CardHeader>
-          <CardTitle>Seu Perfil</CardTitle>
+          <CardTitle>Perfil</CardTitle>
           <CardDescription>
-            Atualize suas informações pessoais e foto de perfil.
+            Atualize as informações do seu perfil.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col items-center sm:flex-row sm:items-start gap-6">
-            <div className="flex flex-col items-center gap-3">
-              <Avatar className="w-24 h-24">
-                {formData.foto_perfil ? (
-                  <AvatarImage src={formData.foto_perfil} />
-                ) : (
-                  <AvatarFallback>
-                    <UserRound className="h-12 w-12" />
-                  </AvatarFallback>
-                )}
-              </Avatar>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingPhoto}
-              >
-                <Upload className="h-4 w-4" />
-                {uploadingPhoto ? 'Enviando...' : 'Alterar foto'}
-              </Button>
-              <input
+          <div className="flex flex-col items-center space-y-4">
+            <Avatar className="w-24 h-24">
+              <AvatarImage src={profileData.foto_perfil || undefined} alt="Avatar" />
+              <AvatarFallback>
+                {settings?.email_usuario ? settings.email_usuario.substring(0, 2).toUpperCase() : '?'}
+              </AvatarFallback>
+            </Avatar>
+            
+            <Label 
+              htmlFor="avatar-upload"
+              className="cursor-pointer flex items-center space-x-2 px-4 py-2 border rounded-md hover:bg-accent"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Carregar foto</span>
+              <Input 
+                id="avatar-upload" 
                 type="file"
-                ref={fileInputRef}
-                onChange={handlePhotoUpload}
-                className="hidden"
                 accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
               />
-            </div>
+            </Label>
+          </div>
 
-            <div className="w-full space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  value={user?.email || ''}
-                  readOnly
-                  disabled
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="area_negocio">Área de Negócio</Label>
-                <Input
-                  id="area_negocio"
-                  placeholder="Ex: Consultoria Financeira"
-                  value={formData.area_negocio || ''}
-                  onChange={(e) => setFormData({ ...formData, area_negocio: e.target.value })}
-                />
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="area_negocio">Área de Negócio</Label>
+            <Input
+              id="area_negocio"
+              placeholder="Ex: Marketing Digital"
+              value={profileData.area_negocio || ''}
+              onChange={(e) => setProfileData({ ...profileData, area_negocio: e.target.value })}
+            />
+            <p className="text-sm text-muted-foreground">
+              Esta informação aparecerá na assinatura dos seus e-mails.
+            </p>
           </div>
         </CardContent>
         <CardFooter>

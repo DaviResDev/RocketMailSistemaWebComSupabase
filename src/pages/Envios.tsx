@@ -1,7 +1,7 @@
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -10,17 +10,61 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Mail, MessageSquare } from 'lucide-react';
+import { Mail, MessageSquare, Paperclip, RefreshCw, AlertCircle, Download } from 'lucide-react';
 import { useEnvios } from '@/hooks/useEnvios';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Envios() {
-  const { envios, loading, fetchEnvios } = useEnvios();
+  const { envios, loading, sending, fetchEnvios, resendEnvio } = useEnvios();
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEnvios();
   }, []);
+
+  const handleResendEmail = async (id: string) => {
+    setResendingId(id);
+    try {
+      await resendEnvio(id);
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const downloadAttachment = async (path: string, fileName: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(path);
+        
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        // Create a URL for the downloaded file
+        const url = URL.createObjectURL(data);
+        
+        // Create an invisible anchor element to trigger the download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error: any) {
+      console.error('Error downloading attachment:', error);
+      alert(`Erro ao baixar o anexo: ${error.message}`);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -44,6 +88,9 @@ export default function Envios() {
         </div>
       ) : (
         <Card>
+          <CardHeader>
+            <CardTitle>Histórico de Envios</CardTitle>
+          </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -53,6 +100,8 @@ export default function Envios() {
                   <TableHead>Template</TableHead>
                   <TableHead>Canal</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Anexos</TableHead>
+                  <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -81,6 +130,52 @@ export default function Envios() {
                       >
                         {envio.status}
                       </Badge>
+                      {envio.status === 'erro' && envio.erro && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertCircle className="h-4 w-4 inline-block ml-2 text-destructive" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p>{envio.erro}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {envio.attachments && envio.attachments.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {envio.attachments.map((attachment, index) => (
+                            <Button 
+                              key={index} 
+                              variant="ghost" 
+                              size="sm" 
+                              className="flex items-center text-xs"
+                              onClick={() => downloadAttachment(attachment.file_path, attachment.file_name)}
+                            >
+                              <Paperclip className="h-3.5 w-3.5 mr-1" />
+                              <span className="truncate max-w-[150px]">{attachment.file_name}</span>
+                              <Download className="h-3.5 w-3.5 ml-1" />
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Nenhum anexo</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {envio.status === 'erro' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          disabled={sending || resendingId === envio.id}
+                          onClick={() => handleResendEmail(envio.id)}
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${resendingId === envio.id ? 'animate-spin' : ''}`} />
+                          Reenviar
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

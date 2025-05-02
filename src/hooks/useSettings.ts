@@ -12,6 +12,8 @@ export type Settings = {
   email_senha: string | null;
   area_negocio: string | null;
   foto_perfil: string | null;
+  smtp_seguranca: string | null; // TLS/SSL
+  smtp_nome: string | null; // Nome da conta SMTP
 };
 
 export type SettingsFormData = Omit<Settings, 'id'>;
@@ -59,7 +61,9 @@ export function useSettings() {
           email_usuario: '',
           email_senha: '',
           area_negocio: null,
-          foto_perfil: null
+          foto_perfil: null,
+          smtp_seguranca: 'tls', // Default to TLS
+          smtp_nome: ''
         });
       }
     } catch (error: any) {
@@ -127,6 +131,35 @@ export function useSettings() {
     }
   };
 
+  const testSmtpConnection = async (formData: SettingsFormData) => {
+    try {
+      setLoading(true);
+      
+      const response = await supabase.functions.invoke('test-smtp', {
+        body: {
+          smtp_server: formData.email_smtp,
+          smtp_port: formData.email_porta,
+          smtp_user: formData.email_usuario,
+          smtp_password: formData.email_senha,
+          smtp_security: formData.smtp_seguranca || 'tls'
+        }
+      });
+
+      if (response.error) {
+        throw new Error(`Teste de conexão SMTP falhou: ${response.error.message}`);
+      }
+
+      toast.success('Conexão SMTP testada com sucesso!');
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao testar conexão SMTP:', error);
+      toast.error('Erro ao testar conexão SMTP: ' + error.message);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const uploadProfilePhoto = async (file: File): Promise<string | null> => {
     if (!user) {
       toast.error('Você precisa estar logado para fazer upload de fotos');
@@ -168,6 +201,7 @@ export function useSettings() {
     error,
     fetchSettings,
     saveSettings,
+    testSmtpConnection,
     uploadProfilePhoto
   };
 }

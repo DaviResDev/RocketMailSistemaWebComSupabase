@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +12,9 @@ export type Envio = {
   status: string;
   erro: string | null;
   user_id: string;
+  cc?: string[] | null;
+  bcc?: string[] | null;
+  attachments?: EnvioAttachment[] | null;
   contato?: {
     nome: string;
     email: string;
@@ -26,9 +30,20 @@ export type Envio = {
   };
 };
 
+export type EnvioAttachment = {
+  id: string;
+  envio_id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+};
+
 export type EnvioFormData = {
   contato_id: string;
   template_id: string;
+  cc?: string[];
+  bcc?: string[];
+  attachments?: File[];
 };
 
 export function useEnvios() {
@@ -63,6 +78,9 @@ export function useEnvios() {
         status: item.status,
         erro: item.erro,
         user_id: item.user_id,
+        cc: item.cc,
+        bcc: item.bcc,
+        attachments: item.attachments,
         contato: item.contato as Envio['contato'],
         template: item.template as Envio['template']
       }));
@@ -74,6 +92,47 @@ export function useEnvios() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const uploadAttachment = async (file: File): Promise<{ path: string; name: string; type: string } | null> => {
+    if (!user) return null;
+
+    try {
+      const filePath = `attachments/${user.id}/${Date.now()}-${file.name}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('email-attachments')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+      
+      return {
+        path: filePath,
+        name: file.name,
+        type: file.type
+      };
+    } catch (error: any) {
+      console.error('Erro ao fazer upload do anexo:', error);
+      toast.error(`Erro ao fazer upload do anexo ${file.name}: ${error.message}`);
+      return null;
+    }
+  };
+  
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          // Remove the data URL prefix (e.g., "data:image/png;base64,")
+          const base64String = reader.result.split(',')[1];
+          resolve(base64String);
+        } else {
+          reject(new Error('Failed to convert file to base64'));
+        }
+      };
+      reader.onerror = reject;
+    });
   };
 
   const createEnvio = async (formData: EnvioFormData) => {
@@ -118,14 +177,41 @@ export function useEnvios() {
       
       console.log('Contato e template verificados com sucesso');
 
+      // Process attachments if any
+      let attachmentsData = [];
+      if (formData.attachments && formData.attachments.length > 0) {
+        toast.info(`Preparando ${formData.attachments.length} anexos...`);
+        
+        // Convert all files to base64
+        const attachmentPromises = formData.attachments.map(async (file) => {
+          try {
+            const base64Content = await fileToBase64(file);
+            return {
+              filename: file.name,
+              content: base64Content,
+              contentType: file.type
+            };
+          } catch (error) {
+            console.error(`Failed to process attachment ${file.name}:`, error);
+            toast.error(`Erro ao processar anexo ${file.name}`);
+            return null;
+          }
+        });
+        
+        attachmentsData = (await Promise.all(attachmentPromises)).filter(a => a !== null);
+      }
+
       // Criar o registro de envio
       const { data: envioData, error: envioError } = await supabase
         .from('envios')
         .insert([{
-          ...formData,
+          contato_id: formData.contato_id,
+          template_id: formData.template_id,
           user_id: user.id,
           status: 'pendente',
-          data_envio: new Date().toISOString()
+          data_envio: new Date().toISOString(),
+          cc: formData.cc || null,
+          bcc: formData.bcc || null
         }])
         .select();
 
@@ -161,14 +247,14 @@ export function useEnvios() {
         .from('configuracoes')
         .select('*')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .limit(1);
         
       if (configError) {
         console.error('Erro ao buscar configurações:', configError);
         throw new Error('Erro ao buscar configurações de email: ' + configError.message);
       }
 
-      if (!configData || !configData.email_smtp || !configData.email_usuario || !configData.email_senha) {
+      if (!configData || configData.length === 0 || !configData[0].email_smtp || !configData[0].email_usuario || !configData[0].email_senha) {
         console.error('Configurações incompletas:', configData);
         throw new Error('Configurações de email incompletas. Por favor, configure seu email em Configurações antes de enviar.');
       }
@@ -183,7 +269,10 @@ export function useEnvios() {
             content: processedContent,
             contato_id: contato.id,
             template_id: template.id,
-            user_id: user.id  // Pass the user_id to the edge function
+            user_id: user.id,
+            cc: formData.cc,
+            bcc: formData.bcc,
+            attachments: attachmentsData
           },
         });
         
@@ -233,11 +322,100 @@ export function useEnvios() {
     }
   };
 
+  // Function to resend a failed email
+  const resendEnvio = async (envioId: string) => {
+    if (!user) {
+      toast.error('Você precisa estar logado para reenviar mensagens');
+      return false;
+    }
+
+    setSending(true);
+
+    try {
+      // Get the envio details
+      const { data: envioData, error: envioError } = await supabase
+        .from('envios')
+        .select(`
+          *,
+          contato:contatos(nome, email, telefone, razao_social, cliente),
+          template:templates(nome, canal, conteudo, assinatura)
+        `)
+        .eq('id', envioId)
+        .single();
+
+      if (envioError) {
+        console.error('Erro ao buscar dados do envio:', envioError);
+        throw new Error('Erro ao buscar dados do envio para reenvio');
+      }
+
+      const envio = envioData as Envio;
+      
+      if (!envio.contato || !envio.template) {
+        throw new Error('Dados de contato ou template incompletos para reenvio');
+      }
+
+      // Process template content
+      let processedContent = envio.template.conteudo
+        .replace(/{nome}/g, envio.contato.nome || '')
+        .replace(/{email}/g, envio.contato.email || '')
+        .replace(/{telefone}/g, envio.contato.telefone || '')
+        .replace(/{razao_social}/g, envio.contato.razao_social || '')
+        .replace(/{cliente}/g, envio.contato.cliente || '')
+        .replace(/{dia}/g, new Date().toLocaleDateString('pt-BR'));
+
+      // Add signature if available
+      if (envio.template.assinatura) {
+        processedContent += `\n\n${envio.template.assinatura}`;
+      }
+
+      // Send the email using the edge function
+      const response = await supabase.functions.invoke('send-email', {
+        body: {
+          to: envio.contato.email,
+          subject: envio.template.nome,
+          content: processedContent,
+          contato_id: envio.contato_id,
+          template_id: envio.template_id,
+          user_id: user.id,
+          cc: envio.cc || undefined,
+          bcc: envio.bcc || undefined,
+          attachments: envio.attachments || undefined
+        },
+      });
+
+      if (response.error) {
+        console.error('Erro na resposta da edge function:', response.error);
+        throw new Error(`Erro no serviço de email: ${response.error.message || JSON.stringify(response.error)}`);
+      }
+
+      // Update envio status
+      await supabase
+        .from('envios')
+        .update({ 
+          status: 'entregue',
+          data_envio: new Date().toISOString(),
+          erro: null
+        })
+        .eq('id', envioId);
+
+      toast.success(`Mensagem reenviada com sucesso para ${envio.contato.nome}!`);
+      await fetchEnvios();
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao reenviar mensagem:', error);
+      toast.error(`Falha ao reenviar mensagem: ${error.message || 'Erro desconhecido'}`);
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
   return {
     envios,
     loading,
     sending,
     fetchEnvios,
-    createEnvio
+    createEnvio,
+    resendEnvio
   };
 }

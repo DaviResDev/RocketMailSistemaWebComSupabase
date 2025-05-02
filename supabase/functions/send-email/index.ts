@@ -12,9 +12,18 @@ interface EmailRequest {
   to: string;
   subject: string;
   content: string;
+  cc?: string[];
+  bcc?: string[];
   contato_id?: string;
   template_id?: string;
-  user_id: string; // Add user_id to the request
+  user_id: string;
+  attachments?: AttachmentData[];
+}
+
+interface AttachmentData {
+  filename: string;
+  content: string; // Base64 encoded content
+  contentType: string;
 }
 
 serve(async (req) => {
@@ -35,7 +44,7 @@ serve(async (req) => {
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     
     const requestData = await req.json();
-    const { to, subject, content, contato_id, template_id, user_id } = requestData as EmailRequest;
+    const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments } = requestData as EmailRequest;
     
     if (!to || !subject || !content || !user_id) {
       console.error("Incomplete request data:", requestData);
@@ -73,6 +82,7 @@ serve(async (req) => {
     console.log("Using SMTP server:", emailConfig.email_smtp);
     console.log("Using SMTP port:", emailConfig.email_porta);
     console.log("Using SMTP username:", emailConfig.email_usuario);
+    console.log("Using SMTP security:", emailConfig.smtp_seguranca || "tls");
     
     // Generate signature with area_negocio if available
     let assinatura = "";
@@ -96,12 +106,15 @@ serve(async (req) => {
     `;
 
     try {
+      // Determine TLS setting based on configuration
+      const useTls = emailConfig.smtp_seguranca !== "none";
+      
       // Create SMTP client with user configuration
       const client = new SMTPClient({
         connection: {
           hostname: emailConfig.email_smtp,
           port: emailConfig.email_porta,
-          tls: true,
+          tls: useTls,
           auth: {
             username: emailConfig.email_usuario,
             password: emailConfig.email_senha,
@@ -112,14 +125,35 @@ serve(async (req) => {
 
       console.log("SMTP client configured, attempting to send email...");
 
-      // Send the email
-      await client.send({
+      // Prepare email content
+      const emailData: any = {
         from: emailConfig.email_usuario,
         to: to,
         subject: subject,
         content: "text/html",
         html: htmlContent,
-      });
+      };
+      
+      // Add CC and BCC if provided
+      if (cc && cc.length > 0) {
+        emailData.cc = cc;
+      }
+      
+      if (bcc && bcc.length > 0) {
+        emailData.bcc = bcc;
+      }
+      
+      // Add attachments if provided
+      if (attachments && attachments.length > 0) {
+        emailData.attachments = attachments.map(attachment => ({
+          filename: attachment.filename,
+          content: Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0)),
+          contentType: attachment.contentType,
+        }));
+      }
+
+      // Send the email
+      await client.send(emailData);
       
       // Close the connection
       await client.close();
