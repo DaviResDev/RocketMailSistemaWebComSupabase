@@ -64,6 +64,8 @@ export type Database = {
           email_usuario: string | null
           foto_perfil: string | null
           id: string
+          smtp_nome: string | null
+          smtp_seguranca: string | null
           user_id: string
           whatsapp_token: string | null
         }
@@ -76,6 +78,8 @@ export type Database = {
           email_usuario?: string | null
           foto_perfil?: string | null
           id?: string
+          smtp_nome?: string | null
+          smtp_seguranca?: string | null
           user_id: string
           whatsapp_token?: string | null
         }
@@ -88,6 +92,8 @@ export type Database = {
           email_usuario?: string | null
           foto_perfil?: string | null
           id?: string
+          smtp_nome?: string | null
+          smtp_seguranca?: string | null
           user_id?: string
           whatsapp_token?: string | null
         }
