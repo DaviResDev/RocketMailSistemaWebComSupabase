@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -11,11 +11,11 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, Mail, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, Mail, MoreHorizontal } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEnvios } from '@/hooks/useEnvios';
-import { useSchedules, Schedule } from '@/hooks/useSchedules';
+import { Schedule } from '@/hooks/useSchedules';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -25,14 +25,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 
-export function SchedulesList() {
-  const { schedules, fetchSchedules } = useSchedules();
+interface SchedulesListProps {
+  schedules: Schedule[];
+  onRefresh: () => Promise<void>;
+}
+
+export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
   const { sendEmail } = useEnvios();
   const [loading, setLoading] = useState(false);
-  
-  useEffect(() => {
-    fetchSchedules();
-  }, [fetchSchedules]);
 
   const handleSendNow = async (schedule: Schedule) => {
     try {
@@ -55,7 +55,7 @@ export function SchedulesList() {
       toast.success('Email enviado com sucesso!');
       
       // Refresh schedules list
-      fetchSchedules();
+      onRefresh();
     } catch (err: any) {
       console.error('Error sending scheduled email:', err);
       toast.error(`Erro ao enviar email: ${err.message}`);
@@ -76,7 +76,7 @@ export function SchedulesList() {
       toast.success('Agendamento cancelado com sucesso!');
       
       // Refresh schedules list
-      fetchSchedules();
+      onRefresh();
     } catch (err: any) {
       console.error('Error canceling schedule:', err);
       toast.error(`Erro ao cancelar agendamento: ${err.message}`);

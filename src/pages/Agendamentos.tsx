@@ -4,7 +4,7 @@ import { useSchedules } from '@/hooks/useSchedules';
 import { ScheduleForm } from '@/components/schedules/ScheduleForm';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCcw } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -19,12 +19,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { SchedulesList } from '@/components/schedules/SchedulesList';
 
 export default function Agendamentos() {
-  const { schedules, loading, error, fetchSchedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules();
+  const { schedules, loading, error, fetchSchedules } = useSchedules();
   const [dialogOpen, setDialogOpen] = useState(false);
   
   useEffect(() => {
+    console.log("Agendamentos: Fetching schedules");
     fetchSchedules();
   }, [fetchSchedules]);
+  
+  const handleScheduleCreated = () => {
+    setDialogOpen(false);
+    fetchSchedules();
+  };
   
   if (error) {
     return (
@@ -46,6 +52,7 @@ export default function Agendamentos() {
                 fetchSchedules();
               }}
             >
+              <RefreshCcw className="mr-2 h-4 w-4" />
               Tentar novamente
             </Button>
           </CardContent>
@@ -73,7 +80,7 @@ export default function Agendamentos() {
               </DialogDescription>
             </DialogHeader>
             <ScheduleForm 
-              onCancel={() => setDialogOpen(false)}
+              onSuccess={handleScheduleCreated}
             />
           </DialogContent>
         </Dialog>
@@ -97,7 +104,10 @@ export default function Agendamentos() {
               <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
             </div>
           ) : (
-            <SchedulesList />
+            <SchedulesList 
+              schedules={schedules}
+              onRefresh={fetchSchedules}
+            />
           )}
         </TabsContent>
         
@@ -113,7 +123,10 @@ export default function Agendamentos() {
               <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
             </div>
           ) : (
-            <SchedulesList />
+            <SchedulesList 
+              schedules={schedules}
+              onRefresh={fetchSchedules}
+            />
           )}
         </TabsContent>
       </Tabs>

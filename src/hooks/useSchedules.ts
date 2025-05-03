@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,17 +25,26 @@ export function useSchedules() {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
-  const fetchSchedules = async () => {
+  const fetchSchedules = useCallback(async () => {
     try {
+      if (!user) {
+        setError("Você precisa estar logado para ver os agendamentos");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('agendamentos')
         .select('*')
+        .eq('user_id', user.id)
         .order('data_envio', { ascending: true });
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
+      
+      console.log("Schedules fetched:", data);
       setSchedules(data || []);
     } catch (error: any) {
       const errorMessage = error.message || 'Erro ao carregar agendamentos';
@@ -44,7 +53,7 @@ export function useSchedules() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   const createSchedule = async (formData: ScheduleFormData) => {
     if (!user) {

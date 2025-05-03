@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.13.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +50,7 @@ serve(async (req) => {
       if (smtp_security === "tls") {
         await client.connectTLS(connectionConfig);
       } else if (smtp_security === "ssl") {
-        await client.connect(connectionConfig);
+        await client.connectTLS(connectionConfig);
       } else {
         // No security
         await client.connect(connectionConfig);

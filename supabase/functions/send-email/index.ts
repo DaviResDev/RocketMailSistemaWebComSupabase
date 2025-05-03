@@ -121,7 +121,7 @@ serve(async (req) => {
       if (emailConfig.smtp_seguranca === "tls") {
         connectionConfig.tls = true;
       } else if (emailConfig.smtp_seguranca === "ssl") {
-        connectionConfig.ssl = true;
+        connectionConfig.tls = true;
       }
 
       console.log("SMTP client configured, attempting to connect...");

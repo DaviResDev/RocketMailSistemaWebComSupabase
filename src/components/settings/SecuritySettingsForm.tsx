@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,11 +34,9 @@ export function SecuritySettingsForm() {
       if (!user) return;
       
       try {
-        // Store user settings in configuracoes table instead of user_settings since that's not 
-        // in the types file yet
         const { data, error } = await supabase
           .from('configuracoes')
-          .select('two_factor_enabled')
+          .select('*')
           .eq('user_id', user.id)
           .maybeSingle();
         
@@ -144,8 +141,7 @@ export function SecuritySettingsForm() {
           const { error } = await supabase
             .from('configuracoes')
             .update({
-              two_factor_enabled: true,
-              updated_at: new Date().toISOString()
+              two_factor_enabled: true
             })
             .eq('user_id', user.id);
           
@@ -176,8 +172,7 @@ export function SecuritySettingsForm() {
         const { error } = await supabase
           .from('configuracoes')
           .update({
-            two_factor_enabled: false,
-            updated_at: new Date().toISOString()
+            two_factor_enabled: false
           })
           .eq('user_id', user.id);
         
