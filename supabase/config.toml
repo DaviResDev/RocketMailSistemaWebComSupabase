@@ -49,3 +49,4 @@ backend = "postgres"
 verify_jwt = true
 [functions.test-smtp]
 verify_jwt = true
+

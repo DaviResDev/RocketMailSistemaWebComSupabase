@@ -1,53 +1,122 @@
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Calendar, Plus } from 'lucide-react';
+import React, { useEffect } from 'react';
 import { useSchedules } from '@/hooks/useSchedules';
 import { ScheduleForm } from '@/components/schedules/ScheduleForm';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SchedulesList } from '@/components/schedules/SchedulesList';
 
 export default function Agendamentos() {
-  const [isCreating, setIsCreating] = useState(false);
-  const { schedules, loading, fetchSchedules } = useSchedules();
-
+  const { schedules, loading, error, fetchSchedules } = useSchedules();
+  
   useEffect(() => {
     fetchSchedules();
-  }, []);
-
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+  }, [fetchSchedules]);
+  
+  if (error) {
+    return (
+      <div className="space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Agendamentos</h1>
-        <div className="flex flex-wrap gap-2">
-          {!isCreating && (
-            <Button onClick={() => setIsCreating(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Novo Agendamento
+        <Card>
+          <CardHeader>
+            <CardTitle>Erro</CardTitle>
+            <CardDescription>
+              Ocorreu um erro ao carregar os agendamentos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-destructive">{error}</p>
+            <Button 
+              className="mt-4"
+              onClick={() => {
+                toast.info('Recarregando agendamentos...');
+                fetchSchedules();
+              }}
+            >
+              Tentar novamente
             </Button>
-          )}
-        </div>
+          </CardContent>
+        </Card>
       </div>
-
-      {isCreating && (
-        <ScheduleForm onCancel={() => setIsCreating(false)} />
-      )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <p className="text-muted-foreground">Carregando agendamentos...</p>
-          </div>
-        </div>
-      ) : schedules.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
-          <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">Nenhum agendamento encontrado</h3>
-          <p className="text-muted-foreground mt-2 text-center">
-            Agende seu primeiro envio para começar.
-          </p>
-        </div>
-      ) : (
-        <SchedulesList schedules={schedules} />
-      )}
+    );
+  }
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold tracking-tight">Agendamentos</h1>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Agendamento
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Novo Agendamento</DialogTitle>
+              <DialogDescription>
+                Agende o envio de uma mensagem para um contato.
+              </DialogDescription>
+            </DialogHeader>
+            <ScheduleForm 
+              onSuccess={() => {
+                toast.success('Agendamento criado com sucesso!');
+                fetchSchedules();
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+      
+      <Tabs defaultValue="upcoming">
+        <TabsList>
+          <TabsTrigger value="upcoming">Próximos</TabsTrigger>
+          <TabsTrigger value="past">Passados</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="upcoming" className="mt-4">
+          {loading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : (
+            <SchedulesList 
+              schedules={schedules.filter(s => new Date(s.data_envio) >= new Date())}
+              onRefresh={fetchSchedules}
+            />
+          )}
+        </TabsContent>
+        
+        <TabsContent value="past" className="mt-4">
+          {loading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : (
+            <SchedulesList 
+              schedules={schedules.filter(s => new Date(s.data_envio) < new Date())}
+              onRefresh={fetchSchedules}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -1,6 +1,7 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.13.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,23 +106,30 @@ serve(async (req) => {
     `;
 
     try {
-      // Configure TLS/SSL based on security setting
-      const tls = emailConfig.smtp_seguranca === 'tls';
+      // Create SMTP client
+      const client = new SmtpClient();
       
-      // Create SMTP client with user configuration
-      const client = new SMTPClient({
-        connection: {
-          hostname: emailConfig.email_smtp,
-          port: emailConfig.email_porta,
-          tls: tls,
-          auth: {
-            username: emailConfig.email_usuario,
-            password: emailConfig.email_senha,
-          },
-        }
-      });
+      // Configure connection based on security settings
+      const connectionConfig: any = {
+        hostname: emailConfig.email_smtp,
+        port: emailConfig.email_porta,
+        username: emailConfig.email_usuario,
+        password: emailConfig.email_senha,
+      };
 
-      console.log("SMTP client configured, attempting to send email...");
+      // Set TLS/SSL based on security setting
+      if (emailConfig.smtp_seguranca === "tls") {
+        connectionConfig.tls = true;
+      } else if (emailConfig.smtp_seguranca === "ssl") {
+        connectionConfig.ssl = true;
+      }
+
+      console.log("SMTP client configured, attempting to connect...");
+      
+      // Connect to SMTP server
+      await client.connectTLS(connectionConfig);
+      
+      console.log("Connected to SMTP server, sending email...");
 
       // Prepare email content
       const emailData: any = {
