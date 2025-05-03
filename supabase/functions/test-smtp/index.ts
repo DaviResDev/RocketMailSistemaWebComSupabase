@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.13.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,25 +38,24 @@ serve(async (req) => {
       // Create SMTP client
       const client = new SmtpClient();
 
-      // Configure security options based on the selected security type
-      const connectionConfig: any = {
+      // Configure connection options
+      const connectionConfig = {
         hostname: smtp_server,
         port: smtp_port,
         username: smtp_user,
         password: smtp_password,
       };
 
-      // Set TLS based on security option
+      // Connect based on security type
       if (smtp_security === "tls") {
-        connectionConfig.tls = true;
+        await client.connectTLS(connectionConfig);
       } else if (smtp_security === "ssl") {
-        connectionConfig.ssl = true;
+        await client.connect(connectionConfig);
+      } else {
+        // No security
+        await client.connect(connectionConfig);
       }
-
-      console.log("Connection configured, attempting to connect...");
       
-      // Connect and verify
-      await client.connectTLS(connectionConfig);
       console.log("SMTP connection successful");
       
       // Close the connection

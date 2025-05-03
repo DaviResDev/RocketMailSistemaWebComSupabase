@@ -35,8 +35,10 @@ export function SecuritySettingsForm() {
       if (!user) return;
       
       try {
+        // Store user settings in configuracoes table instead of user_settings since that's not 
+        // in the types file yet
         const { data, error } = await supabase
-          .from('user_settings')
+          .from('configuracoes')
           .select('two_factor_enabled')
           .eq('user_id', user.id)
           .maybeSingle();
@@ -140,12 +142,12 @@ export function SecuritySettingsForm() {
         // Save the 2FA status
         if (user) {
           const { error } = await supabase
-            .from('user_settings')
-            .upsert({
-              user_id: user.id,
+            .from('configuracoes')
+            .update({
               two_factor_enabled: true,
               updated_at: new Date().toISOString()
-            });
+            })
+            .eq('user_id', user.id);
           
           if (error) throw error;
         }
@@ -172,12 +174,12 @@ export function SecuritySettingsForm() {
       
       if (user) {
         const { error } = await supabase
-          .from('user_settings')
-          .upsert({
-            user_id: user.id,
+          .from('configuracoes')
+          .update({
             two_factor_enabled: false,
             updated_at: new Date().toISOString()
-          });
+          })
+          .eq('user_id', user.id);
         
         if (error) throw error;
       }

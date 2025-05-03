@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSchedules } from '@/hooks/useSchedules';
 import { ScheduleForm } from '@/components/schedules/ScheduleForm';
 import { Button } from '@/components/ui/button';
@@ -19,10 +19,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { SchedulesList } from '@/components/schedules/SchedulesList';
 
 export default function Agendamentos() {
-  const { schedules, loading, error, fetchSchedules } = useSchedules();
+  const { schedules, loading, fetchSchedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules();
+  const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
-    fetchSchedules();
+    const loadSchedules = async () => {
+      try {
+        await fetchSchedules();
+      } catch (err: any) {
+        setError(err.message || 'Erro ao carregar agendamentos');
+      }
+    };
+    
+    loadSchedules();
   }, [fetchSchedules]);
   
   if (error) {
@@ -42,7 +51,9 @@ export default function Agendamentos() {
               className="mt-4"
               onClick={() => {
                 toast.info('Recarregando agendamentos...');
-                fetchSchedules();
+                fetchSchedules().catch(err => {
+                  setError(err.message || 'Erro ao recarregar agendamentos');
+                });
               }}
             >
               Tentar novamente
@@ -72,9 +83,12 @@ export default function Agendamentos() {
               </DialogDescription>
             </DialogHeader>
             <ScheduleForm 
-              onSuccess={() => {
-                toast.success('Agendamento criado com sucesso!');
-                fetchSchedules();
+              onSubmit={async (formData) => {
+                const success = await createSchedule(formData);
+                if (success) {
+                  toast.success('Agendamento criado com sucesso!');
+                }
+                return success;
               }}
             />
           </DialogContent>
@@ -96,7 +110,9 @@ export default function Agendamentos() {
             </div>
           ) : (
             <SchedulesList 
-              schedules={schedules.filter(s => new Date(s.data_envio) >= new Date())}
+              items={schedules.filter(s => new Date(s.data_envio) >= new Date())}
+              onDelete={deleteSchedule}
+              onUpdate={updateSchedule}
               onRefresh={fetchSchedules}
             />
           )}
@@ -111,7 +127,9 @@ export default function Agendamentos() {
             </div>
           ) : (
             <SchedulesList 
-              schedules={schedules.filter(s => new Date(s.data_envio) < new Date())}
+              items={schedules.filter(s => new Date(s.data_envio) < new Date())}
+              onDelete={deleteSchedule}
+              onUpdate={updateSchedule}
               onRefresh={fetchSchedules}
             />
           )}
