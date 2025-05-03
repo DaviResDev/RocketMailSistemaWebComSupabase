@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -107,7 +108,7 @@ export function useEnvios() {
     }
   }, [user]);
 
-  const sendEmail = async (formData: EnvioFormData) => {
+  const sendEmail = useCallback(async (formData: EnvioFormData) => {
     if (!user) {
       toast.error('Você precisa estar logado para enviar emails');
       return false;
@@ -221,7 +222,7 @@ export function useEnvios() {
     } finally {
       setSending(false);
     }
-  }, [user]);
+  }, [user, fetchEnvios]);
 
   const resendEnvio = async (envioId: string) => {
     try {
