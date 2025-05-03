@@ -34,11 +34,11 @@ serve(async (req) => {
     console.log("User:", smtp_user);
     console.log("Security type:", smtp_security);
     
-    // Configure TLS/SSL based on security setting
-    const useTLS = smtp_security === 'tls';
-    const useSSL = smtp_security === 'ssl';
-    
     try {
+      // Configure connection options based on security setting
+      const useTLS = smtp_security === 'tls';
+      const useSSL = smtp_security === 'ssl';
+      
       // Create SMTP client with user configuration
       const client = new SMTPClient({
         connection: {
@@ -54,15 +54,13 @@ serve(async (req) => {
         debug: true, // Enable debug mode for troubleshooting
       });
 
-      // The denomailer library works differently than expected
-      // Instead of just connecting, we'll try to send a test email to verify connection
-      await client.send({
-        from: smtp_user,
-        to: smtp_user, // Send to self as a test
-        subject: "SMTP Test Connection",
-        content: "text/plain",
-        text: "This is a test email to verify SMTP connection.",
-      });
+      // Instead of sending a test email, just try to connect and verify authentication
+      await client.connect();
+      
+      // Verify SMTP connection
+      if (!client.connected) {
+        throw new Error("Falha ao conectar ao servidor SMTP");
+      }
       
       // Close the connection
       await client.close();

@@ -1,409 +1,295 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-export type Envio = {
+// Define the shape of attachments
+export interface EnvioAttachment {
+  file_name: string;
+  file_path: string;
+  content_type: string;
+}
+
+// Update Envio interface to include the missing properties
+export interface Envio {
   id: string;
   contato_id: string;
   template_id: string;
-  data_envio: string;
   status: string;
+  data_envio: string;
   erro: string | null;
   user_id: string;
-  cc?: string[] | null;
-  bcc?: string[] | null;
-  attachments?: EnvioAttachment[] | null;
-  contato?: {
+  contato: {
     nome: string;
     email: string;
     telefone: string | null;
-    razao_social?: string | null;
-    cliente?: string | null;
+    razao_social: string | null;
+    cliente: string | null;
   };
-  template?: {
+  template: {
     nome: string;
-    canal: string;
     conteudo: string;
-    assinatura?: string;
+    canal: string;
+    assinatura: string | null;
   };
-};
+  cc?: string[];
+  bcc?: string[];
+  attachments?: EnvioAttachment[];
+}
 
-export type EnvioAttachment = {
-  id: string;
-  envio_id: string;
-  file_name: string;
-  file_path: string;
-  file_type: string;
-};
-
-export type EnvioFormData = {
+// Form data including email content and recipient
+export interface EnvioFormData {
   contato_id: string;
   template_id: string;
   cc?: string[];
   bcc?: string[];
-  attachments?: File[];
-};
+  attachments?: {
+    file: File;
+    name: string;
+  }[];
+}
 
 export function useEnvios() {
   const [envios, setEnvios] = useState<Envio[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
-  const fetchEnvios = async () => {
-    if (!user) return;
+  const fetchEnvios = useCallback(async () => {
+    if (!user) {
+      setError("Você precisa estar logado para ver os envios");
+      return;
+    }
 
     try {
       setLoading(true);
+      setError(null);
+
       const { data, error } = await supabase
         .from('envios')
         .select(`
           *,
-          contato:contatos(nome, email, telefone, razao_social, cliente),
-          template:templates(nome, canal, conteudo, assinatura)
+          contato:contatos (
+            nome,
+            email,
+            telefone,
+            razao_social,
+            cliente
+          ),
+          template:templates (
+            nome,
+            conteudo,
+            canal,
+            assinatura
+          )
         `)
         .eq('user_id', user.id)
         .order('data_envio', { ascending: false });
 
-      if (error) throw error;
-      
-      // Ensure data conforms to our type with optional fields
-      const processedData: Envio[] = (data || []).map(item => ({
-        id: item.id,
-        contato_id: item.contato_id,
-        template_id: item.template_id,
-        data_envio: item.data_envio,
-        status: item.status,
-        erro: item.erro,
-        user_id: item.user_id,
-        cc: item.cc || null,
-        bcc: item.bcc || null,
-        attachments: item.attachments || null,
-        contato: item.contato as Envio['contato'],
-        template: item.template as Envio['template']
-      }));
-      
-      setEnvios(processedData);
+      if (error) {
+        console.error('Erro ao carregar envios:', error);
+        setError(`Erro ao carregar envios: ${error.message}`);
+        return;
+      }
+
+      // Type guard to ensure data is not null and is an array
+      if (data) {
+        setEnvios(data as Envio[]);
+      } else {
+        setEnvios([]);
+      }
     } catch (error: any) {
-      console.error('Erro ao carregar histórico de envios:', error);
-      toast.error('Erro ao carregar histórico de envios: ' + error.message);
+      console.error('Erro ao carregar envios:', error.message);
+      setError(`Erro ao carregar envios: ${error.message}`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const uploadAttachment = async (file: File): Promise<{ path: string; name: string; type: string } | null> => {
-    if (!user) return null;
-
-    try {
-      const filePath = `attachments/${user.id}/${Date.now()}-${file.name}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('email-attachments')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-      
-      return {
-        path: filePath,
-        name: file.name,
-        type: file.type
-      };
-    } catch (error: any) {
-      console.error('Erro ao fazer upload do anexo:', error);
-      toast.error(`Erro ao fazer upload do anexo ${file.name}: ${error.message}`);
-      return null;
-    }
-  };
-  
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          // Remove the data URL prefix (e.g., "data:image/png;base64,")
-          const base64String = reader.result.split(',')[1];
-          resolve(base64String);
-        } else {
-          reject(new Error('Failed to convert file to base64'));
-        }
-      };
-      reader.onerror = reject;
-    });
-  };
-
-  const createEnvio = async (formData: EnvioFormData) => {
+  const sendEmail = async (formData: EnvioFormData) => {
     if (!user) {
-      toast.error('Você precisa estar logado para enviar mensagens');
+      toast.error('Você precisa estar logado para enviar emails');
       return false;
     }
-
-    if (!formData.contato_id || !formData.template_id) {
-      toast.error('Selecione um contato e um template para enviar a mensagem');
-      return false;
-    }
-
-    setSending(true);
 
     try {
-      console.log('Enviando mensagem com os dados:', formData);
-      
-      // Verificar se o contato existe
-      const { data: contato, error: contatoError } = await supabase
-        .from('contatos')
-        .select('id, nome, email, telefone, razao_social, cliente')
-        .eq('id', formData.contato_id)
-        .single();
-      
-      if (contatoError) {
-        console.error('Erro ao verificar contato:', contatoError);
-        throw new Error('Contato não encontrado. Verifique se ele existe.');
-      }
-      
-      // Verificar se o template existe
-      const { data: template, error: templateError } = await supabase
+      setSending(true);
+      setError(null);
+
+      // Fetch template and contact details
+      const { data: templateData, error: templateError } = await supabase
         .from('templates')
-        .select('id, nome, canal, conteudo, assinatura')
+        .select('*')
         .eq('id', formData.template_id)
         .single();
-      
+
       if (templateError) {
-        console.error('Erro ao verificar template:', templateError);
-        throw new Error('Template não encontrado. Verifique se ele existe.');
+        console.error('Erro ao carregar template:', templateError);
+        toast.error(`Erro ao carregar template: ${templateError.message}`);
+        return false;
       }
-      
-      console.log('Contato e template verificados com sucesso');
 
-      // Process attachments if any
-      let attachmentsData = [];
-      if (formData.attachments && formData.attachments.length > 0) {
-        toast.info(`Preparando ${formData.attachments.length} anexos...`);
-        
-        // Convert all files to base64
-        const attachmentPromises = formData.attachments.map(async (file) => {
-          try {
-            const base64Content = await fileToBase64(file);
-            return {
-              filename: file.name,
-              content: base64Content,
-              contentType: file.type
-            };
-          } catch (error) {
-            console.error(`Failed to process attachment ${file.name}:`, error);
-            toast.error(`Erro ao processar anexo ${file.name}`);
-            return null;
-          }
+      const { data: contatoData, error: contatoError } = await supabase
+        .from('contatos')
+        .select('*')
+        .eq('id', formData.contato_id)
+        .single();
+
+      if (contatoError) {
+        console.error('Erro ao carregar contato:', contatoError);
+        toast.error(`Erro ao carregar contato: ${contatoError.message}`);
+        return false;
+      }
+
+      if (!templateData || !contatoData) {
+        toast.error('Template ou contato não encontrado.');
+        return false;
+      }
+
+      // Prepare attachments for the function call
+      const attachments = formData.attachments ? await Promise.all(formData.attachments.map(async (item) => {
+        const fileContent = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(item.file);
         });
-        
-        attachmentsData = (await Promise.all(attachmentPromises)).filter(a => a !== null);
-      }
 
-      // Criar o registro de envio
-      const { data: envioData, error: envioError } = await supabase
-        .from('envios')
-        .insert([{
+        const base64Content = fileContent.split(',')[1]; // Extract base64 part
+        return {
+          filename: item.name,
+          content: base64Content,
+          contentType: item.file.type,
+        };
+      })) : [];
+
+      // Call the Supabase function to send the email
+      const { error: functionError } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: contatoData.email,
+          subject: templateData.nome,
+          content: templateData.conteudo,
+          cc: formData.cc,
+          bcc: formData.bcc,
           contato_id: formData.contato_id,
           template_id: formData.template_id,
           user_id: user.id,
-          status: 'pendente',
-          data_envio: new Date().toISOString(),
-          cc: formData.cc || null,
-          bcc: formData.bcc || null
-        }])
-        .select();
+          attachments: attachments,
+        },
+      });
 
-      if (envioError) {
-        console.error('Erro ao inserir envio no banco de dados:', envioError);
-        throw envioError;
-      }
-      
-      const envio = envioData?.[0];
-      
-      if (!envio) {
-        throw new Error('Erro ao registrar o envio');
-      }
-      
-      console.log('Envio registrado com sucesso:', envioData);
-      
-      // Processar template com as variáveis do contato
-      let processedContent = template.conteudo
-        .replace(/{nome}/g, contato.nome || '')
-        .replace(/{email}/g, contato.email || '')
-        .replace(/{telefone}/g, contato.telefone || '')
-        .replace(/{razao_social}/g, contato.razao_social || '')
-        .replace(/{cliente}/g, contato.cliente || '')
-        .replace(/{dia}/g, new Date().toLocaleDateString('pt-BR'));
-        
-      // Adicionar assinatura se existir
-      if (template.assinatura) {
-        processedContent += `\n\n${template.assinatura}`;
+      if (functionError) {
+        console.error('Erro ao enviar email:', functionError);
+        toast.error(`Erro ao enviar email: ${functionError.message}`);
+
+        // Save envio with error status
+        await supabase
+          .from('envios')
+          .insert([
+            {
+              contato_id: formData.contato_id,
+              template_id: formData.template_id,
+              status: 'erro',
+              erro: functionError.message,
+              user_id: user.id,
+            },
+          ]);
+
+        return false;
       }
 
-      // Check if we have email settings configured
-      const { data: configData, error: configError } = await supabase
-        .from('configuracoes')
-        .select('*')
-        .eq('user_id', user.id)
-        .limit(1);
-        
-      if (configError) {
-        console.error('Erro ao buscar configurações:', configError);
-        throw new Error('Erro ao buscar configurações de email: ' + configError.message);
-      }
-
-      if (!configData || configData.length === 0 || !configData[0].email_smtp || !configData[0].email_usuario || !configData[0].email_senha) {
-        console.error('Configurações incompletas:', configData);
-        throw new Error('Configurações de email incompletas. Por favor, configure seu email em Configurações antes de enviar.');
-      }
-
-      // Enviar email através da edge function
-      try {
-        console.log('Preparando para enviar email...');
-        const response = await supabase.functions.invoke('send-email', {
-          body: {
-            to: contato.email,
-            subject: template.nome,
-            content: processedContent,
-            contato_id: contato.id,
-            template_id: template.id,
+      // Save envio with pending status
+      await supabase
+        .from('envios')
+        .insert([
+          {
+            contato_id: formData.contato_id,
+            template_id: formData.template_id,
+            status: 'pendente',
             user_id: user.id,
-            cc: formData.cc,
-            bcc: formData.bcc,
-            attachments: attachmentsData
           },
-        });
-        
-        console.log('Resposta da edge function:', response);
-        
-        if (response.error) {
-          console.error('Erro na resposta da edge function:', response.error);
-          throw new Error(`Erro no serviço de email: ${response.error.message || JSON.stringify(response.error)}`);
-        }
-        
-        if (!response.data || !response.data.success) {
-          throw new Error('Resposta do servidor sem confirmação de sucesso');
-        }
-        
-        console.log('Email enviado com sucesso');
-        
-        // Atualizar status do envio para entregue
-        await supabase
-          .from('envios')
-          .update({ status: 'entregue' })
-          .eq('id', envio.id);
-        
-        toast.success(`Mensagem "${template.nome}" enviada para ${contato.nome}!`);
-        await fetchEnvios();
-        return true;
-        
-      } catch (emailError: any) {
-        console.error('Erro completo ao enviar email:', emailError);
-        
-        // Atualizar status do envio para erro
-        await supabase
-          .from('envios')
-          .update({ 
-            status: 'erro', 
-            erro: emailError.message || 'Erro desconhecido no envio'
-          })
-          .eq('id', envio.id);
-          
-        throw new Error(`Falha ao enviar email: ${emailError.message || 'Erro desconhecido'}`);
-      }
+        ]);
+
+      toast.success('Email enviado com sucesso!');
+      fetchEnvios();
+      return true;
     } catch (error: any) {
-      console.error('Erro completo ao enviar mensagem:', error);
-      toast.error(`Falha ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
+      console.error('Erro ao enviar email:', error);
+      toast.error('Erro ao enviar email: ' + error.message);
       return false;
     } finally {
       setSending(false);
     }
-  };
+  }, [user]);
 
-  // Function to resend a failed email
   const resendEnvio = async (envioId: string) => {
-    if (!user) {
-      toast.error('Você precisa estar logado para reenviar mensagens');
-      return false;
-    }
-
-    setSending(true);
-
     try {
-      // Get the envio details
+      setSending(true);
+      setError(null);
+
+      // Fetch the envio details
       const { data: envioData, error: envioError } = await supabase
         .from('envios')
         .select(`
           *,
-          contato:contatos(nome, email, telefone, razao_social, cliente),
-          template:templates(nome, canal, conteudo, assinatura)
+          contato:contatos (
+            email
+          ),
+          template:templates (
+            nome,
+            conteudo
+          )
         `)
         .eq('id', envioId)
         .single();
 
       if (envioError) {
-        console.error('Erro ao buscar dados do envio:', envioError);
-        throw new Error('Erro ao buscar dados do envio para reenvio');
+        console.error('Erro ao carregar envio:', envioError);
+        toast.error(`Erro ao carregar envio: ${envioError.message}`);
+        return;
       }
 
-      const envio = envioData as Envio;
-      
-      if (!envio.contato || !envio.template) {
-        throw new Error('Dados de contato ou template incompletos para reenvio');
+      if (!envioData || !envioData.contato || !envioData.template) {
+        toast.error('Envio, contato ou template não encontrado.');
+        return;
       }
 
-      // Process template content
-      let processedContent = envio.template.conteudo
-        .replace(/{nome}/g, envio.contato.nome || '')
-        .replace(/{email}/g, envio.contato.email || '')
-        .replace(/{telefone}/g, envio.contato.telefone || '')
-        .replace(/{razao_social}/g, envio.contato.razao_social || '')
-        .replace(/{cliente}/g, envio.contato.cliente || '')
-        .replace(/{dia}/g, new Date().toLocaleDateString('pt-BR'));
-
-      // Add signature if available
-      if (envio.template.assinatura) {
-        processedContent += `\n\n${envio.template.assinatura}`;
-      }
-
-      // Send the email using the edge function
-      const response = await supabase.functions.invoke('send-email', {
+      // Call the Supabase function to resend the email
+      const { error: functionError } = await supabase.functions.invoke('send-email', {
         body: {
-          to: envio.contato.email,
-          subject: envio.template.nome,
-          content: processedContent,
-          contato_id: envio.contato_id,
-          template_id: envio.template_id,
+          to: envioData.contato.email,
+          subject: envioData.template.nome,
+          content: envioData.template.conteudo,
+          contato_id: envioData.contato_id,
+          template_id: envioData.template_id,
           user_id: user.id,
-          cc: envio.cc || undefined,
-          bcc: envio.bcc || undefined,
-          attachments: envio.attachments || undefined
         },
       });
 
-      if (response.error) {
-        console.error('Erro na resposta da edge function:', response.error);
-        throw new Error(`Erro no serviço de email: ${response.error.message || JSON.stringify(response.error)}`);
+      if (functionError) {
+        console.error('Erro ao reenviar email:', functionError);
+        toast.error(`Erro ao reenviar email: ${functionError.message}`);
+
+        // Update envio with error status
+        await supabase
+          .from('envios')
+          .update({ status: 'erro', erro: functionError.message })
+          .eq('id', envioId);
+        return;
       }
 
-      // Update envio status
+      // Update envio with pending status
       await supabase
         .from('envios')
-        .update({ 
-          status: 'entregue',
-          data_envio: new Date().toISOString(),
-          erro: null
-        })
+        .update({ status: 'pendente', erro: null })
         .eq('id', envioId);
 
-      toast.success(`Mensagem reenviada com sucesso para ${envio.contato.nome}!`);
-      await fetchEnvios();
-      return true;
+      toast.success('Email reenviado com sucesso!');
+      fetchEnvios();
     } catch (error: any) {
-      console.error('Erro ao reenviar mensagem:', error);
-      toast.error(`Falha ao reenviar mensagem: ${error.message || 'Erro desconhecido'}`);
-      return false;
+      console.error('Erro ao reenviar email:', error);
+      toast.error('Erro ao reenviar email: ' + error.message);
     } finally {
       setSending(false);
     }
@@ -413,8 +299,9 @@ export function useEnvios() {
     envios,
     loading,
     sending,
+    error,
     fetchEnvios,
-    createEnvio,
+    sendEmail,
     resendEnvio
   };
 }
