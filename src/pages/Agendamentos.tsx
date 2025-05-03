@@ -19,19 +19,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { SchedulesList } from '@/components/schedules/SchedulesList';
 
 export default function Agendamentos() {
-  const { schedules, loading, fetchSchedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules();
-  const [error, setError] = useState<string | null>(null);
+  const { schedules, loading, error, fetchSchedules, createSchedule, updateSchedule, deleteSchedule } = useSchedules();
+  const [dialogOpen, setDialogOpen] = useState(false);
   
   useEffect(() => {
-    const loadSchedules = async () => {
-      try {
-        await fetchSchedules();
-      } catch (err: any) {
-        setError(err.message || 'Erro ao carregar agendamentos');
-      }
-    };
-    
-    loadSchedules();
+    fetchSchedules();
   }, [fetchSchedules]);
   
   if (error) {
@@ -51,9 +43,7 @@ export default function Agendamentos() {
               className="mt-4"
               onClick={() => {
                 toast.info('Recarregando agendamentos...');
-                fetchSchedules().catch(err => {
-                  setError(err.message || 'Erro ao recarregar agendamentos');
-                });
+                fetchSchedules();
               }}
             >
               Tentar novamente
@@ -68,7 +58,7 @@ export default function Agendamentos() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">Agendamentos</h1>
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -83,13 +73,7 @@ export default function Agendamentos() {
               </DialogDescription>
             </DialogHeader>
             <ScheduleForm 
-              onSubmit={async (formData) => {
-                const success = await createSchedule(formData);
-                if (success) {
-                  toast.success('Agendamento criado com sucesso!');
-                }
-                return success;
-              }}
+              onCancel={() => setDialogOpen(false)}
             />
           </DialogContent>
         </Dialog>
@@ -108,13 +92,12 @@ export default function Agendamentos() {
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-20 w-full" />
             </div>
+          ) : schedules.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
+              <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
+            </div>
           ) : (
-            <SchedulesList 
-              items={schedules.filter(s => new Date(s.data_envio) >= new Date())}
-              onDelete={deleteSchedule}
-              onUpdate={updateSchedule}
-              onRefresh={fetchSchedules}
-            />
+            <SchedulesList />
           )}
         </TabsContent>
         
@@ -125,13 +108,12 @@ export default function Agendamentos() {
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-20 w-full" />
             </div>
+          ) : schedules.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
+              <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
+            </div>
           ) : (
-            <SchedulesList 
-              items={schedules.filter(s => new Date(s.data_envio) < new Date())}
-              onDelete={deleteSchedule}
-              onUpdate={updateSchedule}
-              onRefresh={fetchSchedules}
-            />
+            <SchedulesList />
           )}
         </TabsContent>
       </Tabs>

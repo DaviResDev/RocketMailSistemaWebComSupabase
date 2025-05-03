@@ -22,10 +22,14 @@ export type ScheduleFormData = {
 export function useSchedules() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   const fetchSchedules = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       const { data, error } = await supabase
         .from('agendamentos')
         .select('*')
@@ -34,7 +38,9 @@ export function useSchedules() {
       if (error) throw error;
       setSchedules(data || []);
     } catch (error: any) {
-      toast.error('Erro ao carregar agendamentos: ' + error.message);
+      const errorMessage = error.message || 'Erro ao carregar agendamentos';
+      setError(errorMessage);
+      toast.error('Erro ao carregar agendamentos: ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -98,6 +104,7 @@ export function useSchedules() {
   return {
     schedules,
     loading,
+    error,
     fetchSchedules,
     createSchedule,
     updateSchedule,

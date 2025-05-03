@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -14,83 +15,73 @@ import { Calendar, Clock, Mail, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEnvios } from '@/hooks/useEnvios';
+import { useSchedules, Schedule } from '@/hooks/useSchedules';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { supabase } from '@/integrations/supabase/client';
 
 export function SchedulesList() {
-  const [schedules, setSchedules] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  // Replace createEnvio with sendEmail
+  const { schedules, fetchSchedules } = useSchedules();
   const { sendEmail } = useEnvios();
-
+  const [loading, setLoading] = useState(false);
+  
   useEffect(() => {
     fetchSchedules();
-  }, []);
+  }, [fetchSchedules]);
 
-  const fetchSchedules = async () => {
+  const handleSendNow = async (schedule: Schedule) => {
     try {
       setLoading(true);
-      // Fetch schedules from API or database
-      // This is a placeholder for the actual implementation
-      const response = await fetch('/api/schedules');
-      const data = await response.json();
-      setSchedules(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendNow = async (schedule) => {
-    try {
       // Convert schedule to EnvioFormData format
       const envioData = {
         contato_id: schedule.contato_id,
-        template_id: schedule.template_id,
-        cc: schedule.cc,
-        bcc: schedule.bcc,
-        attachments: schedule.attachments
+        template_id: schedule.template_id
       };
       
       // Send email immediately using sendEmail
       await sendEmail(envioData);
       
       // Update schedule status
-      // This is a placeholder for the actual implementation
-      await fetch(`/api/schedules/${schedule.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: 'sent' })
-      });
+      await supabase
+        .from('agendamentos')
+        .update({ status: 'enviado' })
+        .eq('id', schedule.id);
+      
+      toast.success('Email enviado com sucesso!');
       
       // Refresh schedules list
       fetchSchedules();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending scheduled email:', err);
+      toast.error(`Erro ao enviar email: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleCancelSchedule = async (scheduleId) => {
+  const handleCancelSchedule = async (scheduleId: string) => {
     try {
-      // Cancel the schedule
-      // This is a placeholder for the actual implementation
-      await fetch(`/api/schedules/${scheduleId}`, {
-        method: 'DELETE'
-      });
+      setLoading(true);
+      // Delete the schedule
+      await supabase
+        .from('agendamentos')
+        .delete()
+        .eq('id', scheduleId);
+      
+      toast.success('Agendamento cancelado com sucesso!');
       
       // Refresh schedules list
       fetchSchedules();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error canceling schedule:', err);
+      toast.error(`Erro ao cancelar agendamento: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,24 +90,6 @@ export function SchedulesList() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <p className="text-muted-foreground">Carregando agendamentos...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <p className="text-destructive">Erro ao carregar agendamentos: {error}</p>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={fetchSchedules}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Tentar novamente
-          </Button>
         </div>
       </div>
     );
@@ -157,28 +130,28 @@ export function SchedulesList() {
                   <div className="flex flex-col">
                     <div className="flex items-center">
                       <Calendar className="h-4 w-4 mr-2" />
-                      {format(new Date(schedule.scheduled_date), "dd/MM/yyyy", { locale: ptBR })}
+                      {format(new Date(schedule.data_envio), "dd/MM/yyyy", { locale: ptBR })}
                     </div>
                     <div className="flex items-center text-muted-foreground text-xs mt-1">
                       <Clock className="h-3 w-3 mr-1" />
-                      {format(new Date(schedule.scheduled_date), "HH:mm", { locale: ptBR })}
+                      {format(new Date(schedule.data_envio), "HH:mm", { locale: ptBR })}
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>{schedule.contato?.nome}</TableCell>
-                <TableCell>{schedule.template?.nome}</TableCell>
+                <TableCell>Contato ID: {schedule.contato_id.slice(0, 8)}...</TableCell>
+                <TableCell>Template ID: {schedule.template_id.slice(0, 8)}...</TableCell>
                 <TableCell>
                   <Badge 
                     variant={
-                      schedule.status === 'pending' ? 'secondary' : 
-                      schedule.status === 'sent' ? 'default' : 
-                      schedule.status === 'failed' ? 'destructive' : 
+                      schedule.status === 'pendente' ? 'secondary' : 
+                      schedule.status === 'enviado' ? 'default' : 
+                      schedule.status === 'falha' ? 'destructive' : 
                       'outline'
                     }
                   >
-                    {schedule.status === 'pending' ? 'Pendente' : 
-                     schedule.status === 'sent' ? 'Enviado' : 
-                     schedule.status === 'failed' ? 'Falhou' : 
+                    {schedule.status === 'pendente' ? 'Pendente' : 
+                     schedule.status === 'enviado' ? 'Enviado' : 
+                     schedule.status === 'falha' ? 'Falhou' : 
                      schedule.status}
                   </Badge>
                 </TableCell>
