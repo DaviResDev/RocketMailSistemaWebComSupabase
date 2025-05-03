@@ -224,7 +224,7 @@ export function useEnvios() {
     }
   }, [user, fetchEnvios]);
 
-  const resendEnvio = async (envioId: string) => {
+  const resendEnvio = useCallback(async (envioId: string) => {
     try {
       setSending(true);
       setError(null);
@@ -294,7 +294,7 @@ export function useEnvios() {
     } finally {
       setSending(false);
     }
-  };
+  }, [user, fetchEnvios]);
 
   return {
     envios,

@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,37 +35,30 @@ serve(async (req) => {
     console.log("Security type:", smtp_security);
     
     try {
-      // Configure connection options based on security setting
-      const useTLS = smtp_security === 'tls';
-      const useSSL = smtp_security === 'ssl';
+      // Configure security options
+      const tls = smtp_security === 'tls';
       
-      // Create SMTP client with user configuration
+      // Create SMTP client
       const client = new SMTPClient({
         connection: {
           hostname: smtp_server,
           port: smtp_port,
-          tls: useTLS,
-          secure: useSSL,
+          tls: tls,
           auth: {
             username: smtp_user,
             password: smtp_password,
-          },
-        },
-        debug: true, // Enable debug mode for troubleshooting
+          }
+        }
       });
 
-      // Instead of sending a test email, just try to connect and verify authentication
-      await client.connect();
+      console.log("Connection configured, attempting to connect...");
       
-      // Verify SMTP connection
-      if (!client.connected) {
-        throw new Error("Falha ao conectar ao servidor SMTP");
-      }
+      // Test the connection by verifying connectivity
+      await client.connect();
+      console.log("SMTP connection successful");
       
       // Close the connection
       await client.close();
-      
-      console.log("SMTP connection successful");
       
       return new Response(
         JSON.stringify({ 

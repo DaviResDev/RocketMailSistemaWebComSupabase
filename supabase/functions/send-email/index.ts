@@ -1,7 +1,6 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -107,23 +106,19 @@ serve(async (req) => {
 
     try {
       // Configure TLS/SSL based on security setting
-      const useTLS = emailConfig.smtp_seguranca === 'tls';
-      const useSSL = emailConfig.smtp_seguranca === 'ssl';
-      const noSecurity = emailConfig.smtp_seguranca === 'none';
+      const tls = emailConfig.smtp_seguranca === 'tls';
       
       // Create SMTP client with user configuration
       const client = new SMTPClient({
         connection: {
           hostname: emailConfig.email_smtp,
           port: emailConfig.email_porta,
-          tls: useTLS,
-          secure: useSSL,
+          tls: tls,
           auth: {
             username: emailConfig.email_usuario,
             password: emailConfig.email_senha,
           },
-        },
-        debug: true, // Enable debug mode for troubleshooting
+        }
       });
 
       console.log("SMTP client configured, attempting to send email...");
@@ -133,7 +128,6 @@ serve(async (req) => {
         from: emailConfig.email_usuario,
         to: to,
         subject: subject,
-        content: "text/html",
         html: htmlContent,
       };
       

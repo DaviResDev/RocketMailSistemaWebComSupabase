@@ -36,7 +36,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
   const { createSchedule, updateSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
-  const { createEnvio, sending } = useEnvios();
+  const { sendEmail, sending } = useEnvios();
 
   useEffect(() => {
     fetchContacts();
@@ -121,7 +121,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
         );
         
         for (const contactId of selectedContacts) {
-          const result = await createEnvio({
+          const result = await sendEmail({
             contato_id: contactId,
             template_id: formData.template_id
           });
@@ -148,7 +148,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
         { duration: 3000 }
       );
       
-      const result = await createEnvio({
+      const result = await sendEmail({
         contato_id: selectedContacts[0],
         template_id: formData.template_id
       });
