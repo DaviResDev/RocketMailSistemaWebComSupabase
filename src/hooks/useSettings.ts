@@ -17,6 +17,7 @@ export type Settings = {
   whatsapp_token?: string | null;
   created_at?: string | null;
   user_id?: string;
+  two_factor_enabled?: boolean; // Added two_factor_enabled property
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
@@ -66,7 +67,8 @@ export function useSettings() {
           smtp_nome: data.smtp_nome || '',
           whatsapp_token: data.whatsapp_token,
           created_at: data.created_at,
-          user_id: data.user_id
+          user_id: data.user_id,
+          two_factor_enabled: data.two_factor_enabled || false // Added two_factor_enabled
         });
       } else {
         // No settings found, create empty settings object
@@ -80,7 +82,8 @@ export function useSettings() {
           area_negocio: null,
           foto_perfil: null,
           smtp_seguranca: 'tls', // Default to TLS
-          smtp_nome: ''
+          smtp_nome: '',
+          two_factor_enabled: false // Added two_factor_enabled default
         });
       }
     } catch (error: any) {

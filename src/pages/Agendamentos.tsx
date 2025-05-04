@@ -13,7 +13,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SchedulesList } from '@/components/schedules/SchedulesList';
@@ -80,56 +79,29 @@ export default function Agendamentos() {
               </DialogDescription>
             </DialogHeader>
             <ScheduleForm 
+              onCancel={() => setDialogOpen(false)}
               onSuccess={handleScheduleCreated}
             />
           </DialogContent>
         </Dialog>
       </div>
       
-      <Tabs defaultValue="upcoming">
-        <TabsList>
-          <TabsTrigger value="upcoming">Próximos</TabsTrigger>
-          <TabsTrigger value="past">Passados</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="upcoming" className="mt-4">
-          {loading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : schedules.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
-              <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
-            </div>
-          ) : (
-            <SchedulesList 
-              schedules={schedules}
-              onRefresh={fetchSchedules}
-            />
-          )}
-        </TabsContent>
-        
-        <TabsContent value="past" className="mt-4">
-          {loading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : schedules.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
-              <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
-            </div>
-          ) : (
-            <SchedulesList 
-              schedules={schedules}
-              onRefresh={fetchSchedules}
-            />
-          )}
-        </TabsContent>
-      </Tabs>
+      {loading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      ) : schedules.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
+          <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
+        </div>
+      ) : (
+        <SchedulesList 
+          schedules={schedules}
+          onRefresh={fetchSchedules}
+        />
+      )}
     </div>
   );
 }

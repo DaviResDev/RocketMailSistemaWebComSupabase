@@ -138,8 +138,12 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>Contato ID: {schedule.contato_id.slice(0, 8)}...</TableCell>
-                <TableCell>Template ID: {schedule.template_id.slice(0, 8)}...</TableCell>
+                <TableCell>
+                  {schedule.contato ? schedule.contato.nome : `Contato ID: ${schedule.contato_id.slice(0, 8)}...`}
+                </TableCell>
+                <TableCell>
+                  {schedule.template ? schedule.template.nome : `Template ID: ${schedule.template_id.slice(0, 8)}...`}
+                </TableCell>
                 <TableCell>
                   <Badge 
                     variant={

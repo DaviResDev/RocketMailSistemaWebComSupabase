@@ -11,6 +11,13 @@ export type Schedule = {
   data_envio: string;
   status: string;
   created_at: string;
+  contato?: {
+    nome: string;
+    email: string;
+  };
+  template?: {
+    nome: string;
+  };
 };
 
 export type ScheduleFormData = {
@@ -38,16 +45,29 @@ export function useSchedules() {
       
       const { data, error: fetchError } = await supabase
         .from('agendamentos')
-        .select('*')
+        .select(`
+          *,
+          contato:contatos (
+            nome,
+            email
+          ),
+          template:templates (
+            nome
+          )
+        `)
         .eq('user_id', user.id)
         .order('data_envio', { ascending: true });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("Error fetching schedules:", fetchError);
+        throw fetchError;
+      }
       
       console.log("Schedules fetched:", data);
       setSchedules(data || []);
     } catch (error: any) {
       const errorMessage = error.message || 'Erro ao carregar agendamentos';
+      console.error("Error in fetchSchedules:", errorMessage);
       setError(errorMessage);
       toast.error('Erro ao carregar agendamentos: ' + errorMessage);
     } finally {

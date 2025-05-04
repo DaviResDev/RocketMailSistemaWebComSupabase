@@ -1,15 +1,18 @@
 
-import { useState, useEffect, KeyboardEventHandler } from 'react';
+import { useState, useEffect, KeyboardEventHandler, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { X, Save, Eye, AlertCircle, User, Mail, Building, Phone, Calendar, FileText } from 'lucide-react';
+import { X, Save, Eye, AlertCircle, User, Mail, Building, Phone, Calendar, FileText, Upload, File } from 'lucide-react';
 import { TemplateFormData } from '@/hooks/useTemplates';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TemplateFormProps {
   formData: TemplateFormData;
@@ -22,6 +25,13 @@ interface TemplateFormProps {
 export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEditing }: TemplateFormProps) {
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [previewHTML, setPreviewHTML] = useState('');
+  const [signature, setSignature] = useState<File | null>(null);
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const { user } = useAuth();
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
   
   // Test data for preview
   const previewData = {
@@ -47,18 +57,37 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
     const htmlContent = processedContent.replace(/\n/g, '<br>');
     
     // Generate signature if it exists
-    let signature = '';
+    let signatureHtml = '';
     if (formData.assinatura) {
-      signature = `<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;"><div style="font-size: 0.9em; color: #666;">${formData.assinatura.replace(/\n/g, '<br>')}</div>`;
+      signatureHtml = `<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;"><div style="font-size: 0.9em; color: #666;">${formData.assinatura.replace(/\n/g, '<br>')}</div>`;
+    }
+    
+    // Add signature image if available
+    if (signaturePreview) {
+      signatureHtml += `<div style="margin-top: 10px;"><img src="${signaturePreview}" style="max-height: 60px;" alt="Assinatura digital" /></div>`;
+    }
+    
+    // Add attachment list if available
+    let attachmentsHtml = '';
+    if (attachments.length > 0) {
+      attachmentsHtml = `
+        <div style="margin-top: 20px; padding-top: 10px; border-top: 1px dashed #ddd;">
+          <p style="font-size: 0.9em; color: #666;">Anexos (${attachments.length}):</p>
+          <ul style="font-size: 0.85em; color: #777;">
+            ${attachments.map(file => `<li>${file.name} (${(file.size / 1024).toFixed(1)} KB)</li>`).join('')}
+          </ul>
+        </div>
+      `;
     }
     
     setPreviewHTML(`
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
         <div>${htmlContent}</div>
-        ${signature}
+        ${signatureHtml}
+        ${attachmentsHtml}
       </div>
     `);
-  }, [formData.conteudo, formData.assinatura]);
+  }, [formData.conteudo, formData.assinatura, signaturePreview, attachments]);
 
   const insertVariable = (variable: string) => {
     setFormData(prev => ({
@@ -84,6 +113,111 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
       setTimeout(() => {
         target.selectionStart = target.selectionEnd = start + 2;
       }, 0);
+    }
+  };
+
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      if (!e.target.files || e.target.files.length === 0) {
+        return;
+      }
+      
+      const file = e.target.files[0];
+      
+      // Check file type
+      if (!file.type.includes('image/')) {
+        toast.error('Por favor, faça upload de uma imagem para sua assinatura.');
+        return;
+      }
+      
+      // Max 2MB
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('A imagem não pode ser maior que 2MB.');
+        return;
+      }
+      
+      setSignature(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = () => {
+        setSignaturePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      
+      if (!user) {
+        toast.error('Você precisa estar logado para fazer upload de arquivos.');
+        return;
+      }
+      
+      // Upload file to Supabase Storage
+      const fileName = `signature_${Date.now()}_${file.name}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('signatures')
+        .upload(`${user.id}/${fileName}`, file);
+        
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      // Get public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('signatures')
+        .getPublicUrl(`${user.id}/${fileName}`);
+        
+      if (publicUrlData && publicUrlData.publicUrl) {
+        setFormData(prev => ({
+          ...prev,
+          assinatura: `${prev.assinatura || ''}\n\n<img src="${publicUrlData.publicUrl}" alt="Assinatura Digital" />`
+        }));
+        
+        toast.success('Assinatura digital adicionada com sucesso!');
+      }
+    } catch (error: any) {
+      console.error('Erro ao fazer upload da assinatura:', error);
+      toast.error(`Erro ao fazer upload da assinatura: ${error.message}`);
+    }
+  };
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      if (!e.target.files || e.target.files.length === 0) {
+        return;
+      }
+      
+      const files = Array.from(e.target.files);
+      
+      // Max 10MB per file
+      for (const file of files) {
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`O arquivo ${file.name} excede o limite de 10MB.`);
+          return;
+        }
+      }
+      
+      // Add files to attachments list
+      setAttachments(prev => [...prev, ...files]);
+      toast.success(`${files.length} arquivo(s) anexado(s)`);
+      
+    } catch (error: any) {
+      console.error('Erro ao anexar arquivos:', error);
+      toast.error(`Erro ao anexar arquivos: ${error.message}`);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeSignature = () => {
+    setSignature(null);
+    setSignaturePreview(null);
+    // Remove image tag from assinatura if present
+    if (formData.assinatura?.includes('<img src=')) {
+      setFormData(prev => ({
+        ...prev,
+        assinatura: prev.assinatura?.replace(/<img src=.*?\/>/, '')
+      }));
     }
   };
 
@@ -200,7 +334,46 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="assinatura">Assinatura (opcional)</Label>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="assinatura">Assinatura (opcional)</Label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="file" 
+                      ref={signatureInputRef}
+                      onChange={handleSignatureUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => signatureInputRef.current?.click()}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload Assinatura Digital
+                    </Button>
+                  </div>
+                </div>
+                
+                {signaturePreview && (
+                  <div className="mb-4 flex items-center">
+                    <img 
+                      src={signaturePreview} 
+                      alt="Assinatura Preview" 
+                      className="max-h-16 border rounded p-1 mr-2"
+                    />
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={removeSignature}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                
                 <Textarea
                   id="assinatura"
                   placeholder="Ex: Atenciosamente, Equipe de Marketing"
@@ -208,6 +381,56 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                   value={formData.assinatura || ''}
                   onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label>Anexos</Label>
+                  <input 
+                    type="file" 
+                    multiple 
+                    ref={fileInputRef}
+                    onChange={handleAttachmentUpload}
+                    className="hidden"
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <File className="mr-2 h-4 w-4" />
+                    Adicionar Anexos
+                  </Button>
+                </div>
+                
+                {/* Attachment list */}
+                {attachments.length > 0 && (
+                  <div className="border rounded-md p-3 mt-2">
+                    <p className="text-sm font-medium mb-2">Anexos ({attachments.length})</p>
+                    <div className="space-y-2">
+                      {attachments.map((file, index) => (
+                        <div key={index} className="flex justify-between items-center text-sm p-1.5 bg-muted/50 rounded">
+                          <div className="flex items-center">
+                            <File className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                            <span>{file.name}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({(file.size / 1024).toFixed(1)} KB)
+                            </span>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0"
+                            onClick={() => removeAttachment(index)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="pt-2">

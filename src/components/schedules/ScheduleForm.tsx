@@ -1,24 +1,27 @@
+
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check } from 'lucide-react';
+import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check, Search } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useEnvios } from '@/hooks/useEnvios';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ScheduleFormProps {
   onCancel: () => void;
   initialData?: ScheduleFormData & { id?: string };
   isEditing?: boolean;
+  onSuccess?: () => void; // Added onSuccess prop
 }
 
-export function ScheduleForm({ onCancel, initialData, isEditing = false }: ScheduleFormProps) {
+export function ScheduleForm({ onCancel, initialData, isEditing = false, onSuccess }: ScheduleFormProps) {
   const [formData, setFormData] = useState<ScheduleFormData>(
     initialData || {
       contato_id: '',
@@ -32,7 +35,10 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
   );
   
   const [bulkMode, setBulkMode] = useState(false);
-
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  
   const { createSchedule, updateSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
@@ -42,6 +48,22 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
     fetchContacts();
     fetchTemplates();
   }, []);
+  
+  // Extract all unique tags from contacts
+  useEffect(() => {
+    const tags = contacts.reduce((allTags: string[], contact) => {
+      if (contact.tags && Array.isArray(contact.tags)) {
+        contact.tags.forEach(tag => {
+          if (!allTags.includes(tag)) {
+            allTags.push(tag);
+          }
+        });
+      }
+      return allTags;
+    }, []);
+    
+    setAvailableTags(tags);
+  }, [contacts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,8 +99,10 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
       if (successCount === totalCount) {
         toast.success(`${totalCount} agendamentos criados com sucesso!`);
         onCancel();
+        if (onSuccess) onSuccess();
       } else {
         toast.warning(`${successCount} de ${totalCount} agendamentos foram criados com sucesso.`);
+        if (successCount > 0 && onSuccess) onSuccess();
       }
       
       return;
@@ -96,6 +120,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
       
     if (success) {
       onCancel();
+      if (onSuccess) onSuccess();
     }
   };
 
@@ -132,8 +157,10 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
         if (successCount === totalCount) {
           toast.success(`Mensagens enviadas com sucesso para todos os ${totalCount} contatos!`);
           onCancel();
+          if (onSuccess) onSuccess();
         } else {
           toast.warning(`${successCount} de ${totalCount} mensagens foram enviadas com sucesso.`);
+          if (successCount > 0 && onSuccess) onSuccess();
         }
         
         return;
@@ -141,7 +168,6 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
       
       // Single send
       const selectedContact = contacts.find(c => c.id === selectedContacts[0]);
-      const selectedTemplate = templates.find(t => t.id === formData.template_id);
       
       toast.info(
         `Iniciando envio para ${selectedContact?.nome || 'contato selecionado'}...`,
@@ -155,6 +181,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
       
       if (result) {
         onCancel();
+        if (onSuccess) onSuccess();
       }
     } catch (error: any) {
       console.error("Erro durante o envio:", error);
@@ -184,6 +211,32 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
       setSelectedContacts([selectedContacts[0]]);
     }
   };
+  
+  const toggleTagSelection = (tag: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tag)) {
+        return prev.filter(t => t !== tag);
+      } else {
+        return [...prev, tag];
+      }
+    });
+  };
+  
+  // Filter contacts based on search query and selected tags
+  const filteredContacts = contacts.filter(contact => {
+    // Search filter
+    const matchesSearch = searchQuery === '' || 
+      contact.nome.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      contact.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (contact.telefone && contact.telefone.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (contact.razao_social && contact.razao_social.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+    // Tag filter
+    const matchesTags = selectedTags.length === 0 || 
+      (contact.tags && selectedTags.some(tag => contact.tags && contact.tags.includes(tag)));
+      
+    return matchesSearch && matchesTags;
+  });
 
   return (
     <Card>
@@ -205,24 +258,76 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false }: Sched
               Selecionar múltiplos contatos
             </label>
           </div>
+          
+          {/* Search input */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contatos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          
+          {/* Tag selection */}
+          {availableTags.length > 0 && (
+            <div>
+              <Label className="mb-2 block">Filtrar por tags</Label>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map(tag => (
+                  <div 
+                    key={tag} 
+                    className={`px-2.5 py-0.5 rounded-full text-xs cursor-pointer ${
+                      selectedTags.includes(tag) 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted hover:bg-muted/80'
+                    }`}
+                    onClick={() => toggleTagSelection(tag)}
+                  >
+                    {tag}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="contato">Contato{bulkMode ? 's' : ''}</Label>
-            <div className="mt-2 max-h-32 overflow-y-auto border rounded-md p-2">
-              {contacts.map((contact) => (
-                <div key={contact.id} className="flex items-center mb-2">
-                  <Checkbox
-                    id={`contact-${contact.id}`}
-                    checked={selectedContacts.includes(contact.id)}
-                    onCheckedChange={() => handleContactSelection(contact.id)}
-                    className="mr-2"
-                  />
-                  <label htmlFor={`contact-${contact.id}`}>
-                    {contact.nome} ({contact.email})
-                  </label>
+            <ScrollArea className="h-40 border rounded-md p-2 mt-2">
+              {filteredContacts.length > 0 ? (
+                filteredContacts.map((contact) => (
+                  <div key={contact.id} className="flex items-center mb-2">
+                    <Checkbox
+                      id={`contact-${contact.id}`}
+                      checked={selectedContacts.includes(contact.id)}
+                      onCheckedChange={() => handleContactSelection(contact.id)}
+                      className="mr-2"
+                    />
+                    <label htmlFor={`contact-${contact.id}`} className="text-sm">
+                      <span className="font-medium">{contact.nome}</span>
+                      <span className="text-muted-foreground ml-2">({contact.email})</span>
+                      {contact.tags && contact.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {contact.tags.map((tag, i) => (
+                            <span 
+                              key={i}
+                              className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded-full text-xs"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  Nenhum contato encontrado
                 </div>
-              ))}
-            </div>
+              )}
+            </ScrollArea>
           </div>
 
           <div>
