@@ -1,58 +1,53 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.13.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SmtpTestRequest {
-  smtp_server: string;
-  smtp_port: number;
-  smtp_user: string;
-  smtp_password: string;
-  smtp_security: string;
-}
-
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
   
   try {
-    const requestData = await req.json();
-    const { smtp_server, smtp_port, smtp_user, smtp_password, smtp_security } = requestData as SmtpTestRequest;
+    const { smtp_server, smtp_port, smtp_user, smtp_password, smtp_security } = await req.json();
     
     if (!smtp_server || !smtp_port || !smtp_user || !smtp_password) {
-      throw new Error("Dados incompletos para teste SMTP");
+      throw new Error("Parâmetros SMTP incompletos");
     }
 
-    console.log("Testing SMTP connection to:", smtp_server);
-    console.log("Port:", smtp_port);
-    console.log("User:", smtp_user);
-    console.log("Security type:", smtp_security);
+    console.log("Testing SMTP connection to:", smtp_server, smtp_port);
+    console.log("With username:", smtp_user);
+    console.log("Security:", smtp_security || "tls");
     
     try {
       // Create SMTP client
       const client = new SmtpClient();
-
-      // Configure connection options
+      
+      // Configure connection based on security settings
       const connectionConfig = {
         hostname: smtp_server,
-        port: smtp_port,
+        port: Number(smtp_port),
         username: smtp_user,
         password: smtp_password,
       };
 
-      // Connect based on security type
-      if (smtp_security === "tls") {
-        await client.connectTLS(connectionConfig);
-      } else if (smtp_security === "ssl") {
+      // Set TLS/SSL based on security setting
+      let connectMethod = 'connect';
+      if (smtp_security === "tls" || smtp_security === "ssl") {
+        connectMethod = 'connectTLS';
+      }
+
+      console.log(`Using connect method: ${connectMethod}`);
+      
+      // Connect to SMTP server using the appropriate method
+      if (connectMethod === 'connectTLS') {
         await client.connectTLS(connectionConfig);
       } else {
-        // No security
         await client.connect(connectionConfig);
       }
       
@@ -64,7 +59,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Conexão SMTP estabelecida com sucesso!"
+          message: "Conexão SMTP testada com sucesso!" 
         }),
         { 
           status: 200, 
@@ -72,16 +67,14 @@ serve(async (req) => {
         }
       );
     } catch (smtpError: any) {
-      console.error("SMTP Connection Error:", smtpError);
-      throw new Error(`Falha na conexão SMTP: ${smtpError.message}`);
+      console.error("SMTP Error:", smtpError);
+      throw new Error(`Teste de conexão SMTP falhou: ${smtpError.message}`);
     }
   } catch (error: any) {
     console.error("Error in test-smtp function:", error);
     
     return new Response(
-      JSON.stringify({ 
-        error: error.message || "Erro ao testar conexão SMTP" 
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         status: 500, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
