@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -57,6 +56,10 @@ export function useEnvios() {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
+  // Adicionar controle de debounce para evitar envios duplicados
+  const [lastSendTime, setLastSendTime] = useState<number>(0);
+  const DEBOUNCE_TIME = 3000; // 3 segundos
+
   const fetchEnvios = useCallback(async () => {
     if (!user) {
       setError("Você precisa estar logado para ver os envios");
@@ -114,6 +117,14 @@ export function useEnvios() {
       return false;
     }
 
+    // Implementar proteção contra spam múltiplo (debounce)
+    const now = Date.now();
+    if (now - lastSendTime < DEBOUNCE_TIME) {
+      toast.warning('Por favor, aguarde alguns segundos antes de enviar outro email');
+      return false;
+    }
+    setLastSendTime(now);
+
     try {
       setSending(true);
       setError(null);
@@ -148,9 +159,9 @@ export function useEnvios() {
         return false;
       }
 
-      // Verificar se o contato possui email
-      if (!contatoData.email) {
-        toast.error('Contato não possui endereço de email válido.');
+      // MELHORIA 1: Validar dados críticos antes do envio
+      if (!contatoData.email || !templateData.conteudo) {
+        toast.error("Dados incompletos para envio. Verifique se o contato possui email e se o template possui conteúdo.");
         return false;
       }
 
@@ -265,7 +276,7 @@ export function useEnvios() {
     } finally {
       setSending(false);
     }
-  }, [user, fetchEnvios]);
+  }, [user, fetchEnvios, lastSendTime]);
 
   const resendEnvio = useCallback(async (envioId: string) => {
     try {

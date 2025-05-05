@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { decode as b64decode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,8 +35,8 @@ interface SmtpResponse {
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
   
   try {
@@ -52,6 +53,7 @@ serve(async (req) => {
     const requestData = await req.json();
     const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments } = requestData as EmailRequest;
     
+    // MELHORIA 1: Validar dados antes de prosseguir
     if (!to || !subject || !content || !user_id) {
       console.error("Incomplete request data:", requestData);
       throw new Error("Dados incompletos para envio de email");
@@ -120,7 +122,7 @@ serve(async (req) => {
       const secure = emailConfig.smtp_seguranca === "ssl" || Number(emailConfig.email_porta) === 465;
       console.log(`Connection security: ${secure ? 'SSL/TLS' : 'STARTTLS if available'}`);
       
-      // Create client with denomailer library - FIXED VERSION
+      // Create client with denomailer library
       const client = new SMTPClient({
         connection: {
           hostname: emailConfig.email_smtp,
@@ -163,8 +165,8 @@ serve(async (req) => {
         
         for (const attachment of attachments) {
           try {
-            // Convert base64 to Uint8Array
-            const binaryContent = Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0));
+            // MELHORIA 2: Usar b64decode em vez de atob
+            const binaryContent = b64decode(attachment.content);
             
             processedAttachments.push({
               filename: attachment.filename,
@@ -191,6 +193,15 @@ serve(async (req) => {
       // Close the connection
       await client.close();
       
+      // MELHORIA 5: Log de envios mais completo
+      const envioData = {
+        contato_id: contato_id,
+        template_id: template_id,
+        user_id: user_id,
+        status: 'entregue',
+        resposta_smtp: JSON.stringify(sendResult),
+      };
+      
       // If this was triggered from an envio, update its status
       if (contato_id && template_id && user_id) {
         const { data: envios } = await supabaseClient
@@ -205,10 +216,20 @@ serve(async (req) => {
         if (envios && envios.length > 0) {
           await supabaseClient
             .from('envios')
-            .update({ status: 'entregue' })
+            .update({ 
+              status: 'entregue',
+              resposta_smtp: JSON.stringify(sendResult)
+            })
             .eq('id', envios[0].id);
             
           console.log("Updated envio status to 'entregue'");
+        } else {
+          // Create a new record if it doesn't exist yet
+          await supabaseClient
+            .from('envios')
+            .insert([envioData]);
+            
+          console.log("Created new envio record with status 'entregue'");
         }
       }
       
@@ -251,6 +272,16 @@ serve(async (req) => {
         errorMessage += String(smtpError);
       }
       
+      // MELHORIA 5: Log de erro mais completo
+      const erroData = {
+        contato_id,
+        template_id,
+        user_id,
+        status: 'erro',
+        erro: errorMessage,
+        resposta_smtp: JSON.stringify(smtpError, Object.getOwnPropertyNames(smtpError))
+      };
+      
       // Update status in database if contato_id and template_id are provided
       if (contato_id && template_id && user_id) {
         try {
@@ -267,10 +298,7 @@ serve(async (req) => {
           if (envios && envios.length > 0) {
             await supabaseClient
               .from('envios')
-              .update({ 
-                status: 'erro', 
-                erro: errorMessage
-              })
+              .update(erroData)
               .eq('id', envios[0].id);
               
             console.log("Updated envio status to 'erro'");
@@ -278,13 +306,8 @@ serve(async (req) => {
             // Create a new error record
             await supabaseClient
               .from('envios')
-              .insert([{
-                contato_id,
-                template_id,
-                user_id,
-                status: 'erro',
-                erro: errorMessage
-              }]);
+              .insert([erroData]);
+              
             console.log("Created new envio record with status 'erro'");
           }
         } catch (dbError: any) {

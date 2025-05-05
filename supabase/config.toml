@@ -1,79 +1,35 @@
 
-# A string used to distinguish different Supabase projects on the same host. Defaults to the 
-# working directory name when running `supabase init`.
 project_id = "czinoycvwsjjxuqbuxtm"
 
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "storage", "graphql_public"]
-extra_search_path = ["public", "extensions"]
-max_rows = 1000
+schemas = ["public", "storage"]
 
 [db]
 port = 54322
-shadow_port = 54320
-major_version = 15
-
-[db.pooler]
-enabled = false
-port = 54329
-pool_mode = "transaction"
-default_pool_size = 15
-max_client_conn = 100
-
-[realtime]
-enabled = true
 
 [studio]
 enabled = true
 port = 54323
-api_url = "http://localhost"
+api_url = "http://localhost:54321"
 
-[storage]
+[inbucket]
 enabled = true
+port = 54324
 
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://localhost:3000"]
-jwt_expiry = 3600
-enable_refresh_token_rotation = true
-refresh_token_reuse_interval = 10
-enable_signup = true
 
-[auth.email]
-enable_signup = true
-double_confirm_changes = true
-enable_confirmations = false
-
-[auth.sms]
-enable_signup = true
-enable_confirmations = true
-
-[auth.external.github]
-enabled = false
-client_id = ""
-secret = ""
-
-[analytics]
-enabled = false
-backend = "postgres"
-retention_days = 30
-vector_enabled = false
-
-[experimental]
-events_listening = true
-tokens = true
-
-[functions]
+[storage]
 enabled = true
-port = 54324
-
-[functions.send-email]
-verify_jwt = true
-
-[functions.test-smtp]
-verify_jwt = true
 
 [edge_functions]
+[edge_functions.send-email]
+
+[edge_functions.test-smtp]
+
+[edge_functions.handle-contact-delete]
+
+[edge_functions.process-scheduled-emails]
