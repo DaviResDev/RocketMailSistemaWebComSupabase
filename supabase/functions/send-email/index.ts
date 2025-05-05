@@ -112,130 +112,100 @@ serve(async (req) => {
       </div>
     `;
 
-    // Function to handle the actual SMTP sending with improved error handling
-    const sendSmtpEmail = async (): Promise<SmtpResponse> => {
-      try {
-        console.log("Creating SMTP client with denomailer library");
-        
-        // Determine connection security type
-        const secure = emailConfig.smtp_seguranca === "ssl" || emailConfig.email_porta === 465;
-        console.log(`Connection security: ${secure ? 'SSL/TLS' : 'STARTTLS if available'}`);
-        
-        // Create client with new library
-        const client = new SMTPClient({
-          connection: {
-            hostname: emailConfig.email_smtp,
-            port: emailConfig.email_porta,
-            auth: {
-              username: emailConfig.email_usuario,
-              password: emailConfig.email_senha,
-            },
-            tls: secure,
-            timeout: 30000, // 30 seconds timeout
+    try {
+      console.log("Creating SMTP client with denomailer library");
+      
+      // Determine connection security type
+      // Most providers use port 465 for SSL and 587 for TLS
+      const secure = emailConfig.smtp_seguranca === "ssl" || Number(emailConfig.email_porta) === 465;
+      console.log(`Connection security: ${secure ? 'SSL/TLS' : 'STARTTLS if available'}`);
+      
+      // Create client with denomailer library
+      const client = new SMTPClient({
+        connection: {
+          hostname: emailConfig.email_smtp,
+          port: Number(emailConfig.email_porta),
+          auth: {
+            username: emailConfig.email_usuario,
+            password: emailConfig.email_senha,
           },
-          debug: {
-            log: true,
-          },
-        });
+          tls: secure,
+          timeout: 30000, // 30 seconds timeout
+        },
+        debug: {
+          log: true,
+        },
+      });
 
-        console.log("SMTP client configuration complete");
+      console.log("SMTP client configuration complete");
+      
+      // Connect to SMTP server first to validate connection before sending
+      await client.connect();
+      console.log("SMTP connection successful");
+      
+      // Prepare message
+      const messageData: any = {
+        from: emailConfig.smtp_nome ? 
+          `${emailConfig.smtp_nome} <${emailConfig.email_usuario}>` : 
+          emailConfig.email_usuario,
+        to: to,
+        subject: subject,
+        html: htmlContent,
+      };
+
+      // Add cc/bcc if provided
+      if (cc && cc.length > 0) {
+        messageData.cc = cc;
+      }
+      
+      if (bcc && bcc.length > 0) {
+        messageData.bcc = bcc;
+      }
+      
+      // Add attachments if provided
+      if (attachments && attachments.length > 0) {
+        console.log(`Processing ${attachments.length} attachments`);
         
-        // Prepare message
-        const messageData = {
-          from: emailConfig.smtp_nome ? 
-            `${emailConfig.smtp_nome} <${emailConfig.email_usuario}>` : 
-            emailConfig.email_usuario,
-          to: to,
-          subject: subject,
-          html: htmlContent,
-          cc: cc || [],
-          bcc: bcc || []
-        };
+        const processedAttachments = [];
         
-        // Add attachments if provided
-        if (attachments && attachments.length > 0) {
-          console.log(`Processing ${attachments.length} attachments`);
-          
-          const processedAttachments = [];
-          
-          for (const attachment of attachments) {
-            try {
-              // Convert base64 to Uint8Array
-              const binaryContent = Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0));
-              
-              processedAttachments.push({
-                filename: attachment.filename,
-                content: binaryContent,
-                contentType: attachment.contentType,
-              });
-              
-              console.log(`Attachment processed: ${attachment.filename} (${attachment.contentType})`);
-            } catch (attachError) {
-              console.error(`Error processing attachment ${attachment.filename}:`, attachError);
-              // Continue with other attachments
-            }
+        for (const attachment of attachments) {
+          try {
+            // Convert base64 to Uint8Array
+            const binaryContent = Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0));
+            
+            processedAttachments.push({
+              filename: attachment.filename,
+              content: binaryContent,
+              contentType: attachment.contentType,
+            });
+            
+            console.log(`Attachment processed: ${attachment.filename} (${attachment.contentType})`);
+          } catch (attachError) {
+            console.error(`Error processing attachment ${attachment.filename}:`, attachError);
+            // Continue with other attachments
           }
-          
+        }
+        
+        if (processedAttachments.length > 0) {
           messageData.attachments = processedAttachments;
         }
-
-        console.log("Sending email now...");
-        const sendResult = await client.send(messageData);
-        console.log("Email sent successfully:", sendResult);
-        
-        return { success: true, message: "Email enviado com sucesso" };
-      } catch (error) {
-        console.error("SMTP Error:", error);
-        
-        // Create specific error message based on error type
-        let errorMessage = "Erro ao enviar email: ";
-        
-        if (typeof error === "object" && error !== null) {
-          if ('code' in error) {
-            const errorCode = (error as any).code;
-            
-            switch(errorCode) {
-              case 'EAUTH':
-                errorMessage += "Falha na autenticação. Verifique seu nome de usuário e senha.";
-                break;
-              case 'ESOCKET':
-                errorMessage += "Problema de conexão com o servidor SMTP. Verifique o endereço e porta do servidor.";
-                break;
-              case 'ETIMEOUT':
-                errorMessage += "Tempo limite de conexão excedido. Verifique sua conexão de rede.";
-                break;
-              default:
-                errorMessage += error.toString();
-            }
-          } else {
-            errorMessage += error.toString();
-          }
-        } else {
-          errorMessage += String(error);
-        }
-        
-        const errorResponse: SmtpResponse = { 
-          success: false, 
-          message: errorMessage,
-          details: JSON.stringify(error, Object.getOwnPropertyNames(error))
-        };
-        
-        throw new Error(errorMessage);
       }
-    };
 
-    try {
-      // Attempt to send email
-      const sendResult = await sendSmtpEmail();
-      console.log("Email sent successfully to:", to);
+      console.log("Sending email now...");
+      const sendResult = await client.send(messageData);
+      console.log("Email sent successfully:", sendResult);
+      
+      // Close the connection
+      await client.close();
       
       // If this was triggered from an envio, update its status
-      if (contato_id && template_id) {
+      if (contato_id && template_id && user_id) {
         const { data: envios } = await supabaseClient
           .from('envios')
           .select('id')
           .eq('contato_id', contato_id)
           .eq('template_id', template_id)
+          .eq('user_id', user_id)
           .order('data_envio', { ascending: false })
           .limit(1);
           
@@ -260,20 +230,32 @@ serve(async (req) => {
         }
       );
     } catch (smtpError: any) {
-      console.error("SMTP Send Error:", smtpError);
+      console.error("SMTP Error:", smtpError);
       
       // Create a detailed error message with solutions
-      let errorMessage = `Erro ao enviar email: ${smtpError.message || "Erro desconhecido"}`;
+      let errorMessage = "Erro ao enviar email: ";
       
-      // Add common SMTP error solutions
-      if (smtpError.message?.includes("authentication") || smtpError.message?.includes("auth")) {
-        errorMessage += ". Verifique seu nome de usuário e senha. Para Gmail, você pode precisar gerar uma senha de aplicativo.";
-      } else if (smtpError.message?.includes("timeout")) {
-        errorMessage += ". Verifique se o servidor SMTP está acessível e que a porta está correta. Alguns ISPs podem estar bloqueando portas SMTP.";
-      } else if (smtpError.message?.includes("certificate") || smtpError.message?.includes("SSL")) {
-        errorMessage += ". Problema com o certificado SSL do servidor. Tente outra configuração de segurança (TLS <-> SSL).";
-      } else if (smtpError.message?.includes("connect") || smtpError.message?.includes("connection")) {
-        errorMessage += ". Não foi possível conectar ao servidor SMTP. Verifique o nome do servidor e a porta.";
+      if (smtpError && typeof smtpError === "object") {
+        const errorString = JSON.stringify(smtpError);
+        
+        // Add common SMTP error solutions
+        if (errorString.includes("authentication") || errorString.includes("auth")) {
+          errorMessage += "Falha na autenticação. Verifique seu nome de usuário e senha.";
+          if (emailConfig.email_smtp?.includes("gmail")) {
+            errorMessage += " Para Gmail, você pode precisar gerar uma senha de aplicativo em https://myaccount.google.com/apppasswords";
+          }
+        } else if (errorString.includes("timeout")) {
+          errorMessage += "Tempo limite de conexão excedido. Verifique se o servidor SMTP está acessível e que a porta está correta.";
+        } else if (errorString.includes("certificate") || errorString.includes("SSL")) {
+          errorMessage += "Problema com o certificado SSL do servidor. Tente outra configuração de segurança (TLS <-> SSL).";
+        } else if (errorString.includes("connect") || errorString.includes("connection")) {
+          errorMessage += "Não foi possível conectar ao servidor SMTP. Verifique o endereço do servidor e a porta.";
+        } else {
+          // Include the raw error message if we can't categorize it
+          errorMessage += smtpError.message || "Erro desconhecido no servidor SMTP";
+        }
+      } else {
+        errorMessage += String(smtpError);
       }
       
       // Update status in database if contato_id and template_id are provided
@@ -321,7 +303,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           error: errorMessage,
-          details: smtpError.stack
+          details: JSON.stringify(smtpError, Object.getOwnPropertyNames(smtpError))
         }),
         { 
           status: 500, 
@@ -332,9 +314,12 @@ serve(async (req) => {
   } catch (error: any) {
     console.error("Error in send-email function:", error);
     
+    // Create a friendly error message
+    const errorMessage = error.message || "Erro desconhecido ao enviar email";
+    
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: errorMessage,
         timestamp: new Date().toISOString(),
         details: error.stack
       }),

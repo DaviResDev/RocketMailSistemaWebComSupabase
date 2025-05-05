@@ -29,7 +29,7 @@ serve(async (req) => {
       const secure = smtp_security === "ssl" || Number(smtp_port) === 465;
       console.log(`Using ${secure ? 'SSL/TLS' : 'STARTTLS if available'} connection`);
       
-      // Create SMTP client with new library
+      // Create SMTP client with denomailer library
       const client = new SMTPClient({
         connection: {
           hostname: smtp_server,
