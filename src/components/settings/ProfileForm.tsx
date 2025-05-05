@@ -44,7 +44,8 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       area_negocio: profileData.area_negocio || null,
       foto_perfil: profileData.foto_perfil,
       smtp_seguranca: settings.smtp_seguranca || null,
-      smtp_nome: settings.smtp_nome || null
+      smtp_nome: settings.smtp_nome || null,
+      two_factor_enabled: settings.two_factor_enabled // Include the two_factor_enabled property
     };
     
     const success = await saveSettings(formData);
