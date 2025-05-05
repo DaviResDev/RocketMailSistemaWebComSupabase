@@ -119,22 +119,51 @@ serve(async (req) => {
       
       // Determine connection security type
       // Most providers use port 465 for SSL and 587 for TLS
-      const secure = emailConfig.smtp_seguranca === "ssl" || Number(emailConfig.email_porta) === 465;
-      console.log(`Connection security: ${secure ? 'SSL/TLS' : 'STARTTLS if available'}`);
+      const portNumber = Number(emailConfig.email_porta);
+      
+      // Fixed: Properly determine connection security by port
+      // Changing the approach to handle TLS connections differently
+      let connectionConfig;
+      
+      if (portNumber === 465) {
+        // Use direct SSL for port 465
+        console.log("Using SSL connection for port 465");
+        connectionConfig = {
+          connection: {
+            hostname: emailConfig.email_smtp,
+            port: portNumber,
+            auth: {
+              username: emailConfig.email_usuario,
+              password: emailConfig.email_senha,
+            },
+            tls: true, // Direct SSL
+            timeout: 30000, // 30 seconds timeout
+          },
+        };
+      } else {
+        // Use STARTTLS for other ports (like 587)
+        console.log("Using STARTTLS connection for port", portNumber);
+        connectionConfig = {
+          connection: {
+            hostname: emailConfig.email_smtp,
+            port: portNumber,
+            auth: {
+              username: emailConfig.email_usuario,
+              password: emailConfig.email_senha,
+            },
+            tls: false, // Start with plain connection
+            timeout: 30000, // 30 seconds timeout
+          },
+          pool: true,
+          client: {
+            host: Deno.env.get('SUPABASE_URL') || "localhost",
+          },
+          starttls: true, // Enable STARTTLS
+        };
+      }
       
       // Create client with denomailer library
-      const client = new SMTPClient({
-        connection: {
-          hostname: emailConfig.email_smtp,
-          port: Number(emailConfig.email_porta),
-          auth: {
-            username: emailConfig.email_usuario,
-            password: emailConfig.email_senha,
-          },
-          tls: secure,
-          timeout: 30000, // 30 seconds timeout
-        },
-      });
+      const client = new SMTPClient(connectionConfig);
 
       console.log("SMTP client configuration complete");
       
