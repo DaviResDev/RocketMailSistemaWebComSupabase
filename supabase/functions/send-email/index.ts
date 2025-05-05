@@ -118,16 +118,39 @@ serve(async (req) => {
       };
 
       // Set TLS/SSL based on security setting
-      if (emailConfig.smtp_seguranca === "tls") {
+      if (emailConfig.smtp_seguranca === "ssl") {
+        // Use SSL mode for port 465
         connectionConfig.tls = true;
-      } else if (emailConfig.smtp_seguranca === "ssl") {
-        connectionConfig.tls = true;
+        console.log("Using SSL mode with TLS enabled");
+      } else if (emailConfig.smtp_seguranca === "tls") {
+        // Use STARTTLS mode for port 587
+        connectionConfig.tls = false;
+        console.log("Using STARTTLS mode");
+      } else {
+        // No security
+        connectionConfig.tls = false;
+        console.log("Using no encryption");
       }
 
+      console.log("SMTP client connection config:", connectionConfig);
       console.log("SMTP client configured, attempting to connect...");
       
-      // Connect to SMTP server
-      await client.connectTLS(connectionConfig);
+      // Connect to SMTP server using the appropriate method based on security setting
+      if (emailConfig.smtp_seguranca === "ssl") {
+        await client.connectTLS(connectionConfig);
+      } else {
+        await client.connect(connectionConfig);
+        
+        // If TLS is selected but not using SSL (port 587), use STARTTLS
+        if (emailConfig.smtp_seguranca === "tls") {
+          try {
+            await client.starttls();
+            console.log("STARTTLS successful");
+          } catch (starttlsError) {
+            console.error("STARTTLS failed, continuing with connection:", starttlsError);
+          }
+        }
+      }
       
       console.log("Connected to SMTP server, sending email...");
 
@@ -157,8 +180,16 @@ serve(async (req) => {
         }));
       }
 
+      console.log("Sending email with data:", { 
+        to: emailData.to, 
+        from: emailData.from, 
+        subject: emailData.subject,
+        hasAttachments: attachments && attachments.length > 0,
+      });
+
       // Send the email
-      await client.send(emailData);
+      const sendResult = await client.send(emailData);
+      console.log("SMTP send result:", sendResult);
       
       // Close the connection
       await client.close();
@@ -197,7 +228,68 @@ serve(async (req) => {
       );
     } catch (smtpError: any) {
       console.error("SMTP Error:", smtpError);
-      throw new Error(`Erro ao enviar email: ${smtpError.message}`);
+      
+      // Log the error details for debugging
+      try {
+        console.error("Error details:", JSON.stringify(smtpError));
+      } catch (jsonError) {
+        console.error("Error cannot be stringified:", smtpError.toString());
+      }
+      
+      // Create a more detailed error message
+      let errorMessage = `Erro ao enviar email: ${smtpError.message || "Erro desconhecido"}`;
+      
+      // Add common SMTP error solutions
+      if (smtpError.message?.includes("authentication")) {
+        errorMessage += ". Verifique seu nome de usuário e senha.";
+      } else if (smtpError.message?.includes("timeout")) {
+        errorMessage += ". Verifique se o servidor SMTP está acessível e que a porta está correta.";
+      } else if (smtpError.message?.includes("certificate")) {
+        errorMessage += ". Problema com o certificado SSL do servidor. Tente outra configuração de segurança.";
+      }
+      
+      // Update status in database if contato_id and template_id are provided
+      if (contato_id && template_id && user_id) {
+        try {
+          console.log("Updating envio status to 'erro'");
+          const { data: envios } = await supabaseClient
+            .from('envios')
+            .select('id')
+            .eq('contato_id', contato_id)
+            .eq('template_id', template_id)
+            .eq('user_id', user_id)
+            .order('data_envio', { ascending: false })
+            .limit(1);
+            
+          if (envios && envios.length > 0) {
+            await supabaseClient
+              .from('envios')
+              .update({ 
+                status: 'erro', 
+                erro: errorMessage
+              })
+              .eq('id', envios[0].id);
+              
+            console.log("Updated envio status to 'erro'");
+          } else {
+            // Create a new error record
+            await supabaseClient
+              .from('envios')
+              .insert([{
+                contato_id,
+                template_id,
+                user_id,
+                status: 'erro',
+                erro: errorMessage
+              }]);
+            console.log("Created new envio record with status 'erro'");
+          }
+        } catch (dbError: any) {
+          console.error("Error updating/creating error record:", dbError);
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
   } catch (error: any) {
     console.error("Error in send-email function:", error);

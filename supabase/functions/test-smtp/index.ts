@@ -36,19 +36,29 @@ serve(async (req) => {
         password: smtp_password,
       };
 
-      // Set TLS/SSL based on security setting
-      let connectMethod = 'connect';
-      if (smtp_security === "tls" || smtp_security === "ssl") {
-        connectMethod = 'connectTLS';
-      }
-
-      console.log(`Using connect method: ${connectMethod}`);
+      // Set connection method based on security setting and port
+      console.log(`Using security mode: ${smtp_security}`);
       
-      // Connect to SMTP server using the appropriate method
-      if (connectMethod === 'connectTLS') {
+      if (smtp_security === "ssl") {
+        // Use SSL/TLS for port 465
+        console.log("Attempting connectTLS for SSL mode");
         await client.connectTLS(connectionConfig);
       } else {
+        // Use standard connection for other ports
+        console.log("Attempting standard connect");
         await client.connect(connectionConfig);
+        
+        // If TLS is selected but not using SSL (port 587), use STARTTLS
+        if (smtp_security === "tls") {
+          try {
+            console.log("Attempting STARTTLS");
+            await client.starttls();
+            console.log("STARTTLS successful");
+          } catch (starttlsError) {
+            console.error("STARTTLS failed:", starttlsError);
+            throw new Error(`STARTTLS failed: ${starttlsError.message}`);
+          }
+        }
       }
       
       console.log("SMTP connection successful");
@@ -68,7 +78,19 @@ serve(async (req) => {
       );
     } catch (smtpError: any) {
       console.error("SMTP Error:", smtpError);
-      throw new Error(`Teste de conexão SMTP falhou: ${smtpError.message}`);
+      
+      // Add detailed error messages for common SMTP issues
+      let errorMessage = `Teste de conexão SMTP falhou: ${smtpError.message}`;
+      
+      if (smtpError.message?.includes("authentication")) {
+        errorMessage += ". Verifique seu nome de usuário e senha.";
+      } else if (smtpError.message?.includes("timeout")) {
+        errorMessage += ". Verifique se o servidor SMTP está acessível e que a porta está correta.";
+      } else if (smtpError.message?.includes("certificate")) {
+        errorMessage += ". Problema com o certificado SSL do servidor. Tente outra configuração de segurança.";
+      }
+      
+      throw new Error(errorMessage);
     }
   } catch (error: any) {
     console.error("Error in test-smtp function:", error);

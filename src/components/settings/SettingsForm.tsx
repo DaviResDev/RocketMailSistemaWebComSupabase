@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,7 +23,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     area_negocio: null,
     foto_perfil: null,
     smtp_seguranca: 'tls',
-    smtp_nome: null
+    smtp_nome: null,
+    two_factor_enabled: false
   });
   const [testingConnection, setTestingConnection] = useState(false);
 
@@ -40,7 +40,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         area_negocio: settings.area_negocio,
         foto_perfil: settings.foto_perfil,
         smtp_seguranca: settings.smtp_seguranca || 'tls',
-        smtp_nome: settings.smtp_nome || ''
+        smtp_nome: settings.smtp_nome || '',
+        two_factor_enabled: settings.two_factor_enabled || false
       });
     }
   }, [settings]);
@@ -138,8 +139,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                     <SelectValue placeholder="Selecione o tipo de segurança" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="tls">TLS</SelectItem>
-                    <SelectItem value="ssl">SSL</SelectItem>
+                    <SelectItem value="tls">TLS (porta 587)</SelectItem>
+                    <SelectItem value="ssl">SSL (porta 465)</SelectItem>
                     <SelectItem value="none">Nenhuma</SelectItem>
                   </SelectContent>
                 </Select>
