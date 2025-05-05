@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { SmtpClient } from "https://deno.land/x/smtp@v0.13.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -124,7 +124,6 @@ serve(async (req) => {
           port: emailConfig.email_porta,
           username: emailConfig.email_usuario,
           password: emailConfig.email_senha,
-          tls: emailConfig.smtp_seguranca === "ssl" ? true : false,
         };
         
         // Connect with appropriate security
@@ -137,7 +136,13 @@ serve(async (req) => {
           
           if (emailConfig.smtp_seguranca === "tls") {
             console.log("Starting STARTTLS upgrade");
-            await client.starttls();
+            try {
+              await client.starttls();
+            } catch (starttlsError) {
+              console.error("STARTTLS error:", starttlsError);
+              console.log("Continuing without STARTTLS");
+              // Continue without STARTTLS if it fails
+            }
           }
         }
 
