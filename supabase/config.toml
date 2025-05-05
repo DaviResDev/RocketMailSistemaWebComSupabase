@@ -33,3 +33,5 @@ enabled = true
 [edge_functions.handle-contact-delete]
 
 [edge_functions.process-scheduled-emails]
+verify_jwt = false
+
