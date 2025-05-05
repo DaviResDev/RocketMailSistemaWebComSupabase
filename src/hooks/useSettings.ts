@@ -68,7 +68,7 @@ export function useSettings() {
           whatsapp_token: data.whatsapp_token,
           created_at: data.created_at,
           user_id: data.user_id,
-          two_factor_enabled: data.two_factor_enabled || false // Added safe access to two_factor_enabled
+          two_factor_enabled: Boolean(data.two_factor_enabled) // Ensure proper boolean conversion
         });
       } else {
         // No settings found, create empty settings object

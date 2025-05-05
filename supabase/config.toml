@@ -77,4 +77,3 @@ verify_jwt = true
 verify_jwt = true
 
 [edge_functions]
-
