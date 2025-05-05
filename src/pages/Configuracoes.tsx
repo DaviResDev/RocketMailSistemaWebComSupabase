@@ -1,6 +1,7 @@
 
 import React, { useEffect } from 'react';
 import { SettingsForm } from '@/components/settings/SettingsForm';
+import { SecuritySettingsForm } from '@/components/settings/SecuritySettingsForm';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -8,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { RefreshCcw } from 'lucide-react';
 import { ProfileForm } from '@/components/settings/ProfileForm';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function Configuracoes() {
   const { fetchSettings, settings, loading, error } = useSettings();
@@ -64,18 +66,34 @@ export default function Configuracoes() {
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-
-      <SettingsForm
-        onSave={() => {
-          toast.success('Configurações atualizadas com sucesso!');
-        }}
-      />
-
-      <ProfileForm
-        onSave={() => {
-          toast.success('Perfil atualizado com sucesso!');
-        }}
-      />
+      
+      <Tabs defaultValue="email">
+        <TabsList className="mb-4">
+          <TabsTrigger value="email">Email</TabsTrigger>
+          <TabsTrigger value="security">Segurança</TabsTrigger>
+          <TabsTrigger value="profile">Perfil</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="email">
+          <SettingsForm
+            onSave={() => {
+              toast.success('Configurações de email atualizadas com sucesso!');
+            }}
+          />
+        </TabsContent>
+        
+        <TabsContent value="security">
+          <SecuritySettingsForm />
+        </TabsContent>
+        
+        <TabsContent value="profile">
+          <ProfileForm
+            onSave={() => {
+              toast.success('Perfil atualizado com sucesso!');
+            }}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

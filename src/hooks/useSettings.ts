@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -17,7 +16,7 @@ export type Settings = {
   whatsapp_token?: string | null;
   created_at?: string | null;
   user_id?: string;
-  two_factor_enabled?: boolean; // Added two_factor_enabled property
+  two_factor_enabled: boolean; // Definindo explicitamente como não-nulo
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
@@ -68,9 +67,8 @@ export function useSettings() {
           whatsapp_token: data.whatsapp_token,
           created_at: data.created_at,
           user_id: data.user_id,
-          // Fix: Use type assertion to handle the two_factor_enabled property
-          // until the Supabase types are regenerated
-          two_factor_enabled: Boolean((data as any).two_factor_enabled)
+          // Usamos o valor booleano da propriedade agora que ela existe no banco de dados
+          two_factor_enabled: Boolean(data.two_factor_enabled)
         });
       } else {
         // No settings found, create empty settings object
@@ -85,7 +83,7 @@ export function useSettings() {
           foto_perfil: null,
           smtp_seguranca: 'tls', // Default to TLS
           smtp_nome: '',
-          two_factor_enabled: false // Added two_factor_enabled default
+          two_factor_enabled: false // Default value
         });
       }
     } catch (error: any) {
