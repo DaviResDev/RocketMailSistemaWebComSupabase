@@ -169,7 +169,7 @@ export function useEnvios() {
 
       if (!settingsData || !settingsData.email_smtp || !settingsData.email_porta || 
           !settingsData.email_usuario || !settingsData.email_senha) {
-        toast.error('Configurações SMTP incompletas. Verifique suas configurações de email.');
+        toast.error('Configurações SMTP incompletas. Verifique suas configurações de email em "Configurações > Email".');
         return false;
       }
 
@@ -193,77 +193,68 @@ export function useEnvios() {
       // Mostrar toast de envio em andamento
       const toastId = toast.loading('Enviando email...');
 
-      // Call the Supabase function to send the email with a timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Tempo limite de envio excedido')), 30000); // 30 segundos de timeout
-      });
-      
-      const functionPromise = supabase.functions.invoke('send-email', {
-        body: {
-          to: contatoData.email,
-          subject: templateData.nome,
-          content: templateData.conteudo,
-          cc: formData.cc,
-          bcc: formData.bcc,
-          contato_id: formData.contato_id,
-          template_id: formData.template_id,
-          user_id: user.id,
-          attachments: attachments,
-        },
-      });
-      
-      const { error: functionError } = await Promise.race([functionPromise, timeoutPromise]) as any;
-
-      if (functionError) {
-        console.error('Erro ao enviar email:', functionError);
-        toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
-
-        // Save envio with error status
-        await supabase
-          .from('envios')
-          .insert([
-            {
-              contato_id: formData.contato_id,
-              template_id: formData.template_id,
-              status: 'erro',
-              erro: functionError.message,
-              user_id: user.id,
-            },
-          ]);
-
-        return false;
-      }
-
-      // Save envio with pending status
-      const { data: envioData, error: envioError } = await supabase
-        .from('envios')
-        .insert([
-          {
+      try {
+        // Call the Supabase function to send the email with improved error handling
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('send-email', {
+          body: {
+            to: contatoData.email,
+            subject: templateData.nome,
+            content: templateData.conteudo,
+            cc: formData.cc,
+            bcc: formData.bcc,
             contato_id: formData.contato_id,
             template_id: formData.template_id,
-            status: 'pendente',
             user_id: user.id,
+            attachments: attachments,
           },
-        ])
-        .select()
-        .single();
+        });
 
-      if (envioError) {
-        console.error('Erro ao salvar registro de envio:', envioError);
+        if (functionError) {
+          console.error('Erro na chamada da function:', functionError);
+          toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
+          return false;
+        }
+
+        // Check for errors in the response body
+        if (functionData && functionData.error) {
+          console.error('Erro retornado pela function:', functionData.error);
+          toast.error(`Erro ao enviar email: ${functionData.error}`, { id: toastId });
+
+          // Save envio with error status
+          await supabase
+            .from('envios')
+            .insert([
+              {
+                contato_id: formData.contato_id,
+                template_id: formData.template_id,
+                status: 'erro',
+                erro: functionData.error,
+                user_id: user.id,
+              },
+            ]);
+
+          return false;
+        }
+
+        // Success case
+        console.log('Email enviado com sucesso:', functionData);
+        toast.success(`Email enviado com sucesso para ${contatoData.nome}!`, { id: toastId });
+        fetchEnvios();
+        return true;
+      } catch (error: any) {
+        console.error('Erro ao executar function de envio:', error);
+        toast.error(`Erro ao enviar email: ${error.message}`, { id: toastId });
+        return false;
       }
-
-      toast.success(`Email enviado com sucesso para ${contatoData.nome}!`, { id: toastId });
-      fetchEnvios();
-      return true;
     } catch (error: any) {
       console.error('Erro ao enviar email:', error);
       
       // Criar mensagem de erro mais detalhada
       let errorMessage = 'Erro ao enviar email: ';
       
-      if (error.message.includes('timeout')) {
+      if (error.message?.includes('timeout')) {
         errorMessage += 'O envio demorou muito tempo para ser concluído. Verifique suas configurações SMTP.';
-      } else if (error.message.includes('SMTP')) {
+      } else if (error.message?.includes('SMTP')) {
         errorMessage += 'Erro de conexão SMTP. Verifique suas configurações de email.';
       } else {
         errorMessage += error.message;
@@ -308,38 +299,57 @@ export function useEnvios() {
         return;
       }
 
-      // Call the Supabase function to resend the email
-      const { error: functionError } = await supabase.functions.invoke('send-email', {
-        body: {
-          to: envioData.contato.email,
-          subject: envioData.template.nome,
-          content: envioData.template.conteudo,
-          contato_id: envioData.contato_id,
-          template_id: envioData.template_id,
-          user_id: user.id,
-        },
-      });
+      const toastId = toast.loading('Reenviando email...');
 
-      if (functionError) {
-        console.error('Erro ao reenviar email:', functionError);
-        toast.error(`Erro ao reenviar email: ${functionError.message}`);
+      try {
+        // Call the Supabase function to resend the email
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('send-email', {
+          body: {
+            to: envioData.contato.email,
+            subject: envioData.template.nome,
+            content: envioData.template.conteudo,
+            contato_id: envioData.contato_id,
+            template_id: envioData.template_id,
+            user_id: user.id,
+          },
+        });
 
-        // Update envio with error status
+        if (functionError) {
+          console.error('Erro ao reenviar email:', functionError);
+          toast.error(`Erro ao reenviar email: ${functionError.message}`, { id: toastId });
+
+          // Update envio with error status
+          await supabase
+            .from('envios')
+            .update({ status: 'erro', erro: functionError.message })
+            .eq('id', envioId);
+          return;
+        }
+
+        if (functionData && functionData.error) {
+          console.error('Erro retornado pela function:', functionData.error);
+          toast.error(`Erro ao reenviar email: ${functionData.error}`, { id: toastId });
+
+          // Update envio with error status
+          await supabase
+            .from('envios')
+            .update({ status: 'erro', erro: functionData.error })
+            .eq('id', envioId);
+          return;
+        }
+
+        // Update envio with pending status
         await supabase
           .from('envios')
-          .update({ status: 'erro', erro: functionError.message })
+          .update({ status: 'entregue', erro: null })
           .eq('id', envioId);
-        return;
+
+        toast.success('Email reenviado com sucesso!', { id: toastId });
+        fetchEnvios();
+      } catch (error: any) {
+        console.error('Erro ao reenviar email:', error);
+        toast.error(`Erro ao reenviar email: ${error.message}`, { id: toastId });
       }
-
-      // Update envio with pending status
-      await supabase
-        .from('envios')
-        .update({ status: 'pendente', erro: null })
-        .eq('id', envioId);
-
-      toast.success('Email reenviado com sucesso!');
-      fetchEnvios();
     } catch (error: any) {
       console.error('Erro ao reenviar email:', error);
       toast.error('Erro ao reenviar email: ' + error.message);

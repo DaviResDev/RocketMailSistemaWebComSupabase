@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,42 +25,29 @@ serve(async (req) => {
     console.log("Security:", smtp_security || "tls");
     
     try {
-      // Create SMTP client
-      const client = new SmtpClient();
+      // Determine if we should use secure connection
+      const secure = smtp_security === "ssl" || Number(smtp_port) === 465;
+      console.log(`Using ${secure ? 'SSL/TLS' : 'STARTTLS if available'} connection`);
       
-      // Configure connection based on security settings
-      const connectionConfig = {
-        hostname: smtp_server,
-        port: Number(smtp_port),
-        username: smtp_user,
-        password: smtp_password,
-      };
+      // Create SMTP client with new library
+      const client = new SMTPClient({
+        connection: {
+          hostname: smtp_server,
+          port: Number(smtp_port),
+          auth: {
+            username: smtp_user,
+            password: smtp_password,
+          },
+          tls: secure,
+          timeout: 30000, // 30 seconds timeout
+        },
+        debug: {
+          log: true,
+        },
+      });
 
-      // Set connection method based on security setting and port
-      console.log(`Using security mode: ${smtp_security}`);
-      
-      if (smtp_security === "ssl") {
-        // Use SSL/TLS for port 465
-        console.log("Attempting connectTLS for SSL mode");
-        await client.connectTLS(connectionConfig);
-      } else {
-        // Use standard connection for other ports
-        console.log("Attempting standard connect");
-        await client.connect(connectionConfig);
-        
-        // If TLS is selected but not using SSL (port 587), use STARTTLS
-        if (smtp_security === "tls") {
-          try {
-            console.log("Attempting STARTTLS");
-            await client.starttls();
-            console.log("STARTTLS successful");
-          } catch (starttlsError) {
-            console.error("STARTTLS failed:", starttlsError);
-            throw new Error(`STARTTLS failed: ${starttlsError.message}`);
-          }
-        }
-      }
-      
+      // Test connection with a validation
+      await client.connect();
       console.log("SMTP connection successful");
       
       // Close the connection
@@ -84,10 +71,15 @@ serve(async (req) => {
       
       if (smtpError.message?.includes("authentication")) {
         errorMessage += ". Verifique seu nome de usuário e senha.";
+        if (smtp_server?.includes("gmail")) {
+          errorMessage += " Para Gmail, você pode precisar gerar uma senha de aplicativo em https://myaccount.google.com/apppasswords";
+        }
       } else if (smtpError.message?.includes("timeout")) {
         errorMessage += ". Verifique se o servidor SMTP está acessível e que a porta está correta.";
       } else if (smtpError.message?.includes("certificate")) {
         errorMessage += ". Problema com o certificado SSL do servidor. Tente outra configuração de segurança.";
+      } else if (smtpError.message?.includes("connect")) {
+        errorMessage += ". Não foi possível conectar ao servidor SMTP. Verifique o endereço e a porta.";
       }
       
       throw new Error(errorMessage);
