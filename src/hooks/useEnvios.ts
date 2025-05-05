@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -125,6 +126,8 @@ export function useEnvios() {
     }
     setLastSendTime(now);
 
+    const toastId = toast.loading('Enviando email...');
+    
     try {
       setSending(true);
       setError(null);
@@ -138,7 +141,7 @@ export function useEnvios() {
 
       if (templateError) {
         console.error('Erro ao carregar template:', templateError);
-        toast.error(`Erro ao carregar template: ${templateError.message}`);
+        toast.error(`Erro ao carregar template: ${templateError.message}`, { id: toastId });
         return false;
       }
 
@@ -150,18 +153,18 @@ export function useEnvios() {
 
       if (contatoError) {
         console.error('Erro ao carregar contato:', contatoError);
-        toast.error(`Erro ao carregar contato: ${contatoError.message}`);
+        toast.error(`Erro ao carregar contato: ${contatoError.message}`, { id: toastId });
         return false;
       }
 
       if (!templateData || !contatoData) {
-        toast.error('Template ou contato não encontrado.');
+        toast.error('Template ou contato não encontrado.', { id: toastId });
         return false;
       }
 
-      // MELHORIA 1: Validar dados críticos antes do envio
+      // Validar dados críticos antes do envio
       if (!contatoData.email || !templateData.conteudo) {
-        toast.error("Dados incompletos para envio. Verifique se o contato possui email e se o template possui conteúdo.");
+        toast.error("Dados incompletos para envio. Verifique se o contato possui email e se o template possui conteúdo.", { id: toastId });
         return false;
       }
 
@@ -174,13 +177,13 @@ export function useEnvios() {
 
       if (settingsError) {
         console.error('Erro ao carregar configurações SMTP:', settingsError);
-        toast.error(`Erro ao verificar configurações SMTP: ${settingsError.message}`);
+        toast.error(`Erro ao verificar configurações SMTP: ${settingsError.message}`, { id: toastId });
         return false;
       }
 
       if (!settingsData || !settingsData.email_smtp || !settingsData.email_porta || 
           !settingsData.email_usuario || !settingsData.email_senha) {
-        toast.error('Configurações SMTP incompletas. Verifique suas configurações de email em "Configurações > Email".');
+        toast.error('Configurações SMTP incompletas. Verifique suas configurações de email em "Configurações > Email".', { id: toastId });
         return false;
       }
 
@@ -201,9 +204,6 @@ export function useEnvios() {
         };
       })) : [];
 
-      // Mostrar toast de envio em andamento
-      const toastId = toast.loading('Enviando email...');
-
       try {
         // Call the Supabase function to send the email with improved error handling
         const { data: functionData, error: functionError } = await supabase.functions.invoke('send-email', {
@@ -223,6 +223,20 @@ export function useEnvios() {
         if (functionError) {
           console.error('Erro na chamada da function:', functionError);
           toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
+
+          // Save envio with error status
+          await supabase
+            .from('envios')
+            .insert([
+              {
+                contato_id: formData.contato_id,
+                template_id: formData.template_id,
+                status: 'erro',
+                erro: functionError.message,
+                user_id: user.id,
+              },
+            ]);
+
           return false;
         }
 
@@ -271,7 +285,7 @@ export function useEnvios() {
         errorMessage += error.message;
       }
       
-      toast.error(errorMessage);
+      toast.error(errorMessage, { id: toastId });
       return false;
     } finally {
       setSending(false);
@@ -279,6 +293,13 @@ export function useEnvios() {
   }, [user, fetchEnvios, lastSendTime]);
 
   const resendEnvio = useCallback(async (envioId: string) => {
+    if (!user) {
+      toast.error('Você precisa estar logado para reenviar emails');
+      return false;
+    }
+    
+    const toastId = toast.loading('Reenviando email...');
+    
     try {
       setSending(true);
       setError(null);
@@ -301,16 +322,14 @@ export function useEnvios() {
 
       if (envioError) {
         console.error('Erro ao carregar envio:', envioError);
-        toast.error(`Erro ao carregar envio: ${envioError.message}`);
-        return;
+        toast.error(`Erro ao carregar envio: ${envioError.message}`, { id: toastId });
+        return false;
       }
 
       if (!envioData || !envioData.contato || !envioData.template) {
-        toast.error('Envio, contato ou template não encontrado.');
-        return;
+        toast.error('Envio, contato ou template não encontrado.', { id: toastId });
+        return false;
       }
-
-      const toastId = toast.loading('Reenviando email...');
 
       try {
         // Call the Supabase function to resend the email
@@ -334,7 +353,7 @@ export function useEnvios() {
             .from('envios')
             .update({ status: 'erro', erro: functionError.message })
             .eq('id', envioId);
-          return;
+          return false;
         }
 
         if (functionData && functionData.error) {
@@ -346,7 +365,7 @@ export function useEnvios() {
             .from('envios')
             .update({ status: 'erro', erro: functionData.error })
             .eq('id', envioId);
-          return;
+          return false;
         }
 
         // Update envio with pending status
@@ -357,13 +376,16 @@ export function useEnvios() {
 
         toast.success('Email reenviado com sucesso!', { id: toastId });
         fetchEnvios();
+        return true;
       } catch (error: any) {
         console.error('Erro ao reenviar email:', error);
         toast.error(`Erro ao reenviar email: ${error.message}`, { id: toastId });
+        return false;
       }
     } catch (error: any) {
       console.error('Erro ao reenviar email:', error);
-      toast.error('Erro ao reenviar email: ' + error.message);
+      toast.error(`Erro ao reenviar email: ${error.message}`, { id: toastId });
+      return false;
     } finally {
       setSending(false);
     }

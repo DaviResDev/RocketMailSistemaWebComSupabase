@@ -110,16 +110,28 @@ serve(async (req) => {
     try {
       console.log("Creating new SMTP client");
       
-      const portNumber = Number(emailConfig.email_porta);
+      const port = Number(emailConfig.email_porta);
       const client = new SmtpClient();
       
-      // Configure the connection
-      await client.connectTLS({
-        hostname: emailConfig.email_smtp,
-        port: portNumber,
-        username: emailConfig.email_usuario,
-        password: emailConfig.email_senha,
-      });
+      // Configure the connection based on the port number
+      // Standard ports: 25, 587 (STARTTLS), 465 (SSL)
+      if (port === 465) {
+        // SSL connection
+        await client.connectTLS({
+          hostname: emailConfig.email_smtp,
+          port: port,
+          username: emailConfig.email_usuario,
+          password: emailConfig.email_senha,
+        });
+      } else {
+        // For 587, 25, and other ports - use STARTTLS
+        await client.connectTLS({
+          hostname: emailConfig.email_smtp,
+          port: port,
+          username: emailConfig.email_usuario,
+          password: emailConfig.email_senha,
+        });
+      }
 
       console.log("SMTP client connected successfully");
       
