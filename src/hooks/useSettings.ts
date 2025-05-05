@@ -68,7 +68,9 @@ export function useSettings() {
           whatsapp_token: data.whatsapp_token,
           created_at: data.created_at,
           user_id: data.user_id,
-          two_factor_enabled: Boolean(data.two_factor_enabled) // Ensure proper boolean conversion
+          // Fix: Use type assertion to handle the two_factor_enabled property
+          // until the Supabase types are regenerated
+          two_factor_enabled: Boolean((data as any).two_factor_enabled)
         });
       } else {
         // No settings found, create empty settings object
