@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, Mail, MoreHorizontal } from 'lucide-react';
+import { Calendar, Clock, Mail, MoreHorizontal, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEnvios } from '@/hooks/useEnvios';
@@ -32,42 +32,64 @@ interface SchedulesListProps {
 
 export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
   const { sendEmail } = useEnvios();
-  const [loading, setLoading] = useState(false);
+  const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
 
   const handleSendNow = async (schedule: Schedule) => {
     try {
-      setLoading(true);
-      // Convert schedule to EnvioFormData format
+      // Marcar item específico como carregando
+      setLoadingItems(prev => ({ ...prev, [schedule.id]: true }));
+      
+      // Mostrar toast de "enviando"
+      const toastId = toast.loading(`Enviando email para ${schedule.contato?.nome || 'contato'}...`);
+      
+      // Verificar se todos os dados necessários estão presentes
+      if (!schedule.contato_id || !schedule.template_id) {
+        throw new Error("Dados incompletos para envio: contato ou template faltando");
+      }
+      
+      // Converter schedule para EnvioFormData
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id
       };
       
-      // Send email immediately using sendEmail
-      await sendEmail(envioData);
+      // Enviar email imediatamente usando sendEmail
+      const result = await sendEmail(envioData);
       
-      // Update schedule status
+      if (!result) {
+        throw new Error("Falha ao enviar o email");
+      }
+      
+      // Atualizar status do agendamento
       await supabase
         .from('agendamentos')
         .update({ status: 'enviado' })
         .eq('id', schedule.id);
       
-      toast.success('Email enviado com sucesso!');
+      toast.success('Email enviado com sucesso!', { id: toastId });
       
-      // Refresh schedules list
+      // Atualizar lista de agendamentos
       onRefresh();
     } catch (err: any) {
-      console.error('Error sending scheduled email:', err);
+      console.error('Erro ao enviar email agendado:', err);
       toast.error(`Erro ao enviar email: ${err.message}`);
+      
+      // Registrar erro detalhado no console para depuração
+      console.error('Detalhes do erro:', {
+        schedule,
+        error: err,
+        stack: err.stack
+      });
     } finally {
-      setLoading(false);
+      // Desmarcar item específico como carregando
+      setLoadingItems(prev => ({ ...prev, [schedule.id]: false }));
     }
   };
 
   const handleCancelSchedule = async (scheduleId: string) => {
     try {
-      setLoading(true);
-      // Delete the schedule
+      setLoadingItems(prev => ({ ...prev, [scheduleId]: true }));
+      // Excluir o agendamento
       await supabase
         .from('agendamentos')
         .delete()
@@ -75,25 +97,15 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       
       toast.success('Agendamento cancelado com sucesso!');
       
-      // Refresh schedules list
+      // Atualizar lista de agendamentos
       onRefresh();
     } catch (err: any) {
-      console.error('Error canceling schedule:', err);
+      console.error('Erro ao cancelar agendamento:', err);
       toast.error(`Erro ao cancelar agendamento: ${err.message}`);
     } finally {
-      setLoading(false);
+      setLoadingItems(prev => ({ ...prev, [scheduleId]: false }));
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <p className="text-muted-foreground">Carregando agendamentos...</p>
-        </div>
-      </div>
-    );
-  }
 
   if (schedules.length === 0) {
     return (
@@ -139,10 +151,27 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
                   </div>
                 </TableCell>
                 <TableCell>
-                  {schedule.contato ? schedule.contato.nome : `Contato ID: ${schedule.contato_id.slice(0, 8)}...`}
+                  {schedule.contato ? (
+                    <div className="flex flex-col">
+                      <span>{schedule.contato.nome}</span>
+                      <span className="text-xs text-muted-foreground">{schedule.contato.email}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-amber-500">
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      Contato não encontrado
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
-                  {schedule.template ? schedule.template.nome : `Template ID: ${schedule.template_id.slice(0, 8)}...`}
+                  {schedule.template ? (
+                    schedule.template.nome
+                  ) : (
+                    <div className="flex items-center text-amber-500">
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      Template não encontrado
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Badge 
@@ -162,17 +191,40 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Ações</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        disabled={loadingItems[schedule.id]}
+                      >
+                        {loadingItems[schedule.id] ? (
+                          <span className="flex items-center">
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processando...
+                          </span>
+                        ) : (
+                          <>
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Ações</span>
+                          </>
+                        )}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleSendNow(schedule)}>
+                      <DropdownMenuItem 
+                        onClick={() => handleSendNow(schedule)}
+                        disabled={loadingItems[schedule.id] || !schedule.contato || !schedule.template}
+                      >
                         <Mail className="h-4 w-4 mr-2" />
                         Enviar agora
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleCancelSchedule(schedule.id)}>
+                      <DropdownMenuItem 
+                        onClick={() => handleCancelSchedule(schedule.id)}
+                        disabled={loadingItems[schedule.id]}
+                        className="text-destructive"
+                      >
                         Cancelar agendamento
                       </DropdownMenuItem>
                     </DropdownMenuContent>

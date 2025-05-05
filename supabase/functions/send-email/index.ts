@@ -26,6 +26,12 @@ interface AttachmentData {
   contentType: string;
 }
 
+interface SmtpResponse {
+  success: boolean;
+  message?: string;
+  details?: string;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -77,6 +83,7 @@ serve(async (req) => {
       throw new Error("Configurações de email incompletas. Por favor, configure seu SMTP corretamente.");
     }
     
+    // Log all important SMTP details for debugging
     console.log("Sending email to:", to);
     console.log("Subject:", subject);
     console.log("Using SMTP server:", emailConfig.email_smtp);
@@ -105,95 +112,113 @@ serve(async (req) => {
       </div>
     `;
 
-    try {
-      // Create SMTP client
-      const client = new SmtpClient();
-      
-      // Configure connection based on security settings
-      const connectionConfig: any = {
-        hostname: emailConfig.email_smtp,
-        port: emailConfig.email_porta,
-        username: emailConfig.email_usuario,
-        password: emailConfig.email_senha,
-      };
-
-      // Set TLS/SSL based on security setting
-      if (emailConfig.smtp_seguranca === "ssl") {
-        // Use SSL mode for port 465
-        connectionConfig.tls = true;
-        console.log("Using SSL mode with TLS enabled");
-      } else if (emailConfig.smtp_seguranca === "tls") {
-        // Use STARTTLS mode for port 587
-        connectionConfig.tls = false;
-        console.log("Using STARTTLS mode");
-      } else {
-        // No security
-        connectionConfig.tls = false;
-        console.log("Using no encryption");
-      }
-
-      console.log("SMTP client connection config:", connectionConfig);
-      console.log("SMTP client configured, attempting to connect...");
-      
-      // Connect to SMTP server using the appropriate method based on security setting
-      if (emailConfig.smtp_seguranca === "ssl") {
-        await client.connectTLS(connectionConfig);
-      } else {
-        await client.connect(connectionConfig);
+    // Function to handle the actual SMTP sending with improved error handling
+    const sendSmtpEmail = async (): Promise<SmtpResponse> => {
+      try {
+        // Create SMTP client
+        const client = new SmtpClient();
         
-        // If TLS is selected but not using SSL (port 587), use STARTTLS
-        if (emailConfig.smtp_seguranca === "tls") {
-          try {
-            await client.starttls();
-            console.log("STARTTLS successful");
-          } catch (starttlsError) {
-            console.error("STARTTLS failed, continuing with connection:", starttlsError);
+        // Configure connection based on security settings
+        const connectionConfig: any = {
+          hostname: emailConfig.email_smtp,
+          port: emailConfig.email_porta,
+          username: emailConfig.email_usuario,
+          password: emailConfig.email_senha,
+        };
+
+        // Set up proper TLS/SSL configuration based on security setting
+        if (emailConfig.smtp_seguranca === "ssl") {
+          // SSL mode typically used with port 465
+          connectionConfig.tls = true;
+          console.log("Using SSL mode with TLS enabled");
+          await client.connectTLS(connectionConfig);
+        } else {
+          // Connect with plain connection first (no TLS)
+          console.log("Connecting with plain connection first");
+          await client.connect(connectionConfig);
+          
+          // If TLS is selected (usually port 587), use STARTTLS after connection
+          if (emailConfig.smtp_seguranca === "tls") {
+            console.log("Starting STARTTLS upgrade");
+            try {
+              await client.starttls();
+              console.log("STARTTLS successful");
+            } catch (starttlsError) {
+              console.error("STARTTLS failed:", starttlsError);
+              throw new Error(`STARTTLS falhou: ${starttlsError.message || "Erro desconhecido"}`);
+            }
           }
         }
-      }
-      
-      console.log("Connected to SMTP server, sending email...");
+        
+        console.log("Connected to SMTP server successfully");
+        
+        // Login explicitly to ensure authentication works
+        try {
+          await client.login();
+          console.log("SMTP authentication successful");
+        } catch (loginError) {
+          console.error("SMTP login failed:", loginError);
+          throw new Error(`Falha na autenticação SMTP: ${loginError.message || "Credenciais inválidas"}`);
+        }
 
-      // Prepare email content
-      const emailData: any = {
-        from: emailConfig.email_usuario,
-        to: to,
-        subject: subject,
-        html: htmlContent,
-      };
-      
-      // Add CC and BCC if provided
-      if (cc && cc.length > 0) {
-        emailData.cc = cc;
-      }
-      
-      if (bcc && bcc.length > 0) {
-        emailData.bcc = bcc;
-      }
-      
-      // Add attachments if provided
-      if (attachments && attachments.length > 0) {
-        emailData.attachments = attachments.map(attachment => ({
-          filename: attachment.filename,
-          content: Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0)),
-          contentType: attachment.contentType,
-        }));
-      }
+        // Prepare email content
+        const emailData: any = {
+          from: emailConfig.email_usuario,
+          to: to,
+          subject: subject,
+          html: htmlContent,
+        };
+        
+        // Add CC and BCC if provided
+        if (cc && cc.length > 0) {
+          emailData.cc = cc;
+        }
+        
+        if (bcc && bcc.length > 0) {
+          emailData.bcc = bcc;
+        }
+        
+        // Add attachments if provided
+        if (attachments && attachments.length > 0) {
+          emailData.attachments = attachments.map(attachment => ({
+            filename: attachment.filename,
+            content: Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0)),
+            contentType: attachment.contentType,
+          }));
+        }
 
-      console.log("Sending email with data:", { 
-        to: emailData.to, 
-        from: emailData.from, 
-        subject: emailData.subject,
-        hasAttachments: attachments && attachments.length > 0,
-      });
+        console.log("Sending email with data:", { 
+          to: emailData.to, 
+          from: emailData.from, 
+          subject: emailData.subject,
+          hasAttachments: attachments && attachments.length > 0,
+        });
 
-      // Send the email
-      const sendResult = await client.send(emailData);
-      console.log("SMTP send result:", sendResult);
-      
-      // Close the connection
-      await client.close();
-      
+        // Send the email and capture detailed result
+        const sendResult = await client.send(emailData);
+        console.log("SMTP send result:", sendResult);
+        
+        // Close the connection
+        await client.close();
+        console.log("SMTP connection closed successfully");
+        
+        return { success: true, message: "Email enviado com sucesso" };
+      } catch (error) {
+        // Create detailed error response
+        const errorResponse: SmtpResponse = { 
+          success: false, 
+          message: `Erro SMTP: ${error.message || "Erro desconhecido"}`,
+          details: JSON.stringify(error, Object.getOwnPropertyNames(error))
+        };
+        
+        console.error("SMTP Error details:", errorResponse);
+        throw error;
+      }
+    }
+
+    try {
+      // Attempt to send email with better error handling
+      const sendResult = await sendSmtpEmail();
       console.log("Email sent successfully to:", to);
       
       // If this was triggered from an envio, update its status
@@ -231,21 +256,23 @@ serve(async (req) => {
       
       // Log the error details for debugging
       try {
-        console.error("Error details:", JSON.stringify(smtpError));
+        console.error("Error details:", JSON.stringify(smtpError, Object.getOwnPropertyNames(smtpError)));
       } catch (jsonError) {
         console.error("Error cannot be stringified:", smtpError.toString());
       }
       
-      // Create a more detailed error message
+      // Create a more detailed error message with common SMTP solutions
       let errorMessage = `Erro ao enviar email: ${smtpError.message || "Erro desconhecido"}`;
       
       // Add common SMTP error solutions
-      if (smtpError.message?.includes("authentication")) {
-        errorMessage += ". Verifique seu nome de usuário e senha.";
+      if (smtpError.message?.includes("authentication") || smtpError.message?.includes("auth")) {
+        errorMessage += ". Verifique seu nome de usuário e senha. Para Gmail, você pode precisar gerar uma senha de aplicativo.";
       } else if (smtpError.message?.includes("timeout")) {
-        errorMessage += ". Verifique se o servidor SMTP está acessível e que a porta está correta.";
-      } else if (smtpError.message?.includes("certificate")) {
-        errorMessage += ". Problema com o certificado SSL do servidor. Tente outra configuração de segurança.";
+        errorMessage += ". Verifique se o servidor SMTP está acessível e que a porta está correta. Alguns ISPs podem estar bloqueando portas SMTP.";
+      } else if (smtpError.message?.includes("certificate") || smtpError.message?.includes("SSL")) {
+        errorMessage += ". Problema com o certificado SSL do servidor. Tente outra configuração de segurança (TLS <-> SSL).";
+      } else if (smtpError.message?.includes("connect") || smtpError.message?.includes("connection")) {
+        errorMessage += ". Não foi possível conectar ao servidor SMTP. Verifique o nome do servidor e a porta.";
       }
       
       // Update status in database if contato_id and template_id are provided
@@ -295,7 +322,11 @@ serve(async (req) => {
     console.error("Error in send-email function:", error);
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        details: error.stack
+      }),
       { 
         status: 500, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 

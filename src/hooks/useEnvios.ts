@@ -148,6 +148,31 @@ export function useEnvios() {
         return false;
       }
 
+      // Verificar se o contato possui email
+      if (!contatoData.email) {
+        toast.error('Contato não possui endereço de email válido.');
+        return false;
+      }
+
+      // Verificar configurações SMTP
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (settingsError) {
+        console.error('Erro ao carregar configurações SMTP:', settingsError);
+        toast.error(`Erro ao verificar configurações SMTP: ${settingsError.message}`);
+        return false;
+      }
+
+      if (!settingsData || !settingsData.email_smtp || !settingsData.email_porta || 
+          !settingsData.email_usuario || !settingsData.email_senha) {
+        toast.error('Configurações SMTP incompletas. Verifique suas configurações de email.');
+        return false;
+      }
+
       // Prepare attachments for the function call
       const attachments = formData.attachments ? await Promise.all(formData.attachments.map(async (item) => {
         const fileContent = await new Promise<string>((resolve, reject) => {
@@ -165,8 +190,15 @@ export function useEnvios() {
         };
       })) : [];
 
-      // Call the Supabase function to send the email
-      const { error: functionError } = await supabase.functions.invoke('send-email', {
+      // Mostrar toast de envio em andamento
+      const toastId = toast.loading('Enviando email...');
+
+      // Call the Supabase function to send the email with a timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Tempo limite de envio excedido')), 30000); // 30 segundos de timeout
+      });
+      
+      const functionPromise = supabase.functions.invoke('send-email', {
         body: {
           to: contatoData.email,
           subject: templateData.nome,
@@ -179,10 +211,12 @@ export function useEnvios() {
           attachments: attachments,
         },
       });
+      
+      const { error: functionError } = await Promise.race([functionPromise, timeoutPromise]) as any;
 
       if (functionError) {
         console.error('Erro ao enviar email:', functionError);
-        toast.error(`Erro ao enviar email: ${functionError.message}`);
+        toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
 
         // Save envio with error status
         await supabase
@@ -201,7 +235,7 @@ export function useEnvios() {
       }
 
       // Save envio with pending status
-      await supabase
+      const { data: envioData, error: envioError } = await supabase
         .from('envios')
         .insert([
           {
@@ -210,14 +244,32 @@ export function useEnvios() {
             status: 'pendente',
             user_id: user.id,
           },
-        ]);
+        ])
+        .select()
+        .single();
 
-      toast.success('Email enviado com sucesso!');
+      if (envioError) {
+        console.error('Erro ao salvar registro de envio:', envioError);
+      }
+
+      toast.success(`Email enviado com sucesso para ${contatoData.nome}!`, { id: toastId });
       fetchEnvios();
       return true;
     } catch (error: any) {
       console.error('Erro ao enviar email:', error);
-      toast.error('Erro ao enviar email: ' + error.message);
+      
+      // Criar mensagem de erro mais detalhada
+      let errorMessage = 'Erro ao enviar email: ';
+      
+      if (error.message.includes('timeout')) {
+        errorMessage += 'O envio demorou muito tempo para ser concluído. Verifique suas configurações SMTP.';
+      } else if (error.message.includes('SMTP')) {
+        errorMessage += 'Erro de conexão SMTP. Verifique suas configurações de email.';
+      } else {
+        errorMessage += error.message;
+      }
+      
+      toast.error(errorMessage);
       return false;
     } finally {
       setSending(false);
