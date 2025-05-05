@@ -120,7 +120,7 @@ serve(async (req) => {
       const secure = emailConfig.smtp_seguranca === "ssl" || Number(emailConfig.email_porta) === 465;
       console.log(`Connection security: ${secure ? 'SSL/TLS' : 'STARTTLS if available'}`);
       
-      // Create client with denomailer library
+      // Create client with denomailer library - FIXED VERSION
       const client = new SMTPClient({
         connection: {
           hostname: emailConfig.email_smtp,
@@ -132,16 +132,9 @@ serve(async (req) => {
           tls: secure,
           timeout: 30000, // 30 seconds timeout
         },
-        debug: {
-          log: true,
-        },
       });
 
       console.log("SMTP client configuration complete");
-      
-      // Connect to SMTP server first to validate connection before sending
-      await client.connect();
-      console.log("SMTP connection successful");
       
       // Prepare message
       const messageData: any = {

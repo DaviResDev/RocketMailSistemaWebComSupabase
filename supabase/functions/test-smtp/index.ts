@@ -41,14 +41,19 @@ serve(async (req) => {
           tls: secure,
           timeout: 30000, // 30 seconds timeout
         },
-        debug: {
-          log: true,
-        },
       });
 
-      // Test connection with a validation
-      await client.connect();
-      console.log("SMTP connection successful");
+      console.log("SMTP client created, attempting to send a test email");
+      
+      // Test with a simple send operation
+      const result = await client.send({
+        from: smtp_user,
+        to: smtp_user, // Send test to self
+        subject: "SMTP Test",
+        content: "This is a test email to verify SMTP settings"
+      });
+      
+      console.log("SMTP test successful:", result);
       
       // Close the connection
       await client.close();
