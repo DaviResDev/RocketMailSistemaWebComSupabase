@@ -173,7 +173,7 @@ export function useEnvios() {
         return false;
       }
 
-      // Verificar configurações SMTP
+      // Verificar se o usuário possui configurações básicas de email
       const { data: settingsData, error: settingsError } = await supabase
         .from('configuracoes')
         .select('*')
@@ -181,15 +181,15 @@ export function useEnvios() {
         .maybeSingle();
 
       if (settingsError) {
-        console.error('Erro ao carregar configurações SMTP:', settingsError);
-        toast.error(`Erro ao verificar configurações SMTP: ${settingsError.message}`, { id: toastId });
+        console.error('Erro ao carregar configurações:', settingsError);
+        toast.error(`Erro ao verificar configurações: ${settingsError.message}`, { id: toastId });
         setSending(false);
         return false;
       }
 
-      if (!settingsData || !settingsData.email_smtp || !settingsData.email_porta || 
-          !settingsData.email_usuario || !settingsData.email_senha) {
-        toast.error('Configurações SMTP incompletas. Verifique suas configurações de email em "Configurações > Email".', { id: toastId });
+      // Verificar apenas configurações básicas necessárias para Resend
+      if (!settingsData) {
+        toast.error('Configurações de email não encontradas. Acesse "Configurações > Email" para configurar seus dados de envio.', { id: toastId });
         setSending(false);
         return false;
       }
@@ -300,9 +300,7 @@ export function useEnvios() {
       let errorMessage = 'Erro ao enviar email: ';
       
       if (error.message?.includes('timeout')) {
-        errorMessage += 'O envio demorou muito tempo para ser concluído. Verifique suas configurações SMTP.';
-      } else if (error.message?.includes('SMTP')) {
-        errorMessage += 'Erro de conexão SMTP. Verifique suas configurações de email.';
+        errorMessage += 'O envio demorou muito tempo para ser concluído.';
       } else {
         errorMessage += error.message;
       }
