@@ -37,6 +37,11 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     
+    // Log environment variables (without revealing full keys)
+    console.log("SUPABASE_URL available:", !!supabaseUrl);
+    console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!supabaseServiceKey);
+    console.log("RESEND_API_KEY available:", !!resendApiKey);
+    
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       throw new Error("Server configuration error");
@@ -103,7 +108,7 @@ serve(async (req) => {
     `;
 
     try {
-      console.log("Sending email with Resend...");
+      console.log("Sending email with Resend using API key...");
       
       // Process attachments if any
       const processedAttachments = [];
@@ -128,6 +133,8 @@ serve(async (req) => {
       // Prepare email data for Resend
       const fromName = emailConfig.smtp_nome || 'DisparoPro';
       const fromEmail = emailConfig.email_usuario || 'onboarding@resend.dev';
+      
+      console.log(`Sending as: ${fromName} <${fromEmail}>`);
       
       const emailData: any = {
         from: `${fromName} <${fromEmail}>`,
@@ -155,6 +162,7 @@ serve(async (req) => {
       const { data: sendResult, error: sendError } = await resend.emails.send(emailData);
       
       if (sendError) {
+        console.error("Resend API error:", sendError);
         throw sendError;
       }
       

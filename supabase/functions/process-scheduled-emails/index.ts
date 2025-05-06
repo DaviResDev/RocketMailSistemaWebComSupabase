@@ -16,10 +16,16 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
     
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       throw new Error("Server configuration error");
+    }
+    
+    if (!resendApiKey) {
+      console.error("Missing environment variable: RESEND_API_KEY");
+      throw new Error("Resend API key not configured. Please add RESEND_API_KEY to your environment variables.");
     }
     
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
