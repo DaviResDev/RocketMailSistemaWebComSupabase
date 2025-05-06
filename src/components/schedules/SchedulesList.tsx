@@ -36,31 +36,33 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
 
   const handleSendNow = async (schedule: Schedule) => {
     try {
-      // Marcar item específico como carregando
+      // Mark this specific item as loading
       setLoadingItems(prev => ({ ...prev, [schedule.id]: true }));
       
-      // Mostrar toast de "enviando"
+      // Show sending toast
       const toastId = toast.loading(`Enviando email para ${schedule.contato?.nome || 'contato'}...`);
       
-      // Verificar se todos os dados necessários estão presentes
+      // Check if we have all required data
       if (!schedule.contato_id || !schedule.template_id) {
+        toast.error("Dados incompletos para envio: contato ou template faltando", { id: toastId });
         throw new Error("Dados incompletos para envio: contato ou template faltando");
       }
       
-      // Converter schedule para EnvioFormData
+      // Convert schedule to EnvioFormData
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id
       };
       
-      // Enviar email imediatamente usando sendEmail
+      // Send email immediately using sendEmail
       const result = await sendEmail(envioData);
       
       if (!result) {
+        toast.error("Falha ao enviar o email", { id: toastId });
         throw new Error("Falha ao enviar o email");
       }
       
-      // Atualizar status do agendamento
+      // Update schedule status
       await supabase
         .from('agendamentos')
         .update({ status: 'enviado' })
@@ -68,20 +70,20 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       
       toast.success('Email enviado com sucesso!', { id: toastId });
       
-      // Atualizar lista de agendamentos
+      // Refresh schedules list
       onRefresh();
     } catch (err: any) {
       console.error('Erro ao enviar email agendado:', err);
       toast.error(`Erro ao enviar email: ${err.message}`);
       
-      // Registrar erro detalhado no console para depuração
+      // Log detailed error for debugging
       console.error('Detalhes do erro:', {
         schedule,
         error: err,
         stack: err.stack
       });
     } finally {
-      // Desmarcar item específico como carregando
+      // Always unmark the item as loading
       setLoadingItems(prev => ({ ...prev, [schedule.id]: false }));
     }
   };
@@ -89,20 +91,26 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
   const handleCancelSchedule = async (scheduleId: string) => {
     try {
       setLoadingItems(prev => ({ ...prev, [scheduleId]: true }));
-      // Excluir o agendamento
-      await supabase
+      
+      // Delete the schedule
+      const { error } = await supabase
         .from('agendamentos')
         .delete()
         .eq('id', scheduleId);
+        
+      if (error) {
+        throw error;
+      }
       
       toast.success('Agendamento cancelado com sucesso!');
       
-      // Atualizar lista de agendamentos
+      // Refresh schedules list
       onRefresh();
     } catch (err: any) {
       console.error('Erro ao cancelar agendamento:', err);
       toast.error(`Erro ao cancelar agendamento: ${err.message}`);
     } finally {
+      // Always unmark the item as loading
       setLoadingItems(prev => ({ ...prev, [scheduleId]: false }));
     }
   };

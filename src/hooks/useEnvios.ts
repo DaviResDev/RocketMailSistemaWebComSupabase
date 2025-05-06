@@ -424,6 +424,8 @@ export function useEnvios() {
       toast.error(`Erro ao reenviar email: ${error.message}`, { id: toastId });
       setSending(false);
       return false;
+    } finally {
+      setSending(false); // Ensure sending state is reset in all cases
     }
   }, [user, fetchEnvios]);
 

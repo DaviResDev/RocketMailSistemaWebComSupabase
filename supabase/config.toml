@@ -35,3 +35,4 @@ verify_jwt = false
 
 [edge_functions.process-scheduled-emails]
 verify_jwt = false
+

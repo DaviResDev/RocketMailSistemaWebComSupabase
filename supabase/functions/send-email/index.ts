@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,7 +48,7 @@ serve(async (req) => {
     
     // Validate data before proceeding
     if (!to || !subject || !content || !user_id) {
-      console.error("Incomplete request data:", requestData);
+      console.error("Incomplete request data:", JSON.stringify(requestData));
       throw new Error("Dados incompletos para envio de email");
     }
 
@@ -75,7 +75,7 @@ serve(async (req) => {
     const emailConfig = settingsData[0];
     
     if (!emailConfig.email_smtp || !emailConfig.email_porta || !emailConfig.email_usuario || !emailConfig.email_senha) {
-      console.error("Incomplete email settings:", emailConfig);
+      console.error("Incomplete email settings:", JSON.stringify(emailConfig));
       throw new Error("Configurações de email incompletas. Por favor, configure seu SMTP corretamente.");
     }
     
@@ -106,7 +106,7 @@ serve(async (req) => {
     `;
 
     try {
-      console.log("Creating SMTP client...");
+      console.log("Setting up SMTP client with denomailer...");
       
       // Process attachments if any
       const processedAttachments = [];
@@ -116,18 +116,14 @@ serve(async (req) => {
         
         for (const attachment of attachments) {
           try {
+            // Convert base64 content to binary data
             const base64Data = attachment.content;
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
+            const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
             
             processedAttachments.push({
               filename: attachment.filename,
               contentType: attachment.contentType,
-              content: bytes.buffer,
+              content: binaryData,
             });
             
             console.log(`Attachment processed: ${attachment.filename}`);
@@ -137,43 +133,43 @@ serve(async (req) => {
         }
       }
 
-      // Determine connection security based on port
-      let isSecure = false;
-      if (emailConfig.email_porta === 465) {
-        isSecure = true;
-        console.log("Using secure connection (SSL/TLS) for port 465");
-      } else {
-        console.log(`Using STARTTLS for port ${emailConfig.email_porta}`);
+      // Determine client configuration based on port
+      const clientConfig: any = {
+        connection: {
+          hostname: emailConfig.email_smtp,
+          port: Number(emailConfig.email_porta),
+          auth: {
+            username: emailConfig.email_usuario,
+            password: emailConfig.email_senha,
+          },
+          tls: true,
+        },
+      };
+      
+      // For port 587, enable STARTTLS
+      if (Number(emailConfig.email_porta) === 587) {
+        console.log("Using STARTTLS for port 587");
+        clientConfig.connection.tls = false;
+        clientConfig.connection.starttls = true;
+      } else if (Number(emailConfig.email_porta) === 465) {
+        console.log("Using SSL/TLS for port 465");
+        clientConfig.connection.tls = true;
+        clientConfig.connection.starttls = false;
       }
 
       // Create the SMTP client with proper configuration
-      const client = new SmtpClient();
-      
-      // Connect to the SMTP server
-      console.log("Connecting to SMTP server...");
-      await client.connectTLS({
-        hostname: emailConfig.email_smtp,
-        port: Number(emailConfig.email_porta),
-        username: emailConfig.email_usuario,
-        password: emailConfig.email_senha,
-      });
-      
-      console.log("SMTP connection established");
+      const client = new SMTPClient(clientConfig);
       
       // Prepare sender info
       const from = emailConfig.smtp_nome ? 
         `${emailConfig.smtp_nome} <${emailConfig.email_usuario}>` : 
         emailConfig.email_usuario;
       
-      // Send email
-      console.log("Sending email...");
-
       // Prepare email data
-      const emailData = {
+      const emailData: any = {
         from: from,
         to: to,
         subject: subject,
-        content: htmlContent,
         html: htmlContent,
       };
       
@@ -192,11 +188,12 @@ serve(async (req) => {
         emailData.attachments = processedAttachments;
       }
 
+      console.log("Sending email with denomailer...");
       // Send the email
       const sendResult = await client.send(emailData);
       console.log("Email sent successfully:", sendResult);
       
-      // Close connection
+      // Close the SMTP connection
       await client.close();
       
       // Update envio status if relevant ids are provided
@@ -215,7 +212,8 @@ serve(async (req) => {
             .from('envios')
             .update({ 
               status: 'entregue',
-              resposta_smtp: JSON.stringify(sendResult)
+              resposta_smtp: JSON.stringify(sendResult),
+              erro: null
             })
             .eq('id', envios[0].id);
             
@@ -249,15 +247,16 @@ serve(async (req) => {
     } catch (smtpError: any) {
       console.error("SMTP Error:", smtpError);
       
-      // Create a detailed error message with solutions
-      let errorMessage = "Erro ao enviar email: ";
+      // Get detailed error information
       let errorDetails = null;
-      
       try {
         errorDetails = JSON.stringify(smtpError, Object.getOwnPropertyNames(smtpError));
       } catch (e) {
         errorDetails = String(smtpError);
       }
+      
+      // Create a detailed error message with solutions
+      let errorMessage = "Erro ao enviar email: ";
       
       if (smtpError.message) {
         if (smtpError.message.includes("authentication") || smtpError.message.includes("auth")) {
