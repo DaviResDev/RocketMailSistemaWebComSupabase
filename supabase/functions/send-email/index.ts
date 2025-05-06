@@ -1,8 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
-import { decode as b64decode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,9 +52,8 @@ serve(async (req) => {
       throw new Error("Dados incompletos para envio de email");
     }
 
-    console.log(`[DEBUG] Preparing to send email to: ${to}`);
-    console.log(`[DEBUG] Subject: ${subject}`);
-    console.log(`[DEBUG] User ID: ${user_id}`);
+    console.log(`Preparing to send email to: ${to}`);
+    console.log(`Subject: ${subject}`);
     
     // Get settings from database for the specified user
     const { data: settingsData, error: settingsError } = await supabaseClient
@@ -82,10 +80,9 @@ serve(async (req) => {
     }
     
     // Log all important SMTP details for debugging
-    console.log(`[DEBUG] SMTP Server: ${emailConfig.email_smtp}`);
-    console.log(`[DEBUG] SMTP Port: ${emailConfig.email_porta}`);
-    console.log(`[DEBUG] SMTP User: ${emailConfig.email_usuario}`);
-    console.log(`[DEBUG] SMTP Security: ${emailConfig.smtp_seguranca || 'tls'}`);
+    console.log(`SMTP Server: ${emailConfig.email_smtp}`);
+    console.log(`SMTP Port: ${emailConfig.email_porta}`);
+    console.log(`SMTP User: ${emailConfig.email_usuario}`);
     
     // Generate signature with area_negocio if available
     let assinatura = "";
@@ -109,48 +106,59 @@ serve(async (req) => {
     `;
 
     try {
-      console.log(`[DEBUG] Creating SMTP client...`);
+      console.log("Creating SMTP client...");
       
       // Process attachments if any
       const processedAttachments = [];
       
       if (attachments && attachments.length > 0) {
-        console.log(`[DEBUG] Processing ${attachments.length} attachments`);
+        console.log(`Processing ${attachments.length} attachments`);
         
         for (const attachment of attachments) {
           try {
-            const binaryContent = b64decode(attachment.content);
+            const base64Data = attachment.content;
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
             
             processedAttachments.push({
-              content: binaryContent,
               filename: attachment.filename,
               contentType: attachment.contentType,
+              content: bytes.buffer,
             });
             
-            console.log(`[DEBUG] Attachment processed: ${attachment.filename}`);
+            console.log(`Attachment processed: ${attachment.filename}`);
           } catch (attachError) {
             console.error(`Error processing attachment ${attachment.filename}:`, attachError);
           }
         }
       }
 
-      // Create SMTP client configuration based on email_porta
-      const port = Number(emailConfig.email_porta);
-      const isSecure = port === 465; // Port 465 uses implicit SSL
+      // Determine connection security based on port
+      let isSecure = false;
+      if (emailConfig.email_porta === 465) {
+        isSecure = true;
+        console.log("Using secure connection (SSL/TLS) for port 465");
+      } else {
+        console.log(`Using STARTTLS for port ${emailConfig.email_porta}`);
+      }
 
-      const client = new SMTPClient({
-        connection: {
-          hostname: emailConfig.email_smtp,
-          port: port,
-          tls: true,
-          auth: {
-            username: emailConfig.email_usuario,
-            password: emailConfig.email_senha,
-          },
-        },
+      // Create the SMTP client with proper configuration
+      const client = new SmtpClient();
+      
+      // Connect to the SMTP server
+      console.log("Connecting to SMTP server...");
+      await client.connectTLS({
+        hostname: emailConfig.email_smtp,
+        port: Number(emailConfig.email_porta),
+        username: emailConfig.email_usuario,
+        password: emailConfig.email_senha,
       });
-
-      console.log(`[DEBUG] SMTP client created, preparing to send email...`);
+      
+      console.log("SMTP connection established");
       
       // Prepare sender info
       const from = emailConfig.smtp_nome ? 
@@ -158,19 +166,35 @@ serve(async (req) => {
         emailConfig.email_usuario;
       
       // Send email
-      console.log(`[DEBUG] Sending email...`);
-      const result = await client.send({
+      console.log("Sending email...");
+
+      // Prepare email data
+      const emailData = {
         from: from,
         to: to,
-        cc: cc,
-        bcc: bcc,
         subject: subject,
         content: htmlContent,
         html: htmlContent,
-        attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
-      });
+      };
       
-      console.log(`[DEBUG] Email sent successfully:`, result);
+      // Add CC recipients if provided
+      if (cc && cc.length > 0) {
+        emailData.cc = cc;
+      }
+      
+      // Add BCC recipients if provided
+      if (bcc && bcc.length > 0) {
+        emailData.bcc = bcc;
+      }
+      
+      // Add attachments if any
+      if (processedAttachments.length > 0) {
+        emailData.attachments = processedAttachments;
+      }
+
+      // Send the email
+      const sendResult = await client.send(emailData);
+      console.log("Email sent successfully:", sendResult);
       
       // Close connection
       await client.close();
@@ -191,11 +215,11 @@ serve(async (req) => {
             .from('envios')
             .update({ 
               status: 'entregue',
-              resposta_smtp: JSON.stringify(result)
+              resposta_smtp: JSON.stringify(sendResult)
             })
             .eq('id', envios[0].id);
             
-          console.log(`[DEBUG] Updated envio status to 'entregue'`);
+          console.log(`Updated envio status to 'entregue'`);
         } else {
           // Create a new record if it doesn't exist yet
           await supabaseClient
@@ -205,10 +229,10 @@ serve(async (req) => {
               template_id: template_id,
               user_id: user_id,
               status: 'entregue',
-              resposta_smtp: JSON.stringify(result)
+              resposta_smtp: JSON.stringify(sendResult)
             }]);
             
-          console.log(`[DEBUG] Created new envio record with status 'entregue'`);
+          console.log(`Created new envio record with status 'entregue'`);
         }
       }
       
@@ -257,7 +281,7 @@ serve(async (req) => {
       // Update envio status for error
       if (contato_id && template_id && user_id) {
         try {
-          console.log(`[DEBUG] Updating envio status to 'erro'`);
+          console.log(`Updating envio status to 'erro'`);
           const { data: envios } = await supabaseClient
             .from('envios')
             .select('id')
@@ -277,7 +301,7 @@ serve(async (req) => {
               })
               .eq('id', envios[0].id);
               
-            console.log(`[DEBUG] Updated envio status to 'erro'`);
+            console.log(`Updated envio status to 'erro'`);
           } else {
             // Create a new error record
             await supabaseClient
@@ -291,7 +315,7 @@ serve(async (req) => {
                 resposta_smtp: errorDetails
               }]);
               
-            console.log(`[DEBUG] Created new envio record with status 'erro'`);
+            console.log(`Created new envio record with status 'erro'`);
           }
         } catch (dbError: any) {
           console.error("Error updating/creating error record:", dbError);

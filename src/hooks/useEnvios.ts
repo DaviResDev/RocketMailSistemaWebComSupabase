@@ -143,6 +143,7 @@ export function useEnvios() {
       if (templateError) {
         console.error('Erro ao carregar template:', templateError);
         toast.error(`Erro ao carregar template: ${templateError.message}`, { id: toastId });
+        setSending(false);
         return false;
       }
 
@@ -155,17 +156,20 @@ export function useEnvios() {
       if (contatoError) {
         console.error('Erro ao carregar contato:', contatoError);
         toast.error(`Erro ao carregar contato: ${contatoError.message}`, { id: toastId });
+        setSending(false);
         return false;
       }
 
       if (!templateData || !contatoData) {
         toast.error('Template ou contato não encontrado.', { id: toastId });
+        setSending(false);
         return false;
       }
 
       // Validar dados críticos antes do envio
       if (!contatoData.email || !templateData.conteudo) {
         toast.error("Dados incompletos para envio. Verifique se o contato possui email e se o template possui conteúdo.", { id: toastId });
+        setSending(false);
         return false;
       }
 
@@ -179,12 +183,14 @@ export function useEnvios() {
       if (settingsError) {
         console.error('Erro ao carregar configurações SMTP:', settingsError);
         toast.error(`Erro ao verificar configurações SMTP: ${settingsError.message}`, { id: toastId });
+        setSending(false);
         return false;
       }
 
       if (!settingsData || !settingsData.email_smtp || !settingsData.email_porta || 
           !settingsData.email_usuario || !settingsData.email_senha) {
         toast.error('Configurações SMTP incompletas. Verifique suas configurações de email em "Configurações > Email".', { id: toastId });
+        setSending(false);
         return false;
       }
 
@@ -235,6 +241,7 @@ export function useEnvios() {
         if (functionError) {
           console.error('Erro na chamada da function:', functionError);
           toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
+          setSending(false);
 
           // Save envio with error status
           await supabase
@@ -256,6 +263,7 @@ export function useEnvios() {
         if (functionData && functionData.error) {
           console.error('Erro retornado pela function:', functionData.error);
           toast.error(`Erro ao enviar email: ${functionData.error}`, { id: toastId });
+          setSending(false);
 
           // Save envio with error status
           await supabase
@@ -276,11 +284,13 @@ export function useEnvios() {
         // Success case
         console.log('Email enviado com sucesso:', functionData);
         toast.success(`Email enviado com sucesso para ${contatoData.nome}!`, { id: toastId });
+        setSending(false);
         fetchEnvios();
         return true;
       } catch (error: any) {
         console.error('Erro ao executar function de envio:', error);
         toast.error(`Erro ao enviar email: ${error.message}`, { id: toastId });
+        setSending(false);
         return false;
       }
     } catch (error: any) {
@@ -298,9 +308,8 @@ export function useEnvios() {
       }
       
       toast.error(errorMessage, { id: toastId });
-      return false;
-    } finally {
       setSending(false);
+      return false;
     }
   }, [user, fetchEnvios, lastSendTime]);
 
@@ -335,11 +344,13 @@ export function useEnvios() {
       if (envioError) {
         console.error('Erro ao carregar envio:', envioError);
         toast.error(`Erro ao carregar envio: ${envioError.message}`, { id: toastId });
+        setSending(false);
         return false;
       }
 
       if (!envioData || !envioData.contato || !envioData.template) {
         toast.error('Envio, contato ou template não encontrado.', { id: toastId });
+        setSending(false);
         return false;
       }
 
@@ -369,6 +380,7 @@ export function useEnvios() {
         if (functionError) {
           console.error('Erro ao reenviar email:', functionError);
           toast.error(`Erro ao reenviar email: ${functionError.message}`, { id: toastId });
+          setSending(false);
 
           // Update envio with error status
           await supabase
@@ -381,6 +393,7 @@ export function useEnvios() {
         if (functionData && functionData.error) {
           console.error('Erro retornado pela function:', functionData.error);
           toast.error(`Erro ao reenviar email: ${functionData.error}`, { id: toastId });
+          setSending(false);
 
           // Update envio with error status
           await supabase
@@ -397,19 +410,20 @@ export function useEnvios() {
           .eq('id', envioId);
 
         toast.success('Email reenviado com sucesso!', { id: toastId });
+        setSending(false);
         fetchEnvios();
         return true;
       } catch (error: any) {
         console.error('Erro ao reenviar email:', error);
         toast.error(`Erro ao reenviar email: ${error.message}`, { id: toastId });
+        setSending(false);
         return false;
       }
     } catch (error: any) {
       console.error('Erro ao reenviar email:', error);
       toast.error(`Erro ao reenviar email: ${error.message}`, { id: toastId });
-      return false;
-    } finally {
       setSending(false);
+      return false;
     }
   }, [user, fetchEnvios]);
 
