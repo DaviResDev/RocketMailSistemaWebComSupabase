@@ -27,6 +27,7 @@ enabled = true
 
 [edge_functions]
 [edge_functions.send-email]
+verify_jwt = false
 
 [edge_functions.test-smtp]
 
@@ -34,4 +35,3 @@ enabled = true
 
 [edge_functions.process-scheduled-emails]
 verify_jwt = false
-

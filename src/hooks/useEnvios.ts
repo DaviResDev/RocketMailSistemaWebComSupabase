@@ -126,6 +126,7 @@ export function useEnvios() {
     }
     setLastSendTime(now);
 
+    // Create a unique toast ID we can reference later
     const toastId = toast.loading('Enviando email...');
     
     try {
@@ -204,8 +205,17 @@ export function useEnvios() {
         };
       })) : [];
 
+      // Call the Supabase function to send the email with improved error handling
+      console.log("Calling send-email function with data:", {
+        to: contatoData.email,
+        subject: templateData.nome,
+        // Don't log full content
+        contato_id: formData.contato_id,
+        template_id: formData.template_id,
+        user_id: user.id,
+      });
+      
       try {
-        // Call the Supabase function to send the email with improved error handling
         const { data: functionData, error: functionError } = await supabase.functions.invoke('send-email', {
           body: {
             to: contatoData.email,
@@ -219,6 +229,8 @@ export function useEnvios() {
             attachments: attachments,
           },
         });
+
+        console.log("Function response:", functionData, "Error:", functionError);
 
         if (functionError) {
           console.error('Erro na chamada da function:', functionError);
@@ -332,6 +344,14 @@ export function useEnvios() {
       }
 
       try {
+        console.log("Attempting to resend email with data:", {
+          to: envioData.contato.email,
+          subject: envioData.template.nome,
+          contato_id: envioData.contato_id,
+          template_id: envioData.template_id,
+          user_id: user.id,
+        });
+        
         // Call the Supabase function to resend the email
         const { data: functionData, error: functionError } = await supabase.functions.invoke('send-email', {
           body: {
@@ -343,6 +363,8 @@ export function useEnvios() {
             user_id: user.id,
           },
         });
+
+        console.log("Resend function response:", functionData, "Error:", functionError);
 
         if (functionError) {
           console.error('Erro ao reenviar email:', functionError);
@@ -368,7 +390,7 @@ export function useEnvios() {
           return false;
         }
 
-        // Update envio with pending status
+        // Update envio with success status
         await supabase
           .from('envios')
           .update({ status: 'entregue', erro: null })
