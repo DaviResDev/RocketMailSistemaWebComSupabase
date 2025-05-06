@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -12,11 +13,11 @@ export type Settings = {
   area_negocio: string | null;
   foto_perfil: string | null;
   smtp_seguranca: string | null; // TLS/SSL
-  smtp_nome: string | null; // Nome da conta SMTP
+  smtp_nome: string | null; // Nome da conta de email
   whatsapp_token?: string | null;
   created_at?: string | null;
   user_id?: string;
-  two_factor_enabled: boolean; // Definindo explicitamente como não-nulo
+  two_factor_enabled: boolean;
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
@@ -67,7 +68,6 @@ export function useSettings() {
           whatsapp_token: data.whatsapp_token,
           created_at: data.created_at,
           user_id: data.user_id,
-          // Usamos o valor booleano da propriedade agora que ela existe no banco de dados
           two_factor_enabled: Boolean(data.two_factor_enabled)
         });
       } else {
@@ -151,35 +151,6 @@ export function useSettings() {
     }
   };
 
-  const testSmtpConnection = async (formData: SettingsFormData) => {
-    try {
-      setLoading(true);
-      
-      const response = await supabase.functions.invoke('test-smtp', {
-        body: {
-          smtp_server: formData.email_smtp,
-          smtp_port: formData.email_porta,
-          smtp_user: formData.email_usuario,
-          smtp_password: formData.email_senha,
-          smtp_security: formData.smtp_seguranca || 'tls'
-        }
-      });
-
-      if (response.error) {
-        throw new Error(`Teste de conexão SMTP falhou: ${response.error.message}`);
-      }
-
-      toast.success('Conexão SMTP testada com sucesso!');
-      return true;
-    } catch (error: any) {
-      console.error('Erro ao testar conexão SMTP:', error);
-      toast.error('Erro ao testar conexão SMTP: ' + error.message);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const uploadProfilePhoto = async (file: File): Promise<string | null> => {
     if (!user) {
       toast.error('Você precisa estar logado para fazer upload de fotos');
@@ -221,7 +192,6 @@ export function useSettings() {
     error,
     fetchSettings,
     saveSettings,
-    testSmtpConnection,
     uploadProfilePhoto
   };
 }

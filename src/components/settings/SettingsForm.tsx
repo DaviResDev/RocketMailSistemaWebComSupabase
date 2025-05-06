@@ -8,13 +8,15 @@ import { Mail, Save, KeyRound, CheckCircle2, Loader2 } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { SecuritySettingsForm } from './SecuritySettingsForm';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
 
 interface SettingsFormProps {
   onSave?: () => void;
 }
 
 export function SettingsForm({ onSave }: SettingsFormProps) {
-  const { settings, loading, saveSettings, testSmtpConnection } = useSettings();
+  const { settings, loading, saveSettings } = useSettings();
   const [formData, setFormData] = useState<SettingsFormData>({
     email_smtp: '',
     email_porta: null,
@@ -26,12 +28,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     smtp_nome: null,
     two_factor_enabled: false
   });
-  const [testingConnection, setTestingConnection] = useState(false);
 
   // Update form data when settings change
   useEffect(() => {
     if (settings) {
-      console.log("Setting form data from settings:", settings);
       setFormData({
         email_smtp: settings.email_smtp || '',
         email_porta: settings.email_porta,
@@ -48,19 +48,9 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitting form data:", formData);
     const success = await saveSettings(formData);
     if (success && onSave) {
       onSave();
-    }
-  };
-
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    try {
-      await testSmtpConnection(formData);
-    } finally {
-      setTestingConnection(false);
     }
   };
 
@@ -93,79 +83,42 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
             <CardHeader>
               <CardTitle>Configurações de Email</CardTitle>
               <CardDescription>
-                Configure seu serviço de email para envio de mensagens.
+                Configure seus dados para envio de emails.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Seus emails agora são enviados pelo serviço Resend para maior confiabilidade. 
+                  As informações abaixo são usadas apenas para personalizar seus envios.
+                </AlertDescription>
+              </Alert>
+
               <div className="space-y-2">
-                <Label htmlFor="smtp_nome">Nome da Conta</Label>
+                <Label htmlFor="smtp_nome">Nome do Remetente</Label>
                 <Input
                   id="smtp_nome"
-                  placeholder="Ex: Email de Marketing"
+                  placeholder="Ex: Marketing DisparoPro"
                   value={formData.smtp_nome || ''}
                   onChange={(e) => setFormData({ ...formData, smtp_nome: e.target.value })}
                 />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email_smtp">Servidor SMTP</Label>
-                  <Input
-                    id="email_smtp"
-                    placeholder="Ex: smtp.gmail.com"
-                    value={formData.email_smtp || ''}
-                    onChange={(e) => setFormData({ ...formData, email_smtp: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email_porta">Porta</Label>
-                  <Input
-                    id="email_porta"
-                    type="number"
-                    placeholder="Ex: 587"
-                    value={formData.email_porta?.toString() || ''}
-                    onChange={(e) => setFormData({ ...formData, email_porta: parseInt(e.target.value) || null })}
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Este nome aparecerá como remetente dos emails enviados.
+                </p>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="smtp_seguranca">Segurança</Label>
-                <Select 
-                  value={formData.smtp_seguranca || 'tls'} 
-                  onValueChange={(value) => setFormData({ ...formData, smtp_seguranca: value })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o tipo de segurança" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tls">TLS (porta 587)</SelectItem>
-                    <SelectItem value="ssl">SSL (porta 465)</SelectItem>
-                    <SelectItem value="none">Nenhuma</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email_usuario">Usuário</Label>
-                  <Input
-                    id="email_usuario"
-                    placeholder="Ex: seu.email@gmail.com"
-                    value={formData.email_usuario || ''}
-                    onChange={(e) => setFormData({ ...formData, email_usuario: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email_senha">Senha</Label>
-                  <Input
-                    id="email_senha"
-                    type="password"
-                    placeholder="Sua senha ou chave de app"
-                    value={formData.email_senha || ''}
-                    onChange={(e) => setFormData({ ...formData, email_senha: e.target.value })}
-                  />
-                </div>
+                <Label htmlFor="email_usuario">Email do Remetente</Label>
+                <Input
+                  id="email_usuario"
+                  placeholder="Ex: contato@seudominio.com"
+                  value={formData.email_usuario || ''}
+                  onChange={(e) => setFormData({ ...formData, email_usuario: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Este email aparecerá como remetente dos emails enviados.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -176,23 +129,29 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                   value={formData.area_negocio || ''}
                   onChange={(e) => setFormData({ ...formData, area_negocio: e.target.value })}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Esta informação aparecerá na assinatura dos seus emails.
+                </p>
               </div>
               
-              <div className="flex space-x-2 pt-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={handleTestConnection}
-                  disabled={testingConnection || !formData.email_smtp || !formData.email_usuario || !formData.email_senha}
-                >
-                  {testingConnection ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                  )}
-                  Testar Conexão SMTP
-                </Button>
-              </div>
+              {/* Mantenha os campos de configuração SMTP escondidos mas não os remova 
+                 para manter compatibilidade com código existente */}
+              <input type="hidden" 
+                id="email_smtp" 
+                value={formData.email_smtp || ''} 
+              />
+              <input type="hidden" 
+                id="email_porta" 
+                value={formData.email_porta?.toString() || ''} 
+              />
+              <input type="hidden" 
+                id="smtp_seguranca" 
+                value={formData.smtp_seguranca || 'tls'} 
+              />
+              <input type="hidden" 
+                id="email_senha" 
+                value={formData.email_senha || ''} 
+              />
             </CardContent>
             <CardFooter>
               <Button type="submit" disabled={loading}>
