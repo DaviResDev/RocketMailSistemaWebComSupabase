@@ -69,64 +69,98 @@ serve(async (req) => {
     for (const agendamento of agendamentos) {
       if (!agendamento.contato || !agendamento.template) {
         console.error(`Skipping agendamento ${agendamento.id} - missing contato or template`);
+        
+        // Update status to erro
+        await supabaseAdmin
+          .from('agendamentos')
+          .update({ 
+            status: 'erro',
+            erro: 'Contato ou template não encontrado'
+          })
+          .eq('id', agendamento.id);
+        
+        results.push({
+          id: agendamento.id,
+          status: 'erro',
+          error: 'Contato ou template não encontrado'
+        });
         continue;
       }
       
       if (!agendamento.contato.email || !agendamento.template.conteudo) {
         console.error(`Skipping agendamento ${agendamento.id} - missing email or content`);
+        
+        // Update status to erro
+        await supabaseAdmin
+          .from('agendamentos')
+          .update({ 
+            status: 'erro',
+            erro: 'Email do contato ou conteúdo do template não encontrado'
+          })
+          .eq('id', agendamento.id);
+        
+        results.push({
+          id: agendamento.id,
+          status: 'erro',
+          error: 'Email do contato ou conteúdo do template não encontrado'
+        });
         continue;
       }
       
       console.log(`Processing scheduled email for ${agendamento.contato.email}`);
       
       try {
-        // Chamar a Edge Function de envio de email
-        const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
-          body: {
-            to: agendamento.contato.email,
-            subject: agendamento.template.nome,
-            content: agendamento.template.conteudo,
-            contato_id: agendamento.contato_id,
-            template_id: agendamento.template_id,
-            user_id: agendamento.user_id,
-          },
-        });
+        // Chamar a Edge Function de envio de email com retry logic
+        let attemptCount = 0;
+        const maxAttempts = 2;
+        let success = false;
+        let lastError = null;
         
-        if (sendError) {
-          console.error(`Error sending scheduled email ${agendamento.id}:`, sendError);
+        while (attemptCount < maxAttempts && !success) {
+          attemptCount++;
           
-          // Atualizar status do agendamento para erro
-          await supabaseAdmin
-            .from('agendamentos')
-            .update({ 
-              status: 'erro',
-              erro: sendError.message
-            })
-            .eq('id', agendamento.id);
-          
-          results.push({
-            id: agendamento.id,
-            status: 'erro',
-            error: sendError.message
-          });
-        } else if (sendResult && sendResult.error) {
-          console.error(`Error in send-email function for agendamento ${agendamento.id}:`, sendResult.error);
-          
-          // Atualizar status do agendamento para erro
-          await supabaseAdmin
-            .from('agendamentos')
-            .update({ 
-              status: 'erro',
-              erro: sendResult.error
-            })
-            .eq('id', agendamento.id);
-          
-          results.push({
-            id: agendamento.id,
-            status: 'erro',
-            error: sendResult.error
-          });
-        } else {
+          try {
+            console.log(`Attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
+            
+            const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
+              body: {
+                to: agendamento.contato.email,
+                subject: agendamento.template.nome,
+                content: agendamento.template.conteudo,
+                contato_id: agendamento.contato_id,
+                template_id: agendamento.template_id,
+                user_id: agendamento.user_id,
+              },
+            });
+            
+            if (sendError) {
+              console.error(`Error on attempt ${attemptCount}:`, sendError);
+              lastError = sendError;
+              // Wait a moment before retrying (500ms)
+              await new Promise(resolve => setTimeout(resolve, 500));
+              continue;
+            }
+            
+            if (sendResult && sendResult.error) {
+              console.error(`Error in send-email function on attempt ${attemptCount}:`, sendResult.error);
+              lastError = sendResult.error;
+              // Wait a moment before retrying
+              await new Promise(resolve => setTimeout(resolve, 500));
+              continue;
+            }
+            
+            // No errors, mark as success
+            success = true;
+            console.log(`Successfully sent email on attempt ${attemptCount}`);
+          } catch (error) {
+            console.error(`Exception on attempt ${attemptCount}:`, error);
+            lastError = error;
+            // Wait a moment before retrying
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        if (success) {
           // Sucesso no envio - atualizar status do agendamento
           await supabaseAdmin
             .from('agendamentos')
@@ -138,6 +172,27 @@ serve(async (req) => {
           results.push({
             id: agendamento.id,
             status: 'enviado'
+          });
+        } else {
+          // Todas as tentativas falharam - atualizar status do agendamento para erro
+          const errorMessage = lastError ? 
+            (typeof lastError === 'string' ? lastError : JSON.stringify(lastError)) : 
+            'Falha após múltiplas tentativas';
+          
+          await supabaseAdmin
+            .from('agendamentos')
+            .update({ 
+              status: 'erro',
+              erro: errorMessage
+            })
+            .eq('id', agendamento.id);
+          
+          console.error(`Failed to send scheduled email ${agendamento.id} after ${maxAttempts} attempts`);
+          
+          results.push({
+            id: agendamento.id,
+            status: 'erro',
+            error: errorMessage
           });
         }
       } catch (error: any) {

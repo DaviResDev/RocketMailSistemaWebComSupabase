@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { Resend } from "https://esm.sh/resend@1.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,13 +35,20 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
     
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       throw new Error("Server configuration error");
     }
     
+    if (!resendApiKey) {
+      console.error("Missing environment variable: RESEND_API_KEY");
+      throw new Error("Resend API key not configured. Please add RESEND_API_KEY to your environment variables.");
+    }
+    
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+    const resend = new Resend(resendApiKey);
     
     const requestData = await req.json();
     const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments } = requestData as EmailRequest;
@@ -69,20 +76,10 @@ serve(async (req) => {
     
     if (!settingsData || settingsData.length === 0) {
       console.error("No email settings found for user:", user_id);
-      throw new Error("Configurações de email não encontradas. Por favor, configure seu SMTP corretamente.");
+      throw new Error("Configurações de email não encontradas.");
     }
     
     const emailConfig = settingsData[0];
-    
-    if (!emailConfig.email_smtp || !emailConfig.email_porta || !emailConfig.email_usuario || !emailConfig.email_senha) {
-      console.error("Incomplete email settings:", JSON.stringify(emailConfig));
-      throw new Error("Configurações de email incompletas. Por favor, configure seu SMTP corretamente.");
-    }
-    
-    // Log all important SMTP details for debugging
-    console.log(`SMTP Server: ${emailConfig.email_smtp}`);
-    console.log(`SMTP Port: ${emailConfig.email_porta}`);
-    console.log(`SMTP User: ${emailConfig.email_usuario}`);
     
     // Generate signature with area_negocio if available
     let assinatura = "";
@@ -90,7 +87,7 @@ serve(async (req) => {
       assinatura += `<div style="margin-top: 5px;"><strong>${emailConfig.area_negocio}</strong></div>`;
     }
 
-    assinatura += `<div style="margin-top: 5px;">${emailConfig.email_usuario}</div>`;
+    assinatura += `<div style="margin-top: 5px;">${emailConfig.email_usuario || ''}</div>`;
 
     // Create email HTML content
     const htmlContent = `
@@ -106,7 +103,7 @@ serve(async (req) => {
     `;
 
     try {
-      console.log("Setting up SMTP client with denomailer...");
+      console.log("Sending email with Resend...");
       
       // Process attachments if any
       const processedAttachments = [];
@@ -116,14 +113,9 @@ serve(async (req) => {
         
         for (const attachment of attachments) {
           try {
-            // Convert base64 content to binary data
-            const base64Data = attachment.content;
-            const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-            
             processedAttachments.push({
               filename: attachment.filename,
-              contentType: attachment.contentType,
-              content: binaryData,
+              content: attachment.content,
             });
             
             console.log(`Attachment processed: ${attachment.filename}`);
@@ -133,41 +125,12 @@ serve(async (req) => {
         }
       }
 
-      // Determine client configuration based on port
-      const clientConfig: any = {
-        connection: {
-          hostname: emailConfig.email_smtp,
-          port: Number(emailConfig.email_porta),
-          auth: {
-            username: emailConfig.email_usuario,
-            password: emailConfig.email_senha,
-          },
-          tls: true,
-        },
-      };
+      // Prepare email data for Resend
+      const fromName = emailConfig.smtp_nome || 'DisparoPro';
+      const fromEmail = emailConfig.email_usuario || 'onboarding@resend.dev';
       
-      // For port 587, enable STARTTLS
-      if (Number(emailConfig.email_porta) === 587) {
-        console.log("Using STARTTLS for port 587");
-        clientConfig.connection.tls = false;
-        clientConfig.connection.starttls = true;
-      } else if (Number(emailConfig.email_porta) === 465) {
-        console.log("Using SSL/TLS for port 465");
-        clientConfig.connection.tls = true;
-        clientConfig.connection.starttls = false;
-      }
-
-      // Create the SMTP client with proper configuration
-      const client = new SMTPClient(clientConfig);
-      
-      // Prepare sender info
-      const from = emailConfig.smtp_nome ? 
-        `${emailConfig.smtp_nome} <${emailConfig.email_usuario}>` : 
-        emailConfig.email_usuario;
-      
-      // Prepare email data
       const emailData: any = {
-        from: from,
+        from: `${fromName} <${fromEmail}>`,
         to: to,
         subject: subject,
         html: htmlContent,
@@ -188,13 +151,14 @@ serve(async (req) => {
         emailData.attachments = processedAttachments;
       }
 
-      console.log("Sending email with denomailer...");
-      // Send the email
-      const sendResult = await client.send(emailData);
-      console.log("Email sent successfully:", sendResult);
+      // Send the email using Resend
+      const { data: sendResult, error: sendError } = await resend.emails.send(emailData);
       
-      // Close the SMTP connection
-      await client.close();
+      if (sendError) {
+        throw sendError;
+      }
+      
+      console.log("Email sent successfully:", sendResult);
       
       // Update envio status if relevant ids are provided
       if (contato_id && template_id && user_id) {
@@ -244,38 +208,20 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
-    } catch (smtpError: any) {
-      console.error("SMTP Error:", smtpError);
+    } catch (emailError: any) {
+      console.error("Email sending error:", emailError);
       
       // Get detailed error information
       let errorDetails = null;
       try {
-        errorDetails = JSON.stringify(smtpError, Object.getOwnPropertyNames(smtpError));
+        errorDetails = JSON.stringify(emailError, Object.getOwnPropertyNames(emailError));
       } catch (e) {
-        errorDetails = String(smtpError);
+        errorDetails = String(emailError);
       }
       
-      // Create a detailed error message with solutions
+      // Create a friendly error message
       let errorMessage = "Erro ao enviar email: ";
-      
-      if (smtpError.message) {
-        if (smtpError.message.includes("authentication") || smtpError.message.includes("auth")) {
-          errorMessage += "Falha na autenticação. Verifique seu nome de usuário e senha.";
-          if (emailConfig.email_smtp?.includes("gmail")) {
-            errorMessage += " Para Gmail, você pode precisar gerar uma senha de aplicativo em https://myaccount.google.com/apppasswords";
-          }
-        } else if (smtpError.message.includes("timeout")) {
-          errorMessage += "Tempo limite de conexão excedido. Verifique se o servidor SMTP está acessível e que a porta está correta.";
-        } else if (smtpError.message.includes("certificate") || smtpError.message.includes("SSL")) {
-          errorMessage += "Problema com o certificado SSL do servidor. Tente outra configuração de segurança (TLS <-> SSL).";
-        } else if (smtpError.message.includes("connect") || smtpError.message.includes("connection")) {
-          errorMessage += "Não foi possível conectar ao servidor SMTP. Verifique o endereço do servidor e a porta.";
-        } else {
-          errorMessage += smtpError.message;
-        }
-      } else {
-        errorMessage += "Erro desconhecido no servidor SMTP";
-      }
+      errorMessage += emailError.message || "Erro desconhecido no serviço de email";
       
       // Update envio status for error
       if (contato_id && template_id && user_id) {
