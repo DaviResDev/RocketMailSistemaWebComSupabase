@@ -1,7 +1,6 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Resend } from "https://esm.sh/@resend/node@0.5.2";
+import { Resend } from "https://esm.sh/resend@1.1.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -136,9 +135,9 @@ serve(async (req) => {
       
       console.log(`Sending as: ${fromName} <${fromEmail}>`);
       
-      const emailData: any = {
+      const emailData = {
         from: `${fromName} <${fromEmail}>`,
-        to: [to],  // Resend expects an array for 'to' field
+        to: [to],  // Make sure to use array format for 'to' field
         subject: subject,
         html: htmlContent,
       };
@@ -161,7 +160,12 @@ serve(async (req) => {
       console.log("Email data prepared:", JSON.stringify(emailData, null, 2));
 
       // Send the email using Resend
-      const sendResult = await resend.emails.send(emailData);
+      const { data: sendResult, error: sendError } = await resend.emails.send(emailData);
+      
+      if (sendError) {
+        console.error("Resend API error:", sendError);
+        throw sendError;
+      }
       
       console.log("Email sent successfully:", sendResult);
       
@@ -303,3 +307,5 @@ serve(async (req) => {
       );
     }
   });
+  
+}
