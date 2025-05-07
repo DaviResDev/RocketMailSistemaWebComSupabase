@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -291,14 +290,8 @@ export function useEnvios() {
         // Success case
         console.log('Email enviado com sucesso:', functionData);
         
-        // Mensagem de sucesso com dica sobre verificação de spam
-        toast.success(
-          <div>
-            <p>Email enviado com sucesso para {contatoData.nome}!</p>
-            <p className="text-xs mt-1 opacity-80">
-              Se o destinatário não receber, peça para verificar a pasta de spam.
-            </p>
-          </div>,
+        // Use a string template instead of JSX
+        toast.success(`Email enviado com sucesso para ${contatoData.nome}! Se o destinatário não receber, peça para verificar a pasta de spam.`, 
           { id: toastId, duration: 5000 }
         );
         
