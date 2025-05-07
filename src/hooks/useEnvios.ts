@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,6 +42,7 @@ export interface Envio {
 export interface EnvioFormData {
   contato_id: string;
   template_id: string;
+  agendamento_id?: string;
   cc?: string[];
   bcc?: string[];
   attachments?: {
@@ -218,6 +220,7 @@ export function useEnvios() {
         contato_id: formData.contato_id,
         template_id: formData.template_id,
         user_id: user.id,
+        agendamento_id: formData.agendamento_id
       });
       
       try {
@@ -231,6 +234,7 @@ export function useEnvios() {
             contato_id: formData.contato_id,
             template_id: formData.template_id,
             user_id: user.id,
+            agendamento_id: formData.agendamento_id,
             attachments: attachments,
           },
         });

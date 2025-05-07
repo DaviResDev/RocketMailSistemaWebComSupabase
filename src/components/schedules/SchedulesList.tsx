@@ -51,18 +51,20 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       // Convert schedule to EnvioFormData
       const envioData = {
         contato_id: schedule.contato_id,
-        template_id: schedule.template_id
+        template_id: schedule.template_id,
+        agendamento_id: schedule.id // Add the agendamento ID so it can be updated properly
       };
       
       // Send email immediately using sendEmail
       const result = await sendEmail(envioData);
       
       if (!result) {
-        toast.error("Falha ao enviar o email", { id: toastId });
+        toast.error("Falha ao enviar o email. Verifique os logs para mais detalhes.", { id: toastId });
         throw new Error("Falha ao enviar o email");
       }
       
-      // Update schedule status
+      // Update schedule status to sent - this should happen in the edge function
+      // but we'll also update it here for immediate UI feedback
       await supabase
         .from('agendamentos')
         .update({ status: 'enviado' })
@@ -223,7 +225,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem 
                         onClick={() => handleSendNow(schedule)}
-                        disabled={loadingItems[schedule.id] || !schedule.contato || !schedule.template}
+                        disabled={loadingItems[schedule.id] || !schedule.contato || !schedule.template || schedule.status === 'enviado'}
                       >
                         <Mail className="h-4 w-4 mr-2" />
                         Enviar agora

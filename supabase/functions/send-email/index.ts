@@ -62,7 +62,10 @@ serve(async (req) => {
     // Validate data before proceeding
     if (!to || !subject || !content || !user_id) {
       console.error("Incomplete request data:", JSON.stringify(requestData));
-      throw new Error("Dados incompletos para envio de email");
+      return new Response(
+        JSON.stringify({ error: "Dados incompletos para envio de email" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log(`Preparing to send email to: ${to}`);
@@ -77,12 +80,18 @@ serve(async (req) => {
       
     if (settingsError) {
       console.error("Error fetching settings:", settingsError);
-      throw new Error("Erro ao buscar configurações de email: " + settingsError.message);
+      return new Response(
+        JSON.stringify({ error: "Erro ao buscar configurações de email: " + settingsError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     
     if (!settingsData || settingsData.length === 0) {
       console.error("No email settings found for user:", user_id);
-      throw new Error("Configurações de email não encontradas.");
+      return new Response(
+        JSON.stringify({ error: "Configurações de email não encontradas." }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     
     const emailConfig = settingsData[0];
@@ -224,16 +233,106 @@ serve(async (req) => {
 
       console.log("Email data prepared:", JSON.stringify(emailData, null, 2));
 
-      // Fix: Use try/catch to properly handle Resend API responses
+      // Send the email using Resend with proper error handling
+      let sendResult;
+      let errorOccurred = false;
+      let errorMessage = "";
+      
       try {
         // Send the email using Resend
-        const sendResult = await resend.emails.send(emailData);
+        sendResult = await resend.emails.send(emailData);
+        console.log("Resend response:", sendResult);
         
-        // Check for errors in the response
-        if (!sendResult || !sendResult.id) {
-          throw new Error("Resposta inválida do serviço de email");
+        // Check for response validity
+        if (!sendResult) {
+          errorOccurred = true;
+          errorMessage = "Resposta inválida do serviço de email";
+        } else if (sendResult.error) {
+          errorOccurred = true;
+          errorMessage = sendResult.error?.message || "Erro desconhecido ao enviar email";
+        }
+      } catch (resendError: any) {
+        errorOccurred = true;
+        console.error("Resend API error:", resendError);
+        
+        if (resendError.statusCode) {
+          console.error(`Resend API status code: ${resendError.statusCode}`);
         }
         
+        errorMessage = resendError.message || "Erro ao conectar com serviço de email";
+      }
+      
+      // Handle success or error cases
+      if (errorOccurred) {
+        console.error("Error sending email:", errorMessage);
+        
+        // Update envio status for error
+        if (contato_id && template_id && user_id) {
+          try {
+            console.log(`Updating envio status to 'erro'`);
+            const { data: envios } = await supabaseClient
+              .from('envios')
+              .select('id')
+              .eq('contato_id', contato_id)
+              .eq('template_id', template_id)
+              .eq('user_id', user_id)
+              .order('data_envio', { ascending: false })
+              .limit(1);
+              
+            if (envios && envios.length > 0) {
+              await supabaseClient
+                .from('envios')
+                .update({
+                  status: 'erro',
+                  erro: errorMessage
+                })
+                .eq('id', envios[0].id);
+                
+              console.log(`Updated envio status to 'erro'`);
+            } else {
+              // Create a new error record
+              await supabaseClient
+                .from('envios')
+                .insert([{
+                  contato_id,
+                  template_id,
+                  user_id,
+                  status: 'erro',
+                  erro: errorMessage
+                }]);
+                
+              console.log(`Created new envio record with status 'erro'`);
+            }
+          } catch (dbError: any) {
+            console.error("Error updating/creating error record:", dbError);
+          }
+        }
+        
+        // Also update the agendamento status if this was from a scheduled email
+        if (requestData.agendamento_id) {
+          try {
+            await supabaseClient
+              .from('agendamentos')
+              .update({ status: 'falha' })
+              .eq('id', requestData.agendamento_id);
+          } catch (dbError) {
+            console.error("Error updating agendamento status:", dbError);
+          }
+        }
+        
+        // Return appropriate error response
+        return new Response(
+          JSON.stringify({ 
+            error: errorMessage,
+            details: "Falha ao enviar email através do Resend API"
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      } else {
+        // Success case
         console.log("Email sent successfully. Resend ID:", sendResult.id);
         
         // Update envio status if relevant ids are provided
@@ -279,6 +378,20 @@ serve(async (req) => {
           }
         }
         
+        // Also update the agendamento status if this was from a scheduled email
+        if (requestData.agendamento_id) {
+          try {
+            await supabaseClient
+              .from('agendamentos')
+              .update({ status: 'enviado' })
+              .eq('id', requestData.agendamento_id);
+            
+            console.log(`Updated agendamento status to 'enviado' for ID: ${requestData.agendamento_id}`);
+          } catch (dbError) {
+            console.error("Error updating agendamento status:", dbError);
+          }
+        }
+        
         return new Response(
           JSON.stringify({ 
             success: true, 
@@ -290,38 +403,9 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" } 
           }
         );
-      } catch (resendError: any) {
-        console.error("Resend API error:", resendError);
-        
-        // Get detailed error information
-        let errorDetails = null;
-        try {
-          errorDetails = JSON.stringify(resendError);
-        } catch (e) {
-          errorDetails = String(resendError);
-        }
-        
-        // Create a friendly error message
-        let errorMessage = "Erro ao enviar email: ";
-        
-        if (resendError.message) {
-          errorMessage += resendError.message;
-        } else {
-          errorMessage += "Erro desconhecido no serviço de email";
-        }
-        
-        throw new Error(errorMessage);
       }
     } catch (emailError: any) {
       console.error("Email sending error:", emailError);
-      
-      // Get detailed error information
-      let errorDetails = null;
-      try {
-        errorDetails = JSON.stringify(emailError, Object.getOwnPropertyNames(emailError));
-      } catch (e) {
-        errorDetails = String(emailError);
-      }
       
       // Create a friendly error message
       let errorMessage = "Erro ao enviar email: ";
@@ -337,64 +421,11 @@ serve(async (req) => {
         errorMessage += emailError.message || "Erro desconhecido no serviço de email";
       }
       
-      // Log specific error information for debugging
-      if (emailError.statusCode) {
-        console.error(`Resend API status code: ${emailError.statusCode}`);
-      }
-      
-      if (emailError.response) {
-        console.error("Resend API response:", emailError.response);
-      }
-      
-      // Update envio status for error
-      if (contato_id && template_id && user_id) {
-        try {
-          console.log(`Updating envio status to 'erro'`);
-          const { data: envios } = await supabaseClient
-            .from('envios')
-            .select('id')
-            .eq('contato_id', contato_id)
-            .eq('template_id', template_id)
-            .eq('user_id', user_id)
-            .order('data_envio', { ascending: false })
-            .limit(1);
-            
-          if (envios && envios.length > 0) {
-            await supabaseClient
-              .from('envios')
-              .update({
-                status: 'erro',
-                erro: errorMessage,
-                resposta_smtp: errorDetails
-              })
-              .eq('id', envios[0].id);
-              
-            console.log(`Updated envio status to 'erro'`);
-          } else {
-            // Create a new error record
-            await supabaseClient
-              .from('envios')
-              .insert([{
-                contato_id,
-                template_id,
-                user_id,
-                status: 'erro',
-                erro: errorMessage,
-                resposta_smtp: errorDetails
-              }]);
-              
-            console.log(`Created new envio record with status 'erro'`);
-          }
-        } catch (dbError: any) {
-          console.error("Error updating/creating error record:", dbError);
-        }
-      }
-      
       // Return appropriate error response
       return new Response(
         JSON.stringify({ 
           error: errorMessage,
-          details: errorDetails
+          details: "Falha ao enviar email"
         }),
         { 
           status: 500, 
@@ -411,8 +442,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: errorMessage,
-        timestamp: new Date().toISOString(),
-        details: error.stack
+        timestamp: new Date().toISOString()
       }),
       { 
         status: 500, 
