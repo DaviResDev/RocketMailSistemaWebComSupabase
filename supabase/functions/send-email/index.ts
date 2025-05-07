@@ -224,71 +224,94 @@ serve(async (req) => {
 
       console.log("Email data prepared:", JSON.stringify(emailData, null, 2));
 
-      // Send the email using Resend with proper error handling
-      const { data: sendResult, error: sendError } = await resend.emails.send(emailData);
-      
-      if (sendError) {
-        console.error("Resend API error:", sendError);
-        throw sendError;
-      }
-      
-      // Verify send result is valid
-      if (!sendResult || !sendResult.id) {
-        console.error("Invalid send result from Resend:", sendResult);
-        throw new Error("Resposta inválida do serviço de email");
-      }
-      
-      console.log("Email sent successfully. Resend ID:", sendResult.id);
-      
-      // Update envio status if relevant ids are provided
-      if (contato_id && template_id && user_id) {
-        const { data: envios } = await supabaseClient
-          .from('envios')
-          .select('id')
-          .eq('contato_id', contato_id)
-          .eq('template_id', template_id)
-          .eq('user_id', user_id)
-          .order('data_envio', { ascending: false })
-          .limit(1);
-          
-        if (envios && envios.length > 0) {
-          await supabaseClient
-            .from('envios')
-            .update({ 
-              status: 'entregue',
-              resposta_smtp: JSON.stringify(sendResult),
-              erro: null
-            })
-            .eq('id', envios[0].id);
-            
-          console.log(`Updated envio status to 'entregue'`);
+      // Fix: Use try/catch to properly handle Resend API responses
+      try {
+        // Send the email using Resend
+        const sendResult = await resend.emails.send(emailData);
+        
+        // Check for errors in the response
+        if (!sendResult || !sendResult.id) {
+          throw new Error("Resposta inválida do serviço de email");
+        }
+        
+        console.log("Email sent successfully. Resend ID:", sendResult.id);
+        
+        // Update envio status if relevant ids are provided
+        if (contato_id && template_id && user_id) {
+          try {
+            const { data: envios } = await supabaseClient
+              .from('envios')
+              .select('id')
+              .eq('contato_id', contato_id)
+              .eq('template_id', template_id)
+              .eq('user_id', user_id)
+              .order('data_envio', { ascending: false })
+              .limit(1);
+              
+            if (envios && envios.length > 0) {
+              await supabaseClient
+                .from('envios')
+                .update({ 
+                  status: 'entregue',
+                  resposta_smtp: JSON.stringify(sendResult),
+                  erro: null
+                })
+                .eq('id', envios[0].id);
+                
+              console.log(`Updated envio status to 'entregue'`);
+            } else {
+              // Create a new record if it doesn't exist yet
+              await supabaseClient
+                .from('envios')
+                .insert([{
+                  contato_id: contato_id,
+                  template_id: template_id,
+                  user_id: user_id,
+                  status: 'entregue',
+                  resposta_smtp: JSON.stringify(sendResult)
+                }]);
+                
+              console.log(`Created new envio record with status 'entregue'`);
+            }
+          } catch (dbError) {
+            console.error("Error updating database record:", dbError);
+            // Continue execution even if DB update fails
+          }
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: "Email enviado com sucesso!",
+            id: sendResult.id
+          }),
+          { 
+            status: 200, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      } catch (resendError: any) {
+        console.error("Resend API error:", resendError);
+        
+        // Get detailed error information
+        let errorDetails = null;
+        try {
+          errorDetails = JSON.stringify(resendError);
+        } catch (e) {
+          errorDetails = String(resendError);
+        }
+        
+        // Create a friendly error message
+        let errorMessage = "Erro ao enviar email: ";
+        
+        if (resendError.message) {
+          errorMessage += resendError.message;
         } else {
-          // Create a new record if it doesn't exist yet
-          await supabaseClient
-            .from('envios')
-            .insert([{
-              contato_id: contato_id,
-              template_id: template_id,
-              user_id: user_id,
-              status: 'entregue',
-              resposta_smtp: JSON.stringify(sendResult)
-            }]);
-            
-          console.log(`Created new envio record with status 'entregue'`);
+          errorMessage += "Erro desconhecido no serviço de email";
         }
+        
+        throw new Error(errorMessage);
       }
-      
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: "Email enviado com sucesso!",
-          id: sendResult.id
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
     } catch (emailError: any) {
       console.error("Email sending error:", emailError);
       
