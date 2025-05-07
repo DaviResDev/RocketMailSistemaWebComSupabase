@@ -163,20 +163,48 @@ serve(async (req) => {
         }
       }
 
-      // Prepare email data for Resend
-      const fromName = emailConfig.smtp_nome || 'DisparoPro';
-      const fromEmail = emailConfig.email_usuario || 'onboarding@resend.dev';
+      // Determine if we should use the user's custom email or a system default
+      let fromName = emailConfig.smtp_nome || 'DisparoPro';
+      let fromEmail = ''; 
+      
+      // Verifica se o usuário tem um domínio verificado salvo nas configurações
+      // Se não tem, usa o email padrão do sistema
+      if (emailConfig.email_usuario && emailConfig.email_usuario.includes('@')) {
+        // Extract domain from email to check if it's a common email service
+        const domain = emailConfig.email_usuario.split('@')[1];
+        const commonDomains = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'aol.com'];
+        
+        if (commonDomains.includes(domain)) {
+          // For common email services, use the shared DisparoPro sender with reply-to
+          console.log(`Using shared DisparoPro sender for ${domain} address`);
+          fromEmail = 'disparos@disparopro.com';
+        } else {
+          // For potential custom domains, try to use them directly
+          // Resend will fall back if they're not verified
+          fromEmail = emailConfig.email_usuario;
+          console.log(`Trying to use custom domain email: ${fromEmail}`);
+        }
+      } else {
+        // Fallback to system address if no user email is set
+        fromEmail = 'disparos@disparopro.com';
+        console.log(`No user email set, using system default: ${fromEmail}`);
+      }
+      
+      // Fallback to the Resend onboarding address if necessary
+      if (!fromEmail) {
+        fromEmail = 'onboarding@resend.dev';
+        console.log(`Falling back to Resend default: ${fromEmail}`);
+      }
       
       console.log(`Sending as: ${fromName} <${fromEmail}>`);
       
-      // Important: Check if the fromEmail domain is verified in Resend
-      // Resend requires domain verification for custom From addresses
+      // Prepare email data for Resend
       const emailData = {
         from: `${fromName} <${fromEmail}>`,
         to: [to],  // Make sure to use array format for 'to' field
         subject: subject,
         html: htmlContent,
-        reply_to: fromEmail,  // Add reply_to field for better deliverability
+        reply_to: emailConfig.email_usuario || fromEmail,  // Always set reply-to for better deliverability
       };
       
       // Add CC recipients if provided
@@ -274,7 +302,17 @@ serve(async (req) => {
       
       // Create a friendly error message
       let errorMessage = "Erro ao enviar email: ";
-      errorMessage += emailError.message || "Erro desconhecido no serviço de email";
+      
+      // Criar mensagens específicas para erros comuns do Resend
+      if (emailError.statusCode === 403) {
+        errorMessage += "Permissão negada pelo servidor de email. Verifique se o domínio está verificado no Resend.";
+      } else if (emailError.message?.includes('domain') && emailError.message?.includes('verify')) {
+        errorMessage += "O domínio do email remetente precisa ser verificado no Resend. Foi usado um email padrão do sistema.";
+      } else if (emailError.statusCode === 429) {
+        errorMessage += "Limite de envios excedido. Tente novamente mais tarde.";
+      } else {
+        errorMessage += emailError.message || "Erro desconhecido no serviço de email";
+      }
       
       // Log specific error information for debugging
       if (emailError.statusCode) {

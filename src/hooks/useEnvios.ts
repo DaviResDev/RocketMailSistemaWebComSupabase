@@ -262,7 +262,14 @@ export function useEnvios() {
         // Check for errors in the response body
         if (functionData && functionData.error) {
           console.error('Erro retornado pela function:', functionData.error);
-          toast.error(`Erro ao enviar email: ${functionData.error}`, { id: toastId });
+          
+          // Criar mensagem mais amigável para problemas comuns
+          let errorMsg = functionData.error;
+          if (functionData.error.includes("domínio")) {
+            errorMsg = "Seu domínio de email precisa ser verificado no Resend. Acesse Configurações > Email para instruções.";
+          }
+          
+          toast.error(`Erro ao enviar email: ${errorMsg}`, { id: toastId });
           setSending(false);
 
           // Save envio with error status
@@ -283,7 +290,18 @@ export function useEnvios() {
 
         // Success case
         console.log('Email enviado com sucesso:', functionData);
-        toast.success(`Email enviado com sucesso para ${contatoData.nome}!`, { id: toastId });
+        
+        // Mensagem de sucesso com dica sobre verificação de spam
+        toast.success(
+          <div>
+            <p>Email enviado com sucesso para {contatoData.nome}!</p>
+            <p className="text-xs mt-1 opacity-80">
+              Se o destinatário não receber, peça para verificar a pasta de spam.
+            </p>
+          </div>,
+          { id: toastId, duration: 5000 }
+        );
+        
         setSending(false);
         fetchEnvios();
         return true;

@@ -12,6 +12,7 @@ import { ProfileForm } from '@/components/settings/ProfileForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
+import { SettingsInstructions } from '@/components/settings/SettingsInstructions';
 
 export default function Configuracoes() {
   const { fetchSettings, settings, loading, error } = useSettings();
@@ -85,11 +86,18 @@ export default function Configuracoes() {
         </TabsList>
         
         <TabsContent value="email">
-          <SettingsForm
-            onSave={() => {
-              toast.success('Configurações de email atualizadas com sucesso!');
-            }}
-          />
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <SettingsForm
+                onSave={() => {
+                  toast.success('Configurações de email atualizadas com sucesso!');
+                }}
+              />
+            </div>
+            <div>
+              <SettingsInstructions />
+            </div>
+          </div>
         </TabsContent>
         
         <TabsContent value="security">
