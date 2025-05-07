@@ -18,6 +18,7 @@ interface EmailRequest {
   template_id?: string;
   user_id: string;
   attachments?: AttachmentData[];
+  isTest?: boolean;
 }
 
 interface AttachmentData {
@@ -56,7 +57,7 @@ serve(async (req) => {
     const resend = new Resend(resendApiKey);
     
     const requestData = await req.json();
-    const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments } = requestData as EmailRequest;
+    const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments, isTest } = requestData as EmailRequest;
     
     // Validate data before proceeding
     if (!to || !subject || !content || !user_id) {
@@ -94,11 +95,43 @@ serve(async (req) => {
 
     assinatura += `<div style="margin-top: 5px;">${emailConfig.email_usuario || ''}</div>`;
 
-    // Create email HTML content
+    // Create email HTML content with personalized content
+    // Replace placeholders with real data if not a test email
+    let processedContent = content;
+    
+    // If it's not a test email, try to get contact information for personalization
+    if (!isTest && contato_id) {
+      try {
+        const { data: contatoData } = await supabaseClient
+          .from('contatos')
+          .select('*')
+          .eq('id', contato_id)
+          .single();
+          
+        if (contatoData) {
+          processedContent = processedContent
+            .replace(/{nome}/g, contatoData.nome || "")
+            .replace(/{email}/g, contatoData.email || "")
+            .replace(/{telefone}/g, contatoData.telefone || "")
+            .replace(/{razao_social}/g, contatoData.razao_social || "")
+            .replace(/{cliente}/g, contatoData.cliente || "");
+        }
+      } catch (error) {
+        console.error("Error fetching contact data for personalization:", error);
+        // Continue without personalization if there's an error
+      }
+    }
+    
+    // Replace date placeholders
+    const currentDate = new Date();
+    processedContent = processedContent
+      .replace(/{dia}/g, currentDate.toLocaleDateString('pt-BR'));
+
+    // Create final HTML content
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="padding: 20px;">
-          ${content.replace(/\n/g, '<br>')}
+          ${processedContent.replace(/\n/g, '<br>')}
         </div>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         <div style="padding: 10px; font-size: 12px; color: #666;">
@@ -136,11 +169,14 @@ serve(async (req) => {
       
       console.log(`Sending as: ${fromName} <${fromEmail}>`);
       
+      // Important: Check if the fromEmail domain is verified in Resend
+      // Resend requires domain verification for custom From addresses
       const emailData = {
         from: `${fromName} <${fromEmail}>`,
         to: [to],  // Make sure to use array format for 'to' field
         subject: subject,
         html: htmlContent,
+        reply_to: fromEmail,  // Add reply_to field for better deliverability
       };
       
       // Add CC recipients if provided
@@ -160,7 +196,7 @@ serve(async (req) => {
 
       console.log("Email data prepared:", JSON.stringify(emailData, null, 2));
 
-      // Send the email using Resend
+      // Send the email using Resend with proper error handling
       const { data: sendResult, error: sendError } = await resend.emails.send(emailData);
       
       if (sendError) {
@@ -168,7 +204,13 @@ serve(async (req) => {
         throw sendError;
       }
       
-      console.log("Email sent successfully:", sendResult);
+      // Verify send result is valid
+      if (!sendResult || !sendResult.id) {
+        console.error("Invalid send result from Resend:", sendResult);
+        throw new Error("Resposta inválida do serviço de email");
+      }
+      
+      console.log("Email sent successfully. Resend ID:", sendResult.id);
       
       // Update envio status if relevant ids are provided
       if (contato_id && template_id && user_id) {
@@ -211,7 +253,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Email enviado com sucesso!"
+          message: "Email enviado com sucesso!",
+          id: sendResult.id
         }),
         { 
           status: 200, 
@@ -232,6 +275,15 @@ serve(async (req) => {
       // Create a friendly error message
       let errorMessage = "Erro ao enviar email: ";
       errorMessage += emailError.message || "Erro desconhecido no serviço de email";
+      
+      // Log specific error information for debugging
+      if (emailError.statusCode) {
+        console.error(`Resend API status code: ${emailError.statusCode}`);
+      }
+      
+      if (emailError.response) {
+        console.error("Resend API response:", emailError.response);
+      }
       
       // Update envio status for error
       if (contato_id && template_id && user_id) {
