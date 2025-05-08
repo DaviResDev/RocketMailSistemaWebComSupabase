@@ -67,6 +67,7 @@ export type Database = {
           smtp_nome: string | null
           smtp_seguranca: string | null
           two_factor_enabled: boolean | null
+          use_smtp: boolean | null
           user_id: string
           whatsapp_token: string | null
         }
@@ -82,6 +83,7 @@ export type Database = {
           smtp_nome?: string | null
           smtp_seguranca?: string | null
           two_factor_enabled?: boolean | null
+          use_smtp?: boolean | null
           user_id: string
           whatsapp_token?: string | null
         }
@@ -97,6 +99,7 @@ export type Database = {
           smtp_nome?: string | null
           smtp_seguranca?: string | null
           two_factor_enabled?: boolean | null
+          use_smtp?: boolean | null
           user_id?: string
           whatsapp_token?: string | null
         }

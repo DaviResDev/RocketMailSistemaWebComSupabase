@@ -18,7 +18,7 @@ export type Settings = {
   created_at?: string | null;
   user_id?: string;
   two_factor_enabled: boolean;
-  use_smtp: boolean; // Added this property to fix the type error
+  use_smtp: boolean; // Property to control if SMTP is used instead of Resend
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
@@ -70,7 +70,7 @@ export function useSettings() {
           created_at: data.created_at,
           user_id: data.user_id,
           two_factor_enabled: Boolean(data.two_factor_enabled),
-          use_smtp: Boolean(data.use_smtp) // Properly cast to boolean
+          use_smtp: Boolean(data.use_smtp) // Ensure proper boolean casting
         });
       } else {
         // No settings found, create empty settings object with default true for use_smtp
