@@ -17,6 +17,7 @@ interface EmailRequest {
   contato_id?: string;
   template_id?: string;
   user_id: string;
+  agendamento_id?: string;
   attachments?: AttachmentData[];
   isTest?: boolean;
 }
@@ -42,6 +43,7 @@ serve(async (req) => {
     console.log("SUPABASE_URL available:", !!supabaseUrl);
     console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!supabaseServiceKey);
     console.log("RESEND_API_KEY available:", !!resendApiKey);
+    console.log("RESEND_API_KEY starts with:", resendApiKey?.substring(0, 5));
     
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
@@ -57,7 +59,7 @@ serve(async (req) => {
     const resend = new Resend(resendApiKey);
     
     const requestData = await req.json();
-    const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments, isTest } = requestData as EmailRequest;
+    const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments, isTest, agendamento_id } = requestData as EmailRequest;
     
     // Validate data before proceeding
     if (!to || !subject || !content || !user_id) {
@@ -172,48 +174,20 @@ serve(async (req) => {
         }
       }
 
-      // Determine if we should use the user's custom email or a system default
-      let fromName = emailConfig.smtp_nome || 'DisparoPro';
-      let fromEmail = ''; 
-      
-      // Verifica se o usuário tem um domínio verificado salvo nas configurações
-      // Se não tem, usa o email padrão do sistema
-      if (emailConfig.email_usuario && emailConfig.email_usuario.includes('@')) {
-        // Extract domain from email to check if it's a common email service
-        const domain = emailConfig.email_usuario.split('@')[1];
-        const commonDomains = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'aol.com'];
-        
-        if (commonDomains.includes(domain)) {
-          // For common email services, use the shared DisparoPro sender with reply-to
-          console.log(`Using shared DisparoPro sender for ${domain} address`);
-          fromEmail = 'disparos@disparopro.com';
-        } else {
-          // For potential custom domains, try to use them directly
-          // Resend will fall back if they're not verified
-          fromEmail = emailConfig.email_usuario;
-          console.log(`Trying to use custom domain email: ${fromEmail}`);
-        }
-      } else {
-        // Fallback to system address if no user email is set
-        fromEmail = 'disparos@disparopro.com';
-        console.log(`No user email set, using system default: ${fromEmail}`);
-      }
-      
-      // Fallback to the Resend onboarding address if necessary
-      if (!fromEmail) {
-        fromEmail = 'onboarding@resend.dev';
-        console.log(`Falling back to Resend default: ${fromEmail}`);
-      }
+      // Use onboarding@resend.dev as the sender for testing
+      // This is guaranteed to work with any Resend API key
+      const fromEmail = 'onboarding@resend.dev';
+      const fromName = emailConfig.smtp_nome || 'DisparoPro';
       
       console.log(`Sending as: ${fromName} <${fromEmail}>`);
       
       // Prepare email data for Resend
       const emailData = {
         from: `${fromName} <${fromEmail}>`,
-        to: [to],  // Make sure to use array format for 'to' field
+        to: [to],
         subject: subject,
         html: htmlContent,
-        reply_to: emailConfig.email_usuario || fromEmail,  // Always set reply-to for better deliverability
+        reply_to: emailConfig.email_usuario || fromEmail,
       };
       
       // Add CC recipients if provided
@@ -231,107 +205,27 @@ serve(async (req) => {
         emailData.attachments = processedAttachments;
       }
 
-      console.log("Email data prepared:", JSON.stringify(emailData, null, 2));
+      console.log("Email data prepared:", JSON.stringify({
+        from: emailData.from,
+        to: emailData.to,
+        subject: emailData.subject,
+        reply_to: emailData.reply_to
+      }));
 
       // Send the email using Resend with proper error handling
-      let sendResult;
-      let errorOccurred = false;
-      let errorMessage = "";
-      
       try {
-        // Send the email using Resend
-        sendResult = await resend.emails.send(emailData);
+        const sendResult = await resend.emails.send(emailData);
         console.log("Resend response:", sendResult);
         
         // Check for response validity
         if (!sendResult) {
-          errorOccurred = true;
-          errorMessage = "Resposta inválida do serviço de email";
-        } else if (sendResult.error) {
-          errorOccurred = true;
-          errorMessage = sendResult.error?.message || "Erro desconhecido ao enviar email";
-        }
-      } catch (resendError: any) {
-        errorOccurred = true;
-        console.error("Resend API error:", resendError);
-        
-        if (resendError.statusCode) {
-          console.error(`Resend API status code: ${resendError.statusCode}`);
+          throw new Error("Resposta inválida do serviço de email");
         }
         
-        errorMessage = resendError.message || "Erro ao conectar com serviço de email";
-      }
-      
-      // Handle success or error cases
-      if (errorOccurred) {
-        console.error("Error sending email:", errorMessage);
-        
-        // Update envio status for error
-        if (contato_id && template_id && user_id) {
-          try {
-            console.log(`Updating envio status to 'erro'`);
-            const { data: envios } = await supabaseClient
-              .from('envios')
-              .select('id')
-              .eq('contato_id', contato_id)
-              .eq('template_id', template_id)
-              .eq('user_id', user_id)
-              .order('data_envio', { ascending: false })
-              .limit(1);
-              
-            if (envios && envios.length > 0) {
-              await supabaseClient
-                .from('envios')
-                .update({
-                  status: 'erro',
-                  erro: errorMessage
-                })
-                .eq('id', envios[0].id);
-                
-              console.log(`Updated envio status to 'erro'`);
-            } else {
-              // Create a new error record
-              await supabaseClient
-                .from('envios')
-                .insert([{
-                  contato_id,
-                  template_id,
-                  user_id,
-                  status: 'erro',
-                  erro: errorMessage
-                }]);
-                
-              console.log(`Created new envio record with status 'erro'`);
-            }
-          } catch (dbError: any) {
-            console.error("Error updating/creating error record:", dbError);
-          }
+        if (sendResult.error) {
+          throw new Error(sendResult.error.message || "Erro desconhecido ao enviar email");
         }
         
-        // Also update the agendamento status if this was from a scheduled email
-        if (requestData.agendamento_id) {
-          try {
-            await supabaseClient
-              .from('agendamentos')
-              .update({ status: 'falha' })
-              .eq('id', requestData.agendamento_id);
-          } catch (dbError) {
-            console.error("Error updating agendamento status:", dbError);
-          }
-        }
-        
-        // Return appropriate error response
-        return new Response(
-          JSON.stringify({ 
-            error: errorMessage,
-            details: "Falha ao enviar email através do Resend API"
-          }),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
-          }
-        );
-      } else {
         // Success case
         console.log("Email sent successfully. Resend ID:", sendResult.id);
         
@@ -379,14 +273,14 @@ serve(async (req) => {
         }
         
         // Also update the agendamento status if this was from a scheduled email
-        if (requestData.agendamento_id) {
+        if (agendamento_id) {
           try {
             await supabaseClient
               .from('agendamentos')
               .update({ status: 'enviado' })
-              .eq('id', requestData.agendamento_id);
+              .eq('id', agendamento_id);
             
-            console.log(`Updated agendamento status to 'enviado' for ID: ${requestData.agendamento_id}`);
+            console.log(`Updated agendamento status to 'enviado' for ID: ${agendamento_id}`);
           } catch (dbError) {
             console.error("Error updating agendamento status:", dbError);
           }
@@ -403,22 +297,55 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" } 
           }
         );
+      } catch (resendError: any) {
+        console.error("Resend API error:", resendError);
+        
+        if (resendError.statusCode) {
+          console.error(`Resend API status code: ${resendError.statusCode}`);
+        }
+        
+        // Create a friendly error message
+        let errorMessage = resendError.message || "Erro ao conectar com serviço de email";
+        
+        // Add agendamento update for error case
+        if (agendamento_id) {
+          try {
+            await supabaseClient
+              .from('agendamentos')
+              .update({ status: 'falha' })
+              .eq('id', agendamento_id);
+          } catch (dbError) {
+            console.error("Error updating agendamento status:", dbError);
+          }
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            error: errorMessage,
+            details: "Falha ao enviar email através do Resend API"
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
       }
     } catch (emailError: any) {
       console.error("Email sending error:", emailError);
       
       // Create a friendly error message
-      let errorMessage = "Erro ao enviar email: ";
+      let errorMessage = "Erro ao enviar email: " + (emailError.message || "Erro desconhecido");
       
-      // Criar mensagens específicas para erros comuns do Resend
-      if (emailError.statusCode === 403) {
-        errorMessage += "Permissão negada pelo servidor de email. Verifique se o domínio está verificado no Resend.";
-      } else if (emailError.message?.includes('domain') && emailError.message?.includes('verify')) {
-        errorMessage += "O domínio do email remetente precisa ser verificado no Resend. Foi usado um email padrão do sistema.";
-      } else if (emailError.statusCode === 429) {
-        errorMessage += "Limite de envios excedido. Tente novamente mais tarde.";
-      } else {
-        errorMessage += emailError.message || "Erro desconhecido no serviço de email";
+      // Add agendamento update for error case
+      if (agendamento_id) {
+        try {
+          await supabaseClient
+            .from('agendamentos')
+            .update({ status: 'falha' })
+            .eq('id', agendamento_id);
+        } catch (dbError) {
+          console.error("Error updating agendamento status:", dbError);
+        }
       }
       
       // Return appropriate error response

@@ -268,7 +268,7 @@ export function useEnvios() {
           
           // Criar mensagem mais amigável para problemas comuns
           let errorMsg = functionData.error;
-          if (functionData.error.includes("domínio")) {
+          if (typeof errorMsg === 'string' && errorMsg.includes("domínio")) {
             errorMsg = "Seu domínio de email precisa ser verificado no Resend. Acesse Configurações > Email para instruções.";
           }
           
@@ -294,7 +294,7 @@ export function useEnvios() {
         // Success case
         console.log('Email enviado com sucesso:', functionData);
         
-        // Use a string template instead of JSX
+        // Usando string template em vez de JSX
         toast.success(`Email enviado com sucesso para ${contatoData.nome}! Se o destinatário não receber, peça para verificar a pasta de spam.`, 
           { id: toastId, duration: 5000 }
         );

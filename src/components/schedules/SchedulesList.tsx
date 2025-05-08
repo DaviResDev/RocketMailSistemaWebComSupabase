@@ -52,7 +52,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
-        agendamento_id: schedule.id // Add the agendamento ID so it can be updated properly
+        agendamento_id: schedule.id // Garantir que o ID do agendamento é passado corretamente
       };
       
       // Send email immediately using sendEmail
