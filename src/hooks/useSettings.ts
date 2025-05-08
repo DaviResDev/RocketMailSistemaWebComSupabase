@@ -18,6 +18,7 @@ export type Settings = {
   created_at?: string | null;
   user_id?: string;
   two_factor_enabled: boolean;
+  use_smtp: boolean; // Novo campo para controlar se usa SMTP ou Resend
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
@@ -68,7 +69,8 @@ export function useSettings() {
           whatsapp_token: data.whatsapp_token,
           created_at: data.created_at,
           user_id: data.user_id,
-          two_factor_enabled: Boolean(data.two_factor_enabled)
+          two_factor_enabled: Boolean(data.two_factor_enabled),
+          use_smtp: Boolean(data.use_smtp) // Adiciona o novo campo
         });
       } else {
         // No settings found, create empty settings object
@@ -83,7 +85,8 @@ export function useSettings() {
           foto_perfil: null,
           smtp_seguranca: 'tls', // Default to TLS
           smtp_nome: '',
-          two_factor_enabled: false // Default value
+          two_factor_enabled: false, // Default value
+          use_smtp: false // Default usa Resend
         });
       }
     } catch (error: any) {

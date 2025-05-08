@@ -11,7 +11,7 @@ import { RefreshCcw } from 'lucide-react';
 import { ProfileForm } from '@/components/settings/ProfileForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
 import { SettingsInstructions } from '@/components/settings/SettingsInstructions';
 
 export default function Configuracoes() {
@@ -70,11 +70,10 @@ export default function Configuracoes() {
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
       
-      <Alert className="bg-emerald-50 text-emerald-800 border-emerald-200">
-        <AlertCircle className="h-4 w-4" />
+      <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+        <Info className="h-4 w-4" />
         <AlertDescription>
-          Agora seus emails são enviados pelo serviço Resend para maior confiabilidade e entrega.
-          Você não precisa mais configurar servidores SMTP.
+          Agora você pode escolher entre enviar emails através do serviço Resend ou configurar seu próprio servidor SMTP.
         </AlertDescription>
       </Alert>
       
