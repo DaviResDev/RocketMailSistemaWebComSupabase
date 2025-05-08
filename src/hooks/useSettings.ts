@@ -18,7 +18,7 @@ export type Settings = {
   created_at?: string | null;
   user_id?: string;
   two_factor_enabled: boolean;
-  use_smtp: boolean; // Novo campo para controlar se usa SMTP ou Resend
+  use_smtp: boolean; // Campo para controlar se usa SMTP ou Resend
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
@@ -70,11 +70,11 @@ export function useSettings() {
           created_at: data.created_at,
           user_id: data.user_id,
           two_factor_enabled: Boolean(data.two_factor_enabled),
-          use_smtp: Boolean(data.use_smtp) // Adiciona o novo campo
+          use_smtp: Boolean(data.use_smtp) // Transforma em boolean
         });
       } else {
-        // No settings found, create empty settings object
-        console.log("No settings found, using empty defaults");
+        // No settings found, create empty settings object with default true for use_smtp
+        console.log("No settings found, using empty defaults with SMTP enabled");
         setSettings({
           id: 'new',
           email_smtp: '',
@@ -86,7 +86,7 @@ export function useSettings() {
           smtp_seguranca: 'tls', // Default to TLS
           smtp_nome: '',
           two_factor_enabled: false, // Default value
-          use_smtp: false // Default usa Resend
+          use_smtp: true // Default usa SMTP em vez de Resend
         });
       }
     } catch (error: any) {
@@ -142,7 +142,14 @@ export function useSettings() {
       }
       
       console.log("Settings saved successfully:", newData);
-      setSettings(newData as Settings);
+      
+      // Make sure to transform the data to match our Settings type
+      setSettings({
+        ...newData,
+        use_smtp: Boolean(newData.use_smtp), // Ensure boolean type
+        two_factor_enabled: Boolean(newData.two_factor_enabled) // Ensure boolean type
+      } as Settings);
+      
       toast.success('Configurações salvas com sucesso!');
       return true;
     } catch (error: any) {

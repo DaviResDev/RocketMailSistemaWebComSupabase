@@ -73,7 +73,7 @@ export default function Configuracoes() {
       <Alert className="bg-blue-50 text-blue-800 border-blue-200">
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Agora você pode escolher entre enviar emails através do serviço Resend ou configurar seu próprio servidor SMTP.
+          Configure seu servidor SMTP para enviar emails diretamente da sua conta. Alternativamente, você pode usar o serviço Resend.
         </AlertDescription>
       </Alert>
       

@@ -101,6 +101,11 @@ serve(async (req) => {
     }
     
     const emailConfig = settingsData[0];
+    console.log("Email configuration:", JSON.stringify({
+      use_smtp: emailConfig.use_smtp,
+      email_smtp: emailConfig.email_smtp ? "configured" : "not configured",
+      smtp_nome: emailConfig.smtp_nome
+    }));
     
     // Verifica se o usuário tem configurações de SMTP e quer usá-las
     const smtpConfig: SmtpConfig = {
@@ -110,7 +115,7 @@ serve(async (req) => {
       password: emailConfig.email_senha,
       security: emailConfig.smtp_seguranca || 'tls',
       nome: emailConfig.smtp_nome || '',
-      use_smtp: Boolean(emailConfig.use_smtp) // Novo campo para controlar se usa SMTP ou Resend
+      use_smtp: Boolean(emailConfig.use_smtp) // Campo para controlar se usa SMTP ou Resend
     };
     
     const useSmtp = smtpConfig.use_smtp && 
@@ -118,6 +123,8 @@ serve(async (req) => {
                     smtpConfig.port && 
                     smtpConfig.user && 
                     smtpConfig.password;
+    
+    console.log("Using SMTP:", useSmtp);
     
     // Generate signature with area_negocio if available
     let assinatura = "";
@@ -295,8 +302,8 @@ serve(async (req) => {
         
         const resend = new Resend(resendApiKey);
 
+        // Determinar o email do remetente
         // Usar onboarding@resend.dev como remetente para testes
-        // Isso é garantido funcionar com qualquer chave da Resend
         const fromEmail = 'onboarding@resend.dev';
         const fromName = smtpConfig.nome || 'DisparoPro';
         

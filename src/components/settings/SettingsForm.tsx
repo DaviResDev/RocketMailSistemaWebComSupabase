@@ -31,7 +31,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     smtp_seguranca: 'tls',
     smtp_nome: null,
     two_factor_enabled: false,
-    use_smtp: false
+    use_smtp: true // Definindo padrão para usar SMTP
   });
   
   const [testingSmtp, setTestingSmtp] = useState(false);
@@ -49,7 +49,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         smtp_seguranca: settings.smtp_seguranca || 'tls',
         smtp_nome: settings.smtp_nome || '',
         two_factor_enabled: settings.two_factor_enabled || false,
-        use_smtp: settings.use_smtp || false
+        use_smtp: settings.use_smtp !== undefined ? settings.use_smtp : true // Definindo padrão para usar SMTP se não estiver definido
       });
     }
   }, [settings]);
