@@ -78,20 +78,33 @@ serve(async (req) => {
         
         // Definir o nome do remetente como "Teste DisparoPro" e o email como o email do usuário
         const fromName = "Teste DisparoPro";
-        const fromEmail = "onboarding@resend.dev"; // Email verificado do Resend
-        const replyTo = data.smtp_user; // Email do usuário para reply-to
         
-        console.log(`Testando Resend com from: ${fromName} <${fromEmail}> e reply-to: ${replyTo}`);
+        // Usar email do usuário como remetente (isso requer domínio verificado no Resend)
+        // Se o domínio não estiver verificado, isso falhará e a mensagem de erro ajudará o usuário
+        const fromEmail = data.smtp_user; 
+        
+        console.log(`Testando Resend com from: ${fromName} <${fromEmail}>`);
         
         const result = await resend.emails.send({
           from: `${fromName} <${fromEmail}>`,
           to: [data.smtp_user],
           subject: "Teste de conexão DisparoPro",
-          html: "<h1>Teste de email via Resend</h1><p>Esta é uma mensagem de teste para verificar a integração do Resend com o DisparoPro.</p>",
-          reply_to: replyTo // Configurar reply-to com o email do usuário
+          html: "<h1>Teste de email via Resend</h1><p>Esta é uma mensagem de teste para verificar a integração do Resend com o DisparoPro.</p>"
         });
         
         if (result.error) {
+          // Se o erro for relacionado à verificação de domínio, fornecer uma mensagem mais clara
+          if (result.error.message?.includes('domain') || result.error.message?.includes('verify')) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                message: "Você precisa verificar seu domínio de email no Resend antes de usar seu próprio email como remetente. Acesse https://resend.com/domains para verificar seu domínio.",
+                provider: "resend",
+                error: result.error
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
           throw new Error(result.error.message);
         }
         
@@ -102,14 +115,27 @@ serve(async (req) => {
             provider: "resend",
             info: {
               messageId: result.id,
-              from: fromEmail,
-              replyTo: replyTo
+              from: fromEmail
             }
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } catch (error) {
         console.error("Erro ao testar Resend:", error);
+        
+        // Verificar se o erro é relacionado à verificação de domínio
+        const errorMsg = error.message || "";
+        if (errorMsg.includes('domain') || errorMsg.includes('verify')) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message: "Você precisa verificar seu domínio de email no Resend antes de usar seu próprio email como remetente. Acesse https://resend.com/domains para verificar seu domínio.",
+              provider: "resend"
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
         return new Response(
           JSON.stringify({
             success: false,
@@ -149,7 +175,7 @@ serve(async (req) => {
         
         // Enviar um email de teste
         const fromName = "Teste DisparoPro";
-        const fromEmail = data.smtp_user; // Usar o email SMTP do usuário como remetente
+        const fromEmail = data.smtp_user; // Usar o email do usuário como remetente
         
         console.log(`Enviando email de teste como: ${fromName} <${fromEmail}>`);
         

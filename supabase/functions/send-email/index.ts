@@ -292,15 +292,17 @@ serve(async (req) => {
           
           // Preparar o email
           // Usar o nome configurado se disponível, ou apenas o email de usuário
-          const fromName = smtpConfig.nome 
-            ? `${smtpConfig.nome} <${smtpConfig.user}>` 
-            : smtpConfig.user;
+          const fromName = smtpConfig.nome || smtpConfig.user.split('@')[0];
+          const fromEmail = smtpConfig.user;
+          const fromHeader = fromName 
+            ? `${fromName} <${fromEmail}>` 
+            : fromEmail;
           
-          console.log(`Enviando como: ${fromName}`);
+          console.log(`Enviando como: ${fromHeader}`);
           
           // Construir o email
           const emailOpts = {
-            from: fromName,
+            from: fromHeader,
             to: to,
             subject: subject,
             content: "text/html",
@@ -334,7 +336,7 @@ serve(async (req) => {
             id: sendId || "SMTP-SENT", 
             provider: "smtp",
             success: true,
-            from: smtpConfig.user // Registrar o endereço de e-mail usado
+            from: fromEmail // Registrar o endereço de e-mail usado
           };
         } catch (smtpError) {
           console.error("Erro no envio SMTP:", smtpError);
@@ -374,62 +376,66 @@ serve(async (req) => {
         const resend = new Resend(resendApiKey);
 
         // Determinar o email e nome do remetente para Resend
-        // Importante: Resend só permite envio de domínios verificados, então 
-        // usamos onboarding@resend.dev mas configuramos o reply-to com o email do usuário
-        const fromEmail = 'onboarding@resend.dev';
-        
-        // Usar o nome configurado nas configurações, ou "DisparoPro" como fallback
         const fromName = smtpConfig.nome || emailConfig.smtp_nome || 'DisparoPro';
         
-        console.log(`Enviando como Resend: ${fromName} <${fromEmail}> com reply-to: ${smtpConfig.user || emailConfig.email_usuario}`);
+        // Para Resend, tentamos usar o email do usuário se o domínio estiver verificado
+        // Tentar enviar do próprio domínio do usuário primeiro para preservar identidade
+        const userEmail = smtpConfig.user || emailConfig.email_usuario;
+        const fromEmail = userEmail || 'onboarding@resend.dev';
+        const replyToEmail = userEmail;
         
-        // Preparar dados de email para Resend
-        const emailData: any = {
-          from: `${fromName} <${fromEmail}>`,
-          to: [to],
-          subject: subject,
-          html: htmlContent,
-          reply_to: smtpConfig.user || emailConfig.email_usuario || fromEmail,
-        };
-        
-        // Adicionar destinatários em CC se fornecidos
-        if (cc && cc.length > 0) {
-          emailData.cc = cc;
-        }
-        
-        // Adicionar destinatários em BCC se fornecidos
-        if (bcc && bcc.length > 0) {
-          emailData.bcc = bcc;
-        }
-        
-        // Adicionar anexos se houver
-        if (processedAttachments.length > 0) {
-          emailData.attachments = processedAttachments.map(attachment => ({
-            filename: attachment.filename,
-            content: attachment.content, // Resend espera o conteúdo como string base64
-          }));
-        }
-
-        console.log("Dados de email preparados para Resend:", JSON.stringify({
-          from: emailData.from,
-          to: emailData.to,
-          subject: emailData.subject,
-          reply_to: emailData.reply_to
-        }));
+        // Tentar enviar com o próprio email se existir
+        let usingDefaultSender = false;
+        let emailData: any;
 
         try {
-          const result = await resend.emails.send(emailData);
-          console.log("Resposta do Resend:", result);
+          console.log(`Tentando enviar como Resend com: ${fromName} <${fromEmail}>`);
           
-          if (!result) {
-            throw new Error("Resposta inválida do serviço de email");
+          // Preparar dados de email para Resend com o próprio domínio
+          emailData = {
+            from: `${fromName} <${fromEmail}>`,
+            to: [to],
+            subject: subject,
+            html: htmlContent
+          };
+          
+          // Adicionar reply_to apenas se for diferente do from
+          if (replyToEmail && replyToEmail !== fromEmail) {
+            emailData.reply_to = replyToEmail;
           }
+          
+          // Adicionar destinatários em CC se fornecidos
+          if (cc && cc.length > 0) {
+            emailData.cc = cc;
+          }
+          
+          // Adicionar destinatários em BCC se fornecidos
+          if (bcc && bcc.length > 0) {
+            emailData.bcc = bcc;
+          }
+          
+          // Adicionar anexos se houver
+          if (processedAttachments.length > 0) {
+            emailData.attachments = processedAttachments.map(attachment => ({
+              filename: attachment.filename,
+              content: attachment.content, // Resend espera o conteúdo como string base64
+            }));
+          }
+          
+          // Tentar enviar com o domínio do usuário
+          const result = await resend.emails.send(emailData);
           
           if (result.error) {
-            throw new Error(result.error.message || "Erro desconhecido ao enviar email");
+            // Se o erro é relacionado ao domínio não verificado, faremos fallback
+            if (result.error.message?.includes('domain') || 
+                result.error.message?.includes('verify') || 
+                result.error.message?.includes('sender')) {
+              throw new Error('Domain not verified');
+            }
+            throw new Error(result.error.message);
           }
           
-          console.log("Email enviado com sucesso via Resend. ID:", result.id);
+          console.log("Email enviado com sucesso via Resend com domínio próprio. ID:", result.id);
           
           sendResult = {
             id: result.id,
@@ -437,9 +443,73 @@ serve(async (req) => {
             success: true,
             from: fromEmail // Registrar o endereço de e-mail usado
           };
-        } catch (resendError) {
-          console.error("Erro na API do Resend:", resendError);
-          throw resendError;
+        } catch (domainError) {
+          // Fazer fallback para o remetente padrão do Resend se o domínio não estiver verificado
+          console.log("Não foi possível enviar com domínio do usuário, usando sender padrão do Resend", domainError.message);
+          usingDefaultSender = true;
+          
+          // Usar o endereço padrão verificado do Resend, mas manter o nome e reply-to
+          const defaultFromEmail = 'onboarding@resend.dev';
+          
+          emailData = {
+            from: `${fromName} <${defaultFromEmail}>`,
+            to: [to],
+            subject: subject,
+            html: htmlContent,
+            reply_to: replyToEmail || defaultFromEmail
+          };
+          
+          // Manter os mesmos CC, BCC e anexos da tentativa anterior
+          if (cc && cc.length > 0) {
+            emailData.cc = cc;
+          }
+          
+          if (bcc && bcc.length > 0) {
+            emailData.bcc = bcc;
+          }
+          
+          if (processedAttachments.length > 0) {
+            emailData.attachments = processedAttachments.map(attachment => ({
+              filename: attachment.filename,
+              content: attachment.content,
+            }));
+          }
+        }
+
+        // Se estamos usando o sender padrão ou ainda não enviamos o email
+        if (usingDefaultSender || !sendResult) {
+          console.log("Dados de email preparados para Resend:", JSON.stringify({
+            from: emailData.from,
+            to: emailData.to,
+            subject: emailData.subject,
+            reply_to: emailData.reply_to || "não definido"
+          }));
+
+          try {
+            const result = await resend.emails.send(emailData);
+            console.log("Resposta do Resend:", result);
+            
+            if (!result) {
+              throw new Error("Resposta inválida do serviço de email");
+            }
+            
+            if (result.error) {
+              throw new Error(result.error.message || "Erro desconhecido ao enviar email");
+            }
+            
+            console.log("Email enviado com sucesso via Resend. ID:", result.id);
+            
+            sendResult = {
+              id: result.id,
+              provider: "resend",
+              success: true,
+              from: emailData.from.split('<')[1].split('>')[0],
+              reply_to: emailData.reply_to
+            };
+          } catch (resendError) {
+            console.error("Erro na API do Resend:", resendError);
+            throw resendError;
+          }
         }
       } else if (!sendResult) {
         // Não temos SMTP nem Resend configurados
@@ -509,6 +579,7 @@ serve(async (req) => {
           message: "Email enviado com sucesso!",
           provider: sendResult.provider,
           from: sendResult.from, // Incluir o endereço de remetente na resposta
+          reply_to: sendResult.reply_to, // Incluir o endereço de resposta se disponível
           info: {
             messageId: sendResult.id
           }
