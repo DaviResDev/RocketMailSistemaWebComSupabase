@@ -50,18 +50,18 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     
-    // Log environment variables (sem revelar chaves completas)
-    console.log("SUPABASE_URL disponível:", !!supabaseUrl);
-    console.log("SUPABASE_SERVICE_ROLE_KEY disponível:", !!supabaseServiceKey);
-    console.log("RESEND_API_KEY disponível:", !!resendApiKey);
+    // Log environment variables (without revealing full keys)
+    console.log("SUPABASE_URL available:", !!supabaseUrl);
+    console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!supabaseServiceKey);
+    console.log("RESEND_API_KEY available:", !!resendApiKey);
     
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("Variáveis de ambiente ausentes: SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY");
+      console.error("Missing environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Erro de configuração do servidor",
-          error: "Erro de configuração do servidor: Credenciais Supabase ausentes" 
+          message: "Server configuration error",
+          error: "Server configuration error: Missing Supabase credentials" 
         }),
         { 
           status: 200, 
@@ -72,17 +72,17 @@ serve(async (req) => {
     
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Validar request
+    // Validate request
     let requestData: EmailRequest;
     try {
       requestData = await req.json();
     } catch (parseError) {
-      console.error("Erro ao analisar JSON do request:", parseError);
+      console.error("Error parsing request JSON:", parseError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Formato de requisição inválido",
-          error: "Formato JSON inválido" 
+          message: "Invalid request format",
+          error: "Invalid JSON format" 
         }),
         { 
           status: 200, 
@@ -93,14 +93,14 @@ serve(async (req) => {
     
     const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments, isTest, agendamento_id } = requestData;
     
-    // Validar dados antes de prosseguir
+    // Validate data before proceeding
     if (!to || !subject || !content || !user_id) {
-      console.error("Dados de requisição incompletos:", JSON.stringify(requestData));
+      console.error("Incomplete request data:", JSON.stringify(requestData));
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Dados incompletos para envio de email",
-          error: "Dados obrigatórios ausentes: destinatário, assunto, conteúdo ou ID do usuário" 
+          message: "Incomplete data for email sending",
+          error: "Missing required data: recipient, subject, content, or user ID" 
         }),
         { 
           status: 200, 
@@ -109,13 +109,13 @@ serve(async (req) => {
       );
     }
 
-    // Validar formato de email do destinatário
+    // Validate recipient email format
     if (!/^[\w.-]+@[\w.-]+\.\w+$/.test(to)) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Email de destinatário inválido",
-          error: "Formato de email inválido para o destinatário" 
+          message: "Invalid recipient email",
+          error: "Invalid email format for recipient" 
         }),
         { 
           status: 200, 
@@ -124,23 +124,23 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Preparando para enviar email para: ${to}`);
-    console.log(`Assunto: ${subject}`);
+    console.log(`Preparing to send email to: ${to}`);
+    console.log(`Subject: ${subject}`);
     
-    // Obter configurações do banco de dados para o usuário especificado
+    // Get settings from database for the specified user
     const { data: settingsData, error: settingsError } = await supabaseClient
       .from('configuracoes')
       .select('*')
       .eq('user_id', user_id)
-      .maybeSingle(); // Usando maybeSingle para evitar erros quando não há configurações
+      .maybeSingle();
 
     if (settingsError) {
-      console.error("Erro ao buscar configurações:", settingsError);
+      console.error("Error fetching settings:", settingsError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Erro ao buscar configurações",
-          error: "Erro ao buscar configurações de email: " + settingsError.message 
+          message: "Error fetching settings",
+          error: "Error fetching email settings: " + settingsError.message 
         }),
         { 
           status: 200, 
@@ -150,12 +150,12 @@ serve(async (req) => {
     }
     
     if (!settingsData) {
-      console.error("Configurações de email não encontradas para o usuário:", user_id);
+      console.error("Email settings not found for user:", user_id);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Configurações não encontradas",
-          error: "Configurações de email não encontradas para o usuário" 
+          message: "Settings not found",
+          error: "Email settings not found for user" 
         }),
         { 
           status: 200, 
@@ -165,14 +165,14 @@ serve(async (req) => {
     }
     
     const emailConfig = settingsData;
-    console.log("Configuração de email:", JSON.stringify({
+    console.log("Email configuration:", JSON.stringify({
       use_smtp: emailConfig.use_smtp,
-      email_smtp: emailConfig.email_smtp ? "configurado" : "não configurado",
-      smtp_nome: emailConfig.smtp_nome || "não definido",
-      email_usuario: emailConfig.email_usuario ? "configurado" : "não configurado"
+      email_smtp: emailConfig.email_smtp ? "configured" : "not configured",
+      smtp_nome: emailConfig.smtp_nome || "not defined",
+      email_usuario: emailConfig.email_usuario ? "configured" : "not configured"
     }));
     
-    // Verificar configurações de SMTP
+    // Check SMTP configuration
     const smtpConfig: SmtpConfig = {
       server: emailConfig.email_smtp,
       port: emailConfig.email_porta,
@@ -183,28 +183,28 @@ serve(async (req) => {
       use_smtp: Boolean(emailConfig.use_smtp)
     };
     
-    // Verificar se todos os campos necessários para SMTP estão presentes
+    // Check if all required fields for SMTP are present
     const useSmtp = smtpConfig.use_smtp && 
                     smtpConfig.server && 
                     smtpConfig.port && 
                     smtpConfig.user && 
                     smtpConfig.password;
     
-    console.log("Usando SMTP:", useSmtp);
+    console.log("Using SMTP:", useSmtp);
     
-    // Gerar assinatura com area_negocio se disponível
-    let assinatura = "";
+    // Generate signature with area_negocio if available
+    let signature = "";
     if (emailConfig.area_negocio) {
-      assinatura += `<div style="margin-top: 5px;"><strong>${emailConfig.area_negocio}</strong></div>`;
+      signature += `<div style="margin-top: 5px;"><strong>${emailConfig.area_negocio}</strong></div>`;
     }
 
-    assinatura += `<div style="margin-top: 5px;">${emailConfig.email_usuario || ''}</div>`;
+    signature += `<div style="margin-top: 5px;">${emailConfig.email_usuario || ''}</div>`;
 
-    // Criar conteúdo HTML do email com conteúdo personalizado
-    // Substituir placeholders com dados reais se não for um email de teste
+    // Create HTML content with customized content
+    // Replace placeholders with real data if not a test email
     let processedContent = content;
     
-    // Se não for um email de teste, tenta obter informações de contato para personalização
+    // If not a test email, try to get contact information for personalization
     if (!isTest && contato_id) {
       try {
         const { data: contatoData } = await supabaseClient
@@ -222,17 +222,17 @@ serve(async (req) => {
             .replace(/{cliente}/g, contatoData.cliente || "");
         }
       } catch (error) {
-        console.error("Erro ao buscar dados do contato para personalização:", error);
-        // Continuar sem personalização se houver um erro
+        console.error("Error fetching contact data for personalization:", error);
+        // Continue without personalization if there's an error
       }
     }
     
-    // Substituir placeholders de data
+    // Replace date placeholders
     const currentDate = new Date();
     processedContent = processedContent
       .replace(/{dia}/g, currentDate.toLocaleDateString('pt-BR'));
 
-    // Criar conteúdo HTML final
+    // Create final HTML content
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="padding: 20px;">
@@ -240,17 +240,17 @@ serve(async (req) => {
         </div>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         <div style="padding: 10px; font-size: 12px; color: #666;">
-          ${assinatura}
+          ${signature}
         </div>
       </div>
     `;
 
     try {
-      // Processar anexos se houver
+      // Process attachments if any
       const processedAttachments = [];
       
       if (attachments && attachments.length > 0) {
-        console.log(`Processando ${attachments.length} anexos`);
+        console.log(`Processing ${attachments.length} attachments`);
         
         for (const attachment of attachments) {
           try {
@@ -260,47 +260,61 @@ serve(async (req) => {
               contentType: attachment.contentType,
             });
             
-            console.log(`Anexo processado: ${attachment.filename}`);
+            console.log(`Attachment processed: ${attachment.filename}`);
           } catch (attachError) {
-            console.error(`Erro ao processar anexo ${attachment.filename}:`, attachError);
+            console.error(`Error processing attachment ${attachment.filename}:`, attachError);
           }
         }
       }
 
       let sendResult;
       
-      // Tentar enviar via SMTP se configurado
+      // Try to send via SMTP if configured
       if (useSmtp) {
-        console.log("Enviando email via SMTP configurado pelo usuário");
+        console.log("Sending email via user-configured SMTP");
         
         try {
-          // Nova implementação usando SmtpClient mais confiável do módulo smtp
+          // New implementation using more reliable SmtpClient from smtp module
           const client = new SmtpClient();
           
-          // Configurar a conexão SMTP
+          // Configure SMTP connection
           const secure = smtpConfig.security === "ssl" || Number(smtpConfig.port) === 465;
-          console.log(`Usando conexão SMTP ${secure ? 'segura (SSL/TLS)' : 'com STARTTLS'} para ${smtpConfig.server}:${smtpConfig.port}`);
+          console.log(`Using SMTP connection ${secure ? 'with SSL/TLS' : 'with STARTTLS'} to ${smtpConfig.server}:${smtpConfig.port}`);
           
-          // Conectar ao servidor SMTP
-          await client.connectTLS({
-            hostname: smtpConfig.server,
-            port: Number(smtpConfig.port),
-            username: smtpConfig.user,
-            password: smtpConfig.password,
-            tls: secure
-          });
+          // Connect to SMTP server with proper error handling
+          try {
+            if (secure) {
+              await client.connectTLS({
+                hostname: smtpConfig.server,
+                port: Number(smtpConfig.port),
+                username: smtpConfig.user,
+                password: smtpConfig.password
+              });
+            } else {
+              // For non-SSL connections, connect first then upgrade with STARTTLS
+              await client.connect({
+                hostname: smtpConfig.server,
+                port: Number(smtpConfig.port)
+              });
+              await client.startTLS();
+              await client.login(smtpConfig.user, smtpConfig.password);
+            }
+          } catch (connError) {
+            console.error("SMTP connection error:", connError);
+            throw new Error(`SMTP connection failed: ${connError.message}`);
+          }
           
-          // Preparar o email
-          // Usar o nome configurado se disponível, ou apenas o email de usuário
+          // Prepare the email
+          // Use the configured name if available, or just the user email
           const fromName = smtpConfig.nome || smtpConfig.user.split('@')[0];
           const fromEmail = smtpConfig.user;
           const fromHeader = fromName 
             ? `${fromName} <${fromEmail}>` 
             : fromEmail;
           
-          console.log(`Enviando como: ${fromHeader}`);
+          console.log(`Sending as: ${fromHeader}`);
           
-          // Construir o email
+          // Build the email
           const emailOpts = {
             from: fromHeader,
             to: to,
@@ -317,7 +331,7 @@ serve(async (req) => {
             emailOpts.bcc = bcc;
           }
           
-          // Implementar anexos
+          // Add attachments
           if (processedAttachments.length > 0) {
             emailOpts.attachments = processedAttachments.map(attachment => ({
               filename: attachment.filename,
@@ -326,197 +340,130 @@ serve(async (req) => {
             }));
           }
           
-          // Enviar o email
+          // Send the email
           const sendId = await client.send(emailOpts);
           await client.close();
           
-          console.log("Email enviado via SMTP com sucesso:", sendId);
+          console.log("Email sent successfully via SMTP:", sendId);
           
           sendResult = {
             id: sendId || "SMTP-SENT", 
             provider: "smtp",
             success: true,
-            from: fromEmail // Registrar o endereço de e-mail usado
+            from: fromEmail // Record the email address used
           };
         } catch (smtpError) {
-          console.error("Erro no envio SMTP:", smtpError);
+          console.error("SMTP sending error:", smtpError);
           
-          // Criar mensagem de erro mais descritiva
-          let errorMessage = "Falha ao enviar email via SMTP: " + smtpError.message;
+          // Create more descriptive error message
+          let errorMessage = "Failed to send email via SMTP: " + smtpError.message;
           
           if (smtpError.message?.includes("authentication") || smtpError.message?.includes("auth")) {
-            errorMessage = "Falha na autenticação SMTP: Verifique seu nome de usuário e senha.";
+            errorMessage = "SMTP authentication failed: Check your username and password.";
             if (smtpConfig.server?.includes("gmail")) {
-              errorMessage += " Para Gmail, você pode precisar gerar uma senha de aplicativo.";
+              errorMessage += " For Gmail, you may need to generate an app password.";
             }
           } else if (smtpError.message?.includes("timeout")) {
-            errorMessage = "Timeout na conexão SMTP: Verifique se o servidor SMTP está acessível.";
+            errorMessage = "SMTP connection timeout: Check if the SMTP server is accessible.";
           } else if (smtpError.message?.includes("certificate") || smtpError.message?.includes("TLS")) {
-            errorMessage = "Erro de certificado SSL/TLS: Verifique as configurações de segurança.";
+            errorMessage = "SSL/TLS certificate error: Check your security settings.";
           } else if (smtpError.message?.includes("connect") || smtpError.message?.includes("network")) {
-            errorMessage = "Falha ao conectar ao servidor SMTP: Verifique o endereço e porta.";
+            errorMessage = "Failed to connect to SMTP server: Check your address and port.";
           } else if (smtpError.message?.includes("Bad resource")) {
-            errorMessage = "Erro de recurso na conexão segura: Verifique as configurações de segurança.";
+            errorMessage = "Secure connection resource error: Check your security settings.";
           }
           
-          // Tenta com Resend como fallback se disponível
+          // Try with Resend as fallback if available
           if (resendApiKey) {
-            console.log("SMTP falhou, tentando com Resend como fallback...");
+            console.log("SMTP failed, trying with Resend as fallback...");
           } else {
-            // Sem Resend como fallback, reportar erro SMTP
+            // No Resend fallback, report SMTP error
             throw new Error(errorMessage);
           }
         }
       }
       
-      // Se SMTP não está configurado ou falhou e temos Resend disponível
+      // If SMTP is not configured or failed and we have Resend available
       if (!sendResult && resendApiKey) {
-        console.log("Enviando email com Resend API", useSmtp ? "(fallback)" : "(padrão)");
+        console.log("Sending email with Resend API", useSmtp ? "(fallback)" : "(default)");
         
         const resend = new Resend(resendApiKey);
 
-        // Determinar o email e nome do remetente para Resend
+        // Determine the email and name for Resend
         const fromName = smtpConfig.nome || emailConfig.smtp_nome || 'DisparoPro';
         
-        // Para Resend, tentamos usar o email do usuário se o domínio estiver verificado
-        // Tentar enviar do próprio domínio do usuário primeiro para preservar identidade
+        // For Resend, we use the default verified sender but set reply-to to the user's email
         const userEmail = smtpConfig.user || emailConfig.email_usuario;
-        const fromEmail = userEmail || 'onboarding@resend.dev';
+        const fromEmail = "onboarding@resend.dev"; // Always use the verified sender
         const replyToEmail = userEmail;
         
-        // Tentar enviar com o próprio email se existir
-        let usingDefaultSender = false;
-        let emailData: any;
+        console.log(`Sending with Resend as: ${fromName} <${fromEmail}> with reply-to: ${replyToEmail}`);
+        
+        // Prepare email data for Resend with proper headers
+        const emailData = {
+          from: `${fromName} <${fromEmail}>`,
+          to: [to],
+          subject: subject,
+          html: htmlContent,
+          reply_to: replyToEmail
+        };
+        
+        // Add CC recipients if provided
+        if (cc && cc.length > 0) {
+          emailData.cc = cc;
+        }
+        
+        // Add BCC recipients if provided
+        if (bcc && bcc.length > 0) {
+          emailData.bcc = bcc;
+        }
+        
+        // Add attachments if any
+        if (processedAttachments.length > 0) {
+          emailData.attachments = processedAttachments.map(attachment => ({
+            filename: attachment.filename,
+            content: attachment.content, // Resend expects content as base64 string
+          }));
+        }
+        
+        console.log("Email data prepared for Resend:", JSON.stringify({
+          from: emailData.from,
+          to: emailData.to,
+          subject: emailData.subject,
+          reply_to: emailData.reply_to || "not defined"
+        }));
 
         try {
-          console.log(`Tentando enviar como Resend com: ${fromName} <${fromEmail}>`);
-          
-          // Preparar dados de email para Resend com o próprio domínio
-          emailData = {
-            from: `${fromName} <${fromEmail}>`,
-            to: [to],
-            subject: subject,
-            html: htmlContent
-          };
-          
-          // Adicionar reply_to apenas se for diferente do from
-          if (replyToEmail && replyToEmail !== fromEmail) {
-            emailData.reply_to = replyToEmail;
-          }
-          
-          // Adicionar destinatários em CC se fornecidos
-          if (cc && cc.length > 0) {
-            emailData.cc = cc;
-          }
-          
-          // Adicionar destinatários em BCC se fornecidos
-          if (bcc && bcc.length > 0) {
-            emailData.bcc = bcc;
-          }
-          
-          // Adicionar anexos se houver
-          if (processedAttachments.length > 0) {
-            emailData.attachments = processedAttachments.map(attachment => ({
-              filename: attachment.filename,
-              content: attachment.content, // Resend espera o conteúdo como string base64
-            }));
-          }
-          
-          // Tentar enviar com o domínio do usuário
           const result = await resend.emails.send(emailData);
+          console.log("Resend response:", result);
+          
+          if (!result) {
+            throw new Error("Invalid response from email service");
+          }
           
           if (result.error) {
-            // Se o erro é relacionado ao domínio não verificado, faremos fallback
-            if (result.error.message?.includes('domain') || 
-                result.error.message?.includes('verify') || 
-                result.error.message?.includes('sender')) {
-              throw new Error('Domain not verified');
-            }
-            throw new Error(result.error.message);
+            throw new Error(result.error.message || "Unknown error sending email");
           }
           
-          console.log("Email enviado com sucesso via Resend com domínio próprio. ID:", result.id);
+          console.log("Email sent successfully via Resend. ID:", result.id);
           
           sendResult = {
             id: result.id,
             provider: "resend",
             success: true,
-            from: fromEmail // Registrar o endereço de e-mail usado
+            from: fromEmail,
+            reply_to: emailData.reply_to
           };
-        } catch (domainError) {
-          // Fazer fallback para o remetente padrão do Resend se o domínio não estiver verificado
-          console.log("Não foi possível enviar com domínio do usuário, usando sender padrão do Resend", domainError.message);
-          usingDefaultSender = true;
-          
-          // Usar o endereço padrão verificado do Resend, mas manter o nome e reply-to
-          const defaultFromEmail = 'onboarding@resend.dev';
-          
-          emailData = {
-            from: `${fromName} <${defaultFromEmail}>`,
-            to: [to],
-            subject: subject,
-            html: htmlContent,
-            reply_to: replyToEmail || defaultFromEmail
-          };
-          
-          // Manter os mesmos CC, BCC e anexos da tentativa anterior
-          if (cc && cc.length > 0) {
-            emailData.cc = cc;
-          }
-          
-          if (bcc && bcc.length > 0) {
-            emailData.bcc = bcc;
-          }
-          
-          if (processedAttachments.length > 0) {
-            emailData.attachments = processedAttachments.map(attachment => ({
-              filename: attachment.filename,
-              content: attachment.content,
-            }));
-          }
-        }
-
-        // Se estamos usando o sender padrão ou ainda não enviamos o email
-        if (usingDefaultSender || !sendResult) {
-          console.log("Dados de email preparados para Resend:", JSON.stringify({
-            from: emailData.from,
-            to: emailData.to,
-            subject: emailData.subject,
-            reply_to: emailData.reply_to || "não definido"
-          }));
-
-          try {
-            const result = await resend.emails.send(emailData);
-            console.log("Resposta do Resend:", result);
-            
-            if (!result) {
-              throw new Error("Resposta inválida do serviço de email");
-            }
-            
-            if (result.error) {
-              throw new Error(result.error.message || "Erro desconhecido ao enviar email");
-            }
-            
-            console.log("Email enviado com sucesso via Resend. ID:", result.id);
-            
-            sendResult = {
-              id: result.id,
-              provider: "resend",
-              success: true,
-              from: emailData.from.split('<')[1].split('>')[0],
-              reply_to: emailData.reply_to
-            };
-          } catch (resendError) {
-            console.error("Erro na API do Resend:", resendError);
-            throw resendError;
-          }
+        } catch (resendError) {
+          console.error("Resend API error:", resendError);
+          throw resendError;
         }
       } else if (!sendResult) {
-        // Não temos SMTP nem Resend configurados
-        throw new Error("Nenhum método de envio de email disponível. Configure SMTP ou adicione API key do Resend.");
+        // We have neither SMTP nor Resend configured
+        throw new Error("No email sending method available. Configure SMTP or add Resend API key.");
       }
       
-      // Email enviado com sucesso - Atualizar status se necessário
+      // Email sent successfully - Update status if needed
       if (contato_id && template_id && user_id) {
         try {
           const { data: envios } = await supabaseClient
@@ -538,9 +485,9 @@ serve(async (req) => {
               })
               .eq('id', envios[0].id);
               
-            console.log(`Atualizado status do envio para 'entregue'`);
+            console.log(`Updated sending status to 'entregue'`);
           } else {
-            // Criar um novo registro se ainda não existir
+            // Create a new record if one doesn't exist yet
             await supabaseClient
               .from('envios')
               .insert([{
@@ -551,15 +498,15 @@ serve(async (req) => {
                 resposta_smtp: JSON.stringify(sendResult)
               }]);
               
-            console.log(`Criado novo registro de envio com status 'entregue'`);
+            console.log(`Created new sending record with status 'entregue'`);
           }
         } catch (dbError) {
-          console.error("Erro ao atualizar registro no banco de dados:", dbError);
-          // Continuar execução mesmo se a atualização do DB falhar
+          console.error("Error updating database record:", dbError);
+          // Continue execution even if DB update fails
         }
       }
       
-      // Também atualizar o status do agendamento se este for de um email agendado
+      // Also update agendamento status if this is a scheduled email
       if (agendamento_id) {
         try {
           await supabaseClient
@@ -567,19 +514,19 @@ serve(async (req) => {
             .update({ status: 'enviado' })
             .eq('id', agendamento_id);
           
-          console.log(`Atualizado status do agendamento para 'enviado' para ID: ${agendamento_id}`);
+          console.log(`Updated agendamento status to 'enviado' for ID: ${agendamento_id}`);
         } catch (dbError) {
-          console.error("Erro ao atualizar status do agendamento:", dbError);
+          console.error("Error updating agendamento status:", dbError);
         }
       }
       
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Email enviado com sucesso!",
+          message: "Email sent successfully!",
           provider: sendResult.provider,
-          from: sendResult.from, // Incluir o endereço de remetente na resposta
-          reply_to: sendResult.reply_to, // Incluir o endereço de resposta se disponível
+          from: sendResult.from, // Include sender address in response
+          reply_to: sendResult.reply_to, // Include reply-to address if available
           info: {
             messageId: sendResult.id
           }
@@ -590,12 +537,12 @@ serve(async (req) => {
         }
       );
     } catch (emailError) {
-      console.error("Erro no envio de email:", emailError);
+      console.error("Email sending error:", emailError);
       
-      // Criar uma mensagem de erro amigável
-      let errorMessage = "Erro ao enviar email: " + (emailError.message || "Erro desconhecido");
+      // Create a friendly error message
+      let errorMessage = "Error sending email: " + (emailError.message || "Unknown error");
       
-      // Atualizar agendamento para caso de erro
+      // Update agendamento for error case
       if (agendamento_id) {
         try {
           await supabaseClient
@@ -603,39 +550,39 @@ serve(async (req) => {
             .update({ status: 'falha' })
             .eq('id', agendamento_id);
         } catch (dbError) {
-          console.error("Erro ao atualizar status do agendamento:", dbError);
+          console.error("Error updating agendamento status:", dbError);
         }
       }
       
-      // Retornar resposta de erro apropriada
+      // Return appropriate error response
       return new Response(
         JSON.stringify({ 
           success: false,
-          message: "Falha ao enviar email",
+          message: "Failed to send email",
           error: errorMessage,
           provider: useSmtp ? "smtp" : "resend"
         }),
         { 
-          status: 200, // Usando 200 mesmo para erro, conforme solicitado
+          status: 200, // Using 200 even for errors as requested
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     }
   } catch (error) {
-    console.error("Erro na função send-email:", error);
+    console.error("Error in send-email function:", error);
     
-    // Criar uma mensagem de erro amigável
-    const errorMessage = error.message || "Erro desconhecido ao enviar email";
+    // Create a friendly error message
+    const errorMessage = error.message || "Unknown error sending email";
     
     return new Response(
       JSON.stringify({ 
         success: false,
-        message: "Erro ao processar solicitação de email",
+        message: "Error processing email request",
         error: errorMessage,
         timestamp: new Date().toISOString()
       }),
       { 
-        status: 200, // Usando 200 mesmo para erro, conforme solicitado
+        status: 200, // Using 200 even for errors as requested
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );

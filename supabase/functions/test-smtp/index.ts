@@ -26,47 +26,47 @@ serve(async (req) => {
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     
-    // Parsear o corpo da requisição
+    // Parse request body
     let data: SmtpConfig;
     try {
       data = await req.json();
     } catch (error) {
-      console.error("Erro ao analisar o corpo da requisição:", error);
+      console.error("Error parsing request body:", error);
       return new Response(
         JSON.stringify({
           success: false,
-          message: "Formato de requisição inválido",
+          message: "Invalid request format",
           provider: "unknown"
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Testando configurações:", {
+    console.log("Testing configurations:", {
       use_resend: data.use_resend,
-      smtp_server: data.smtp_server ? "configurado" : "não configurado",
-      smtp_user: data.smtp_user ? "configurado" : "não configurado",
+      smtp_server: data.smtp_server ? "configured" : "not configured",
+      smtp_user: data.smtp_user ? "configured" : "not configured",
     });
 
-    // Adicionar validações básicas
+    // Add basic validations
     if (!data) {
       return new Response(
         JSON.stringify({
           success: false,
-          message: "Dados ausentes na requisição",
+          message: "Missing data in request",
           provider: "unknown"
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Se use_resend estiver definido como true, testar o Resend
+    // If use_resend is set to true, test Resend
     if (data.use_resend) {
       if (!resendApiKey) {
         return new Response(
           JSON.stringify({
             success: false,
-            message: "API key do Resend não configurada no servidor",
+            message: "Resend API key not configured on server",
             provider: "resend"
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -76,82 +76,59 @@ serve(async (req) => {
       try {
         const resend = new Resend(resendApiKey);
         
-        // Definir o nome do remetente como "Teste DisparoPro" e o email como o email do usuário
+        // Set sender name as "DisparoPro Test" and use user's email
         const fromName = "Teste DisparoPro";
         
-        // Usar email do usuário como remetente (isso requer domínio verificado no Resend)
-        // Se o domínio não estiver verificado, isso falhará e a mensagem de erro ajudará o usuário
-        const fromEmail = data.smtp_user; 
+        // For testing, we'll use onboarding@resend.dev as sender and set reply-to as user's email
+        // This ensures the test email will be delivered even if domain is not verified
+        const fromEmail = "onboarding@resend.dev";
         
-        console.log(`Testando Resend com from: ${fromName} <${fromEmail}>`);
+        console.log(`Testing Resend with from: ${fromName} <${fromEmail}> and reply-to: ${data.smtp_user}`);
         
         const result = await resend.emails.send({
           from: `${fromName} <${fromEmail}>`,
           to: [data.smtp_user],
-          subject: "Teste de conexão DisparoPro",
-          html: "<h1>Teste de email via Resend</h1><p>Esta é uma mensagem de teste para verificar a integração do Resend com o DisparoPro.</p>"
+          reply_to: data.smtp_user,
+          subject: "DisparoPro Connection Test",
+          html: "<h1>Email test via Resend</h1><p>This is a test message to verify your Resend integration with DisparoPro.</p><p>If you received this message, your email configuration is working correctly!</p>"
         });
         
         if (result.error) {
-          // Se o erro for relacionado à verificação de domínio, fornecer uma mensagem mais clara
-          if (result.error.message?.includes('domain') || result.error.message?.includes('verify')) {
-            return new Response(
-              JSON.stringify({
-                success: false,
-                message: "Você precisa verificar seu domínio de email no Resend antes de usar seu próprio email como remetente. Acesse https://resend.com/domains para verificar seu domínio.",
-                provider: "resend",
-                error: result.error
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-          throw new Error(result.error.message);
+          throw new Error(result.error.message || "Unknown error from Resend");
         }
         
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Teste de conexão com Resend bem-sucedido!",
+            message: "Resend connection test successful! Check your inbox for the test email.",
             provider: "resend",
             info: {
               messageId: result.id,
-              from: fromEmail
+              from: fromEmail,
+              reply_to: data.smtp_user
             }
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } catch (error) {
-        console.error("Erro ao testar Resend:", error);
-        
-        // Verificar se o erro é relacionado à verificação de domínio
-        const errorMsg = error.message || "";
-        if (errorMsg.includes('domain') || errorMsg.includes('verify')) {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              message: "Você precisa verificar seu domínio de email no Resend antes de usar seu próprio email como remetente. Acesse https://resend.com/domains para verificar seu domínio.",
-              provider: "resend"
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        console.error("Error testing Resend:", error);
         
         return new Response(
           JSON.stringify({
             success: false,
-            message: `Erro ao testar Resend: ${error.message}`,
+            message: `Error testing Resend: ${error.message}`,
             provider: "resend"
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     } else {
-      // Teste SMTP
+      // SMTP Test
       if (!data.smtp_server || !data.smtp_port || !data.smtp_user || !data.smtp_password) {
         return new Response(
           JSON.stringify({
             success: false,
-            message: "Configurações SMTP incompletas",
+            message: "Incomplete SMTP settings",
             provider: "smtp"
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -161,63 +138,76 @@ serve(async (req) => {
       try {
         const client = new SmtpClient();
         
-        // Configurar a conexão SMTP
+        // Configure SMTP connection with explicit debug info
         const secure = data.smtp_security === "ssl" || data.smtp_port === 465;
-        console.log(`Testando conexão SMTP ${secure ? 'segura (SSL/TLS)' : 'com STARTTLS'}`);
+        console.log(`Testing SMTP connection ${secure ? 'with SSL/TLS' : 'with STARTTLS'} to ${data.smtp_server}:${data.smtp_port}`);
         
-        await client.connectTLS({
-          hostname: data.smtp_server,
-          port: data.smtp_port,
-          username: data.smtp_user,
-          password: data.smtp_password,
-          tls: secure
-        });
+        // Use direct connection method for better error handling
+        if (secure) {
+          await client.connectTLS({
+            hostname: data.smtp_server,
+            port: data.smtp_port,
+            username: data.smtp_user,
+            password: data.smtp_password
+          });
+        } else {
+          // For non-SSL connections, connect first then upgrade with STARTTLS
+          await client.connect({
+            hostname: data.smtp_server,
+            port: data.smtp_port
+          });
+          await client.startTLS();
+          await client.login(data.smtp_user, data.smtp_password);
+        }
         
-        // Enviar um email de teste
+        // Send a test email
         const fromName = "Teste DisparoPro";
-        const fromEmail = data.smtp_user; // Usar o email do usuário como remetente
+        const fromEmail = data.smtp_user;
+        const fromHeader = `${fromName} <${fromEmail}>`;
         
-        console.log(`Enviando email de teste como: ${fromName} <${fromEmail}>`);
+        console.log(`Sending test email as: ${fromHeader}`);
         
-        const sendId = await client.send({
-          from: `${fromName} <${fromEmail}>`,
-          to: data.smtp_user, // Enviar para o próprio usuário
+        const sendResult = await client.send({
+          from: fromHeader,
+          to: data.smtp_user, // Send to the user's own email
           subject: "Teste de conexão SMTP DisparoPro",
           content: "text/html",
-          html: "<h1>Teste de email via SMTP</h1><p>Esta é uma mensagem de teste para verificar suas configurações SMTP no DisparoPro.</p>",
+          html: "<h1>Teste de email via SMTP</h1><p>Esta é uma mensagem de teste para verificar suas configurações SMTP no DisparoPro.</p><p>Se você recebeu essa mensagem, sua configuração de email está funcionando corretamente!</p>",
         });
         
         await client.close();
+        
+        console.log("SMTP test result:", sendResult);
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Teste de conexão SMTP bem-sucedido!",
+            message: "SMTP connection test successful! Check your inbox for the test email.",
             provider: "smtp",
             info: {
-              messageId: sendId || "SMTP-TEST-OK",
+              messageId: sendResult || "SMTP-TEST-OK",
               from: fromEmail
             }
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } catch (error) {
-        console.error("Erro ao testar SMTP:", error);
+        console.error("Error testing SMTP:", error);
         
-        // Criar mensagem de erro mais descritiva
-        let errorMessage = "Falha na conexão SMTP: " + error.message;
+        // Create more descriptive error message
+        let errorMessage = "SMTP connection failed: " + error.message;
         
         if (error.message?.includes("authentication") || error.message?.includes("auth")) {
-          errorMessage = "Falha na autenticação SMTP: Verifique seu nome de usuário e senha.";
+          errorMessage = "SMTP authentication failed: Check your username and password.";
           if (data.smtp_server?.includes("gmail")) {
-            errorMessage += " Para Gmail, você pode precisar gerar uma senha de aplicativo.";
+            errorMessage += " For Gmail, you may need to generate an app password.";
           }
         } else if (error.message?.includes("timeout")) {
-          errorMessage = "Timeout na conexão SMTP: Verifique se o servidor SMTP está acessível.";
+          errorMessage = "SMTP connection timeout: Check if the SMTP server is accessible.";
         } else if (error.message?.includes("certificate") || error.message?.includes("TLS")) {
-          errorMessage = "Erro de certificado SSL/TLS: Verifique as configurações de segurança.";
+          errorMessage = "SSL/TLS certificate error: Check your security settings.";
         } else if (error.message?.includes("connect") || error.message?.includes("network")) {
-          errorMessage = "Falha ao conectar ao servidor SMTP: Verifique o endereço e porta.";
+          errorMessage = "Failed to connect to SMTP server: Check your server address and port.";
         }
         
         return new Response(
@@ -231,11 +221,11 @@ serve(async (req) => {
       }
     }
   } catch (error) {
-    console.error("Erro geral no teste de conexão:", error);
+    console.error("General error in connection test:", error);
     return new Response(
       JSON.stringify({
         success: false,
-        message: `Erro ao testar conexão: ${error.message}`,
+        message: `Error testing connection: ${error.message}`,
         provider: "unknown"
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
