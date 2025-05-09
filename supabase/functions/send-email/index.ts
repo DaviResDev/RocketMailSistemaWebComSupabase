@@ -168,7 +168,8 @@ serve(async (req) => {
     console.log("Configuração de email:", JSON.stringify({
       use_smtp: emailConfig.use_smtp,
       email_smtp: emailConfig.email_smtp ? "configurado" : "não configurado",
-      smtp_nome: emailConfig.smtp_nome || "não definido"
+      smtp_nome: emailConfig.smtp_nome || "não definido",
+      email_usuario: emailConfig.email_usuario ? "configurado" : "não configurado"
     }));
     
     // Verificar configurações de SMTP
@@ -290,7 +291,12 @@ serve(async (req) => {
           });
           
           // Preparar o email
-          const fromName = smtpConfig.nome ? `${smtpConfig.nome} <${smtpConfig.user}>` : smtpConfig.user;
+          // Usar o nome configurado se disponível, ou apenas o email de usuário
+          const fromName = smtpConfig.nome 
+            ? `${smtpConfig.nome} <${smtpConfig.user}>` 
+            : smtpConfig.user;
+          
+          console.log(`Enviando como: ${fromName}`);
           
           // Construir o email
           const emailOpts = {
@@ -301,6 +307,23 @@ serve(async (req) => {
             html: htmlContent,
           };
           
+          if (cc && cc.length > 0) {
+            emailOpts.cc = cc;
+          }
+          
+          if (bcc && bcc.length > 0) {
+            emailOpts.bcc = bcc;
+          }
+          
+          // Implementar anexos
+          if (processedAttachments.length > 0) {
+            emailOpts.attachments = processedAttachments.map(attachment => ({
+              filename: attachment.filename,
+              content: attachment.content,
+              contentType: attachment.contentType
+            }));
+          }
+          
           // Enviar o email
           const sendId = await client.send(emailOpts);
           await client.close();
@@ -310,7 +333,8 @@ serve(async (req) => {
           sendResult = {
             id: sendId || "SMTP-SENT", 
             provider: "smtp",
-            success: true
+            success: true,
+            from: smtpConfig.user // Registrar o endereço de e-mail usado
           };
         } catch (smtpError) {
           console.error("Erro no envio SMTP:", smtpError);
@@ -349,11 +373,15 @@ serve(async (req) => {
         
         const resend = new Resend(resendApiKey);
 
-        // Determinar o email do remetente
+        // Determinar o email e nome do remetente para Resend
+        // Importante: Resend só permite envio de domínios verificados, então 
+        // usamos onboarding@resend.dev mas configuramos o reply-to com o email do usuário
         const fromEmail = 'onboarding@resend.dev';
-        const fromName = smtpConfig.nome || 'DisparoPro';
         
-        console.log(`Enviando como: ${fromName} <${fromEmail}>`);
+        // Usar o nome configurado nas configurações, ou "DisparoPro" como fallback
+        const fromName = smtpConfig.nome || emailConfig.smtp_nome || 'DisparoPro';
+        
+        console.log(`Enviando como Resend: ${fromName} <${fromEmail}> com reply-to: ${smtpConfig.user || emailConfig.email_usuario}`);
         
         // Preparar dados de email para Resend
         const emailData: any = {
@@ -361,7 +389,7 @@ serve(async (req) => {
           to: [to],
           subject: subject,
           html: htmlContent,
-          reply_to: smtpConfig.user || fromEmail,
+          reply_to: smtpConfig.user || emailConfig.email_usuario || fromEmail,
         };
         
         // Adicionar destinatários em CC se fornecidos
@@ -406,7 +434,8 @@ serve(async (req) => {
           sendResult = {
             id: result.id,
             provider: "resend",
-            success: true
+            success: true,
+            from: fromEmail // Registrar o endereço de e-mail usado
           };
         } catch (resendError) {
           console.error("Erro na API do Resend:", resendError);
@@ -479,6 +508,7 @@ serve(async (req) => {
           success: true, 
           message: "Email enviado com sucesso!",
           provider: sendResult.provider,
+          from: sendResult.from, // Incluir o endereço de remetente na resposta
           info: {
             messageId: sendResult.id
           }
