@@ -64,7 +64,12 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
   
   // Função para testar a conexão SMTP
   const testSmtpConnection = async () => {
-    if (!formData.email_smtp || !formData.email_porta || !formData.email_usuario || !formData.email_senha) {
+    if (!formData.email_usuario) {
+      toast.error("Preencha pelo menos o email do remetente antes de testar");
+      return;
+    }
+    
+    if (formData.use_smtp && (!formData.email_smtp || !formData.email_porta || !formData.email_senha)) {
       toast.error("Preencha todos os campos de configuração SMTP antes de testar");
       return;
     }
@@ -84,6 +89,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         },
       });
       
+      console.log("Resposta do teste:", data, error);
+      
       if (error) {
         console.error("Erro ao testar conexão:", error);
         toast.error(`Erro ao testar conexão: ${error.message}`);
@@ -97,6 +104,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
       
       if (data.success) {
         toast.success(`Conexão testada com sucesso via ${data.provider === 'smtp' ? 'SMTP' : 'Resend'}!`);
+      } else {
+        toast.error(data.message || "Falha no teste de conexão");
       }
     } catch (error: any) {
       console.error("Erro ao testar configurações:", error);
@@ -254,7 +263,11 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                           value={formData.email_usuario || ''}
                           onChange={(e) => setFormData({ ...formData, email_usuario: e.target.value })}
                           required={formData.use_smtp}
+                          disabled={true}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          O email do remetente é usado como usuário SMTP.
+                        </p>
                       </div>
                       
                       <div className="space-y-2">

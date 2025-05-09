@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { SMTPClient, type SendConfig } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -295,7 +295,7 @@ serve(async (req) => {
           // Preparar o email
           const fromName = smtpConfig.nome ? `"${smtpConfig.nome}" <${smtpConfig.user}>` : smtpConfig.user;
           
-          const emailData: any = {
+          const emailData: SendConfig = {
             from: fromName,
             to: [to],
             subject: subject,
@@ -314,7 +314,11 @@ serve(async (req) => {
           
           // Adicionar anexos se existirem
           if (processedAttachments.length > 0) {
-            emailData.attachments = processedAttachments;
+            emailData.attachments = processedAttachments.map(att => ({
+              filename: att.filename,
+              content: att.content,
+              contentType: att.contentType,
+            }));
           }
 
           console.log("Enviando email via SMTP:", emailData.from, "->", emailData.to, "Subject:", emailData.subject);
@@ -398,7 +402,7 @@ serve(async (req) => {
         if (processedAttachments.length > 0) {
           emailData.attachments = processedAttachments.map(attachment => ({
             filename: attachment.filename,
-            content: attachment.content // Resend espera o conteúdo como string base64
+            content: attachment.content, // Resend espera o conteúdo como string base64
           }));
         }
 
