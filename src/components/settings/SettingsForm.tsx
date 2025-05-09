@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,14 +12,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 
 interface SettingsFormProps {
   onSave?: () => void;
 }
 
 export function SettingsForm({ onSave }: SettingsFormProps) {
-  const { settings, loading, saveSettings } = useSettings();
+  const { settings, loading, saveSettings, testSmtpConnection } = useSettings();
   const [formData, setFormData] = useState<SettingsFormData>({
     email_smtp: '',
     email_porta: null,
@@ -63,53 +61,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
   };
   
   // Função para testar a conexão SMTP
-  const testSmtpConnection = async () => {
-    if (!formData.email_usuario) {
-      toast.error("Preencha pelo menos o email do remetente antes de testar");
-      return;
-    }
-    
-    if (formData.use_smtp && (!formData.email_smtp || !formData.email_porta || !formData.email_senha)) {
-      toast.error("Preencha todos os campos de configuração SMTP antes de testar");
-      return;
-    }
-    
+  const handleTestSmtpConnection = async () => {
     setTestingSmtp(true);
-    
     try {
-      // Chamar a função de teste SMTP
-      const { data, error } = await supabase.functions.invoke('test-smtp', {
-        body: {
-          smtp_server: formData.email_smtp,
-          smtp_port: Number(formData.email_porta),
-          smtp_user: formData.email_usuario,
-          smtp_password: formData.email_senha,
-          smtp_security: formData.smtp_seguranca,
-          use_resend: !formData.use_smtp
-        },
-      });
-      
-      console.log("Resposta do teste:", data, error);
-      
-      if (error) {
-        console.error("Erro ao testar conexão:", error);
-        toast.error(`Erro ao testar conexão: ${error.message}`);
-        return;
-      }
-      
-      if (data.error) {
-        toast.error(`Erro no teste: ${data.error}`);
-        return;
-      }
-      
-      if (data.success) {
-        toast.success(`Conexão testada com sucesso via ${data.provider === 'smtp' ? 'SMTP' : 'Resend'}!`);
-      } else {
-        toast.error(data.message || "Falha no teste de conexão");
-      }
-    } catch (error: any) {
-      console.error("Erro ao testar configurações:", error);
-      toast.error(`Erro ao testar: ${error.message}`);
+      await testSmtpConnection(formData);
     } finally {
       setTestingSmtp(false);
     }
@@ -289,7 +244,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                     <Button 
                       type="button"
                       variant="outline"
-                      onClick={testSmtpConnection}
+                      onClick={handleTestSmtpConnection}
                       disabled={testingSmtp}
                       className="mt-4"
                     >
