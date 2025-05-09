@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import { SMTPClient, type SendConfig } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -273,66 +273,42 @@ serve(async (req) => {
         console.log("Enviando email via SMTP configurado pelo usuário");
         
         try {
-          // Determinar se deve usar conexão segura
+          // Nova implementação usando SmtpClient mais confiável do módulo smtp
+          const client = new SmtpClient();
+          
+          // Configurar a conexão SMTP
           const secure = smtpConfig.security === "ssl" || Number(smtpConfig.port) === 465;
-          console.log(`Usando conexão SMTP ${secure ? 'SSL/TLS direta' : 'com STARTTLS'} para ${smtpConfig.server}:${smtpConfig.port}`);
+          console.log(`Usando conexão SMTP ${secure ? 'segura (SSL/TLS)' : 'com STARTTLS'} para ${smtpConfig.server}:${smtpConfig.port}`);
           
-          // Criar cliente SMTP com timeout adequado e debug ativado
-          const client = new SMTPClient({
-            connection: {
-              hostname: smtpConfig.server,
-              port: Number(smtpConfig.port),
-              auth: {
-                username: smtpConfig.user,
-                password: smtpConfig.password,
-              },
-              tls: secure,
-              timeout: 30000, // 30 segundos timeout
-            },
-            debug: true, // Ativar debug para melhor depuração
+          // Conectar ao servidor SMTP
+          await client.connectTLS({
+            hostname: smtpConfig.server,
+            port: Number(smtpConfig.port),
+            username: smtpConfig.user,
+            password: smtpConfig.password,
+            tls: secure
           });
-
-          // Preparar o email
-          const fromName = smtpConfig.nome ? `"${smtpConfig.nome}" <${smtpConfig.user}>` : smtpConfig.user;
           
-          const emailData: SendConfig = {
+          // Preparar o email
+          const fromName = smtpConfig.nome ? `${smtpConfig.nome} <${smtpConfig.user}>` : smtpConfig.user;
+          
+          // Construir o email
+          const emailOpts = {
             from: fromName,
-            to: [to],
+            to: to,
             subject: subject,
+            content: "text/html",
             html: htmlContent,
           };
           
-          // Adicionar CC se fornecido
-          if (cc && cc.length > 0) {
-            emailData.cc = cc;
-          }
-          
-          // Adicionar BCC se fornecido
-          if (bcc && bcc.length > 0) {
-            emailData.bcc = bcc;
-          }
-          
-          // Adicionar anexos se existirem
-          if (processedAttachments.length > 0) {
-            emailData.attachments = processedAttachments.map(att => ({
-              filename: att.filename,
-              content: att.content,
-              contentType: att.contentType,
-            }));
-          }
-
-          console.log("Enviando email via SMTP:", emailData.from, "->", emailData.to, "Subject:", emailData.subject);
-
           // Enviar o email
-          const result = await client.send(emailData);
-          
-          console.log("Email enviado via SMTP com sucesso:", result);
-          
-          // Fechar a conexão
+          const sendId = await client.send(emailOpts);
           await client.close();
           
+          console.log("Email enviado via SMTP com sucesso:", sendId);
+          
           sendResult = {
-            id: result.id || "SMTP-SENT", 
+            id: sendId || "SMTP-SENT", 
             provider: "smtp",
             success: true
           };
@@ -342,7 +318,7 @@ serve(async (req) => {
           // Criar mensagem de erro mais descritiva
           let errorMessage = "Falha ao enviar email via SMTP: " + smtpError.message;
           
-          if (smtpError.message?.includes("authentication")) {
+          if (smtpError.message?.includes("authentication") || smtpError.message?.includes("auth")) {
             errorMessage = "Falha na autenticação SMTP: Verifique seu nome de usuário e senha.";
             if (smtpConfig.server?.includes("gmail")) {
               errorMessage += " Para Gmail, você pode precisar gerar uma senha de aplicativo.";

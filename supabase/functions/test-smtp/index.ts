@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 import { Resend } from "https://esm.sh/resend@1.1.0";
 
 const corsHeaders = {
@@ -124,19 +124,16 @@ serve(async (req) => {
         const secure = smtp_security === "ssl" || portNumber === 465;
         console.log(`Usando conexão ${secure ? 'SSL/TLS' : 'STARTTLS se disponível'}`);
         
-        // Criar cliente SMTP com biblioteca denomailer
-        const client = new SMTPClient({
-          connection: {
-            hostname: smtp_server,
-            port: portNumber,
-            auth: {
-              username: smtp_user,
-              password: smtp_password,
-            },
-            tls: secure,
-            timeout: 30000, // 30 segundos de timeout
-          },
-          debug: true, // Ativar debug para melhor depuração
+        // Usar a biblioteca smtp mais estável
+        const client = new SmtpClient();
+        
+        // Configurar e conectar ao servidor SMTP
+        await client.connectTLS({
+          hostname: smtp_server,
+          port: portNumber,
+          username: smtp_user,
+          password: smtp_password,
+          tls: secure
         });
 
         console.log("Cliente SMTP criado, tentando enviar um email de teste");
@@ -146,7 +143,7 @@ serve(async (req) => {
           from: smtp_user,
           to: smtp_user, // Enviar teste para o próprio usuário
           subject: "Teste SMTP DisparoPro",
-          content: "Este é um email de teste para verificar suas configurações SMTP",
+          content: "text/html",
           html: "<p>Este é um email de teste do DisparoPro para verificar suas configurações SMTP.</p>"
         });
         
@@ -161,7 +158,7 @@ serve(async (req) => {
             message: "Conexão SMTP testada com sucesso!",
             provider: "smtp",
             info: {
-              messageId: result.id || "SMTP-TEST"
+              messageId: result || "SMTP-TEST"
             }
           }),
           { 
@@ -176,7 +173,7 @@ serve(async (req) => {
         let errorMessage = `Teste de conexão SMTP falhou: ${smtpError.message}`;
         let userFriendlyMessage = "Falha na conexão SMTP";
         
-        if (smtpError.message?.includes("authentication")) {
+        if (smtpError.message?.includes("authentication") || smtpError.message?.includes("auth")) {
           errorMessage = "Falha na autenticação SMTP: Verifique seu nome de usuário e senha.";
           userFriendlyMessage = "Falha na autenticação SMTP";
           if (smtp_server?.includes("gmail")) {
@@ -191,9 +188,6 @@ serve(async (req) => {
         } else if (smtpError.message?.includes("connect") || smtpError.message?.includes("network")) {
           errorMessage = "Falha ao conectar ao servidor SMTP: Verifique o endereço e a porta do servidor.";
           userFriendlyMessage = "Falha ao conectar ao servidor SMTP";
-        } else if (smtpError.message?.includes("Bad resource")) {
-          errorMessage = "Erro na conexão segura: Verifique as configurações de segurança do servidor SMTP e tente novamente.";
-          userFriendlyMessage = "Erro na conexão segura";
         }
 
         // Tentar com Resend como fallback se disponível
