@@ -274,34 +274,51 @@ serve(async (req) => {
         console.log("Sending email via user-configured SMTP");
         
         try {
-          // New implementation using more reliable SmtpClient from smtp module
+          // SMTP sending implementation
           const client = new SmtpClient();
           
           // Configure SMTP connection
           const secure = smtpConfig.security === "ssl" || Number(smtpConfig.port) === 465;
           console.log(`Using SMTP connection ${secure ? 'with SSL/TLS' : 'with STARTTLS'} to ${smtpConfig.server}:${smtpConfig.port}`);
           
-          // Connect to SMTP server with proper error handling
-          try {
-            if (secure) {
+          // Use standalone SMTP connection handler for better error tracking
+          if (secure) {
+            try {
               await client.connectTLS({
                 hostname: smtpConfig.server,
                 port: Number(smtpConfig.port),
                 username: smtpConfig.user,
                 password: smtpConfig.password
               });
-            } else {
+            } catch (connError) {
+              console.error("SMTP secure connection error:", connError);
+              throw new Error(`SMTP secure connection failed: ${connError.message}`);
+            }
+          } else {
+            try {
               // For non-SSL connections, connect first then upgrade with STARTTLS
               await client.connect({
                 hostname: smtpConfig.server,
                 port: Number(smtpConfig.port)
               });
-              await client.startTLS();
-              await client.login(smtpConfig.user, smtpConfig.password);
+            } catch (connError) {
+              console.error("SMTP connection error:", connError);
+              throw new Error(`SMTP connection failed: ${connError.message}`);
             }
-          } catch (connError) {
-            console.error("SMTP connection error:", connError);
-            throw new Error(`SMTP connection failed: ${connError.message}`);
+
+            try {
+              await client.startTLS();
+            } catch (tlsError) {
+              console.error("SMTP TLS upgrade error:", tlsError);
+              throw new Error(`SMTP TLS upgrade failed: ${tlsError.message}`);
+            }
+            
+            try {
+              await client.login(smtpConfig.user, smtpConfig.password);
+            } catch (authError) {
+              console.error("SMTP authentication error:", authError);
+              throw new Error(`SMTP authentication failed: ${authError.message}`);
+            }
           }
           
           // Prepare the email
@@ -340,18 +357,31 @@ serve(async (req) => {
             }));
           }
           
-          // Send the email
-          const sendId = await client.send(emailOpts);
-          await client.close();
+          // Send the email with detailed logging
+          console.log("Sending SMTP email with options:", {
+            from: fromHeader,
+            to: to,
+            subject: subject
+          });
           
-          console.log("Email sent successfully via SMTP:", sendId);
+          try {
+            const sendId = await client.send(emailOpts);
+            console.log("SMTP send response:", sendId);
+            await client.close();
           
-          sendResult = {
-            id: sendId || "SMTP-SENT", 
-            provider: "smtp",
-            success: true,
-            from: fromEmail // Record the email address used
-          };
+            console.log("Email sent successfully via SMTP:", sendId);
+          
+            sendResult = {
+              id: sendId || "SMTP-SENT", 
+              provider: "smtp",
+              success: true,
+              from: fromEmail // Record the email address used
+            };
+          } catch (sendError) {
+            console.error("SMTP send error:", sendError);
+            throw new Error(`SMTP send failed: ${sendError.message}`);
+          }
+          
         } catch (smtpError) {
           console.error("SMTP sending error:", smtpError);
           
@@ -373,8 +403,8 @@ serve(async (req) => {
             errorMessage = "Secure connection resource error: Check your security settings.";
           }
           
-          // Try with Resend as fallback if available
-          if (resendApiKey) {
+          // Try with Resend as fallback if available and only if it wasn't already a Resend test
+          if (resendApiKey && !isTest) {
             console.log("SMTP failed, trying with Resend as fallback...");
           } else {
             // No Resend fallback, report SMTP error

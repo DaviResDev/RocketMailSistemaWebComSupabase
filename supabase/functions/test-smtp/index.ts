@@ -136,28 +136,51 @@ serve(async (req) => {
       }
 
       try {
+        // Improved SMTP connection handling to avoid Deno.writeAll issues
         const client = new SmtpClient();
         
         // Configure SMTP connection with explicit debug info
         const secure = data.smtp_security === "ssl" || data.smtp_port === 465;
         console.log(`Testing SMTP connection ${secure ? 'with SSL/TLS' : 'with STARTTLS'} to ${data.smtp_server}:${data.smtp_port}`);
         
-        // Use direct connection method for better error handling
+        // Use more granular connection process with better error tracking
         if (secure) {
-          await client.connectTLS({
-            hostname: data.smtp_server,
-            port: data.smtp_port,
-            username: data.smtp_user,
-            password: data.smtp_password
-          });
+          try {
+            await client.connectTLS({
+              hostname: data.smtp_server,
+              port: data.smtp_port,
+              username: data.smtp_user,
+              password: data.smtp_password
+            });
+          } catch (connError) {
+            console.error("SMTP secure connection error:", connError);
+            throw new Error(`SMTP secure connection failed: ${connError.message}`);
+          }
         } else {
-          // For non-SSL connections, connect first then upgrade with STARTTLS
-          await client.connect({
-            hostname: data.smtp_server,
-            port: data.smtp_port
-          });
-          await client.startTLS();
-          await client.login(data.smtp_user, data.smtp_password);
+          // For non-SSL connections, connect with explicit error handling
+          try {
+            await client.connect({
+              hostname: data.smtp_server,
+              port: data.smtp_port
+            });
+          } catch (connError) {
+            console.error("SMTP connection error:", connError);
+            throw new Error(`SMTP connection failed: ${connError.message}`);
+          }
+
+          try {
+            await client.startTLS();
+          } catch (tlsError) {
+            console.error("SMTP TLS upgrade error:", tlsError);
+            throw new Error(`SMTP TLS upgrade failed: ${tlsError.message}`);
+          }
+          
+          try {
+            await client.login(data.smtp_user, data.smtp_password);
+          } catch (authError) {
+            console.error("SMTP authentication error:", authError);
+            throw new Error(`SMTP authentication failed: ${authError.message}`);
+          }
         }
         
         // Send a test email
@@ -167,30 +190,43 @@ serve(async (req) => {
         
         console.log(`Sending test email as: ${fromHeader}`);
         
-        const sendResult = await client.send({
+        // Create email options with explicit logging
+        const emailOpts = {
           from: fromHeader,
           to: data.smtp_user, // Send to the user's own email
           subject: "Teste de conexão SMTP DisparoPro",
           content: "text/html",
           html: "<h1>Teste de email via SMTP</h1><p>Esta é uma mensagem de teste para verificar suas configurações SMTP no DisparoPro.</p><p>Se você recebeu essa mensagem, sua configuração de email está funcionando corretamente!</p>",
+        };
+        
+        console.log("Sending SMTP test with options:", {
+          from: fromHeader,
+          to: data.smtp_user,
+          subject: "Teste de conexão SMTP DisparoPro"
         });
         
-        await client.close();
+        try {
+          const sendResult = await client.send(emailOpts);
+          console.log("SMTP test send result:", sendResult);
+          await client.close();
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "SMTP connection test successful! Check your inbox for the test email.",
+              provider: "smtp",
+              info: {
+                messageId: sendResult || "SMTP-TEST-OK",
+                from: fromEmail
+              }
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } catch (sendError) {
+          console.error("SMTP send error:", sendError);
+          throw new Error(`SMTP send failed: ${sendError.message}`);
+        }
         
-        console.log("SMTP test result:", sendResult);
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "SMTP connection test successful! Check your inbox for the test email.",
-            provider: "smtp",
-            info: {
-              messageId: sendResult || "SMTP-TEST-OK",
-              from: fromEmail
-            }
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
       } catch (error) {
         console.error("Error testing SMTP:", error);
         
