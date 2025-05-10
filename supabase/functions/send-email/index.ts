@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -268,26 +269,127 @@ serve(async (req) => {
 
       let sendResult;
       
-      // Removido o envio via SMTP (nodemailer) devido a problemas de compatibilidade com Deno
-      // Usaremos apenas o Resend para todos os envios, mas manteremos as configurações do usuário
-      
-      // Se o Resend API key estiver disponível
-      if (resendApiKey) {
-        console.log("Enviando e-mail com API do Resend" + (useSmtp ? " (o SMTP foi desativado por compatibilidade)" : ""));
+      // Se o usuário configurou SMTP e quer usar SMTP
+      if (useSmtp) {
+        console.log("Enviando e-mail via SMTP direto");
+        
+        try {
+          // Configurar cliente SMTP
+          const client = new SmtpClient();
+          
+          // Conectar ao servidor SMTP
+          await client.connectTLS({
+            hostname: smtpConfig.server,
+            port: smtpConfig.port,
+            username: smtpConfig.user,
+            password: smtpConfig.password,
+          });
+          
+          // Preparar dados do email
+          const emailData = {
+            from: `${smtpConfig.nome} <${smtpConfig.user}>`,
+            to: to,
+            subject: subject,
+            content: "text/html",
+            html: htmlContent,
+          };
+          
+          // Adicionar CC se fornecidos
+          if (cc && cc.length > 0) {
+            emailData.cc = cc.join(', ');
+          }
+          
+          // Adicionar BCC se fornecidos
+          if (bcc && bcc.length > 0) {
+            emailData.bcc = bcc.join(', ');
+          }
+          
+          // TODO: Implementar anexos para SMTP direto
+          if (processedAttachments.length > 0) {
+            console.log("Aviso: Anexos ainda não são suportados com envio SMTP direto");
+          }
+          
+          // Enviar email
+          await client.send(emailData);
+          
+          // Fechar conexão
+          await client.close();
+          
+          console.log("Email enviado com sucesso via SMTP direto");
+          
+          sendResult = {
+            id: `smtp-${Date.now()}`,
+            provider: "smtp",
+            success: true,
+            from: smtpConfig.user,
+            reply_to: smtpConfig.user,
+            server: smtpConfig.server,
+            port: smtpConfig.port
+          };
+        } catch (smtpError) {
+          console.error("Erro ao enviar via SMTP direto:", smtpError);
+          
+          // Tentar fallback para Resend se disponível
+          if (resendApiKey) {
+            console.log("Falha no SMTP, tentando fallback para Resend");
+            
+            const resend = new Resend(resendApiKey);
+            const fromName = smtpConfig.nome || "DisparoPro";
+            const fromEmail = "onboarding@resend.dev";
+            const replyToEmail = smtpConfig.user;
+            
+            const emailData = {
+              from: `${fromName} <${fromEmail}>`,
+              to: [to],
+              subject: subject,
+              html: htmlContent,
+              reply_to: replyToEmail
+            };
+            
+            if (cc && cc.length > 0) {
+              emailData.cc = cc;
+            }
+            
+            if (bcc && bcc.length > 0) {
+              emailData.bcc = bcc;
+            }
+            
+            if (processedAttachments.length > 0) {
+              emailData.attachments = processedAttachments.map(attachment => ({
+                filename: attachment.filename,
+                content: attachment.content,
+              }));
+            }
+            
+            const result = await resend.emails.send(emailData);
+            
+            if (result.error) {
+              throw new Error(`Falha no SMTP e no fallback Resend: ${smtpError.message} e ${result.error.message}`);
+            }
+            
+            console.log("Email enviado com sucesso via Resend (fallback após falha SMTP)");
+            
+            sendResult = {
+              id: result.id,
+              provider: "resend_fallback",
+              success: true,
+              from: fromEmail,
+              reply_to: replyToEmail,
+              original_error: smtpError.message
+            };
+          } else {
+            // Sem fallback disponível, lançar erro original
+            throw smtpError;
+          }
+        }
+      } else if (resendApiKey) {
+        // Usar Resend se configurado e SMTP não estiver disponível ou não for desejado
+        console.log("Enviando e-mail com API do Resend");
         
         const resend = new Resend(resendApiKey);
-
-        // Determine the email and name for Resend
-        const fromName = smtpConfig.nome || emailConfig.smtp_nome || 'DisparoPro';
-        
-        // Usar o email do usuário como remetente se possível (domínio verificado no Resend)
-        // ou usar o email padrão do onboarding
-        const userEmail = smtpConfig.user || emailConfig.email_usuario || '';
-        
-        // Se estiver tentando usar SMTP, é porque o usuário quer enviar de seu próprio domínio
-        // Então vamos tentar usar seu próprio email como remetente (se domínio estiver verificado no Resend)
-        const fromEmail = useSmtp ? userEmail : "onboarding@resend.dev";
-        const replyToEmail = userEmail;
+        const fromName = smtpConfig.nome || "DisparoPro";
+        const fromEmail = "onboarding@resend.dev";
+        const replyToEmail = smtpConfig.user;
         
         console.log(`Enviando com Resend como: ${fromName} <${fromEmail}> com responder-para: ${replyToEmail}`);
         
@@ -325,31 +427,26 @@ serve(async (req) => {
           reply_to: emailData.reply_to || "não definido"
         }));
 
-        try {
-          const result = await resend.emails.send(emailData);
-          console.log("Resposta do Resend:", result);
-          
-          if (!result) {
-            throw new Error("Resposta inválida do serviço de email");
-          }
-          
-          if (result.error) {
-            throw new Error(result.error.message || "Erro desconhecido ao enviar email");
-          }
-          
-          console.log("Email enviado com sucesso via Resend. ID:", result.id);
-          
-          sendResult = {
-            id: result.id,
-            provider: "resend",
-            success: true,
-            from: fromEmail,
-            reply_to: emailData.reply_to
-          };
-        } catch (resendError) {
-          console.error("Erro da API do Resend:", resendError);
-          throw resendError;
+        const result = await resend.emails.send(emailData);
+        console.log("Resposta do Resend:", result);
+        
+        if (!result) {
+          throw new Error("Resposta inválida do serviço de email");
         }
+        
+        if (result.error) {
+          throw new Error(result.error.message || "Erro desconhecido ao enviar email");
+        }
+        
+        console.log("Email enviado com sucesso via Resend. ID:", result.id);
+        
+        sendResult = {
+          id: result.id,
+          provider: "resend",
+          success: true,
+          from: fromEmail,
+          reply_to: emailData.reply_to
+        };
       } else {
         // Não temos nem SMTP nem Resend configurados
         throw new Error("Nenhum método de envio de email disponível. Configure SMTP ou adicione a chave API Resend.");
@@ -452,7 +549,7 @@ serve(async (req) => {
           success: false,
           message: "Falha ao enviar email",
           error: errorMessage,
-          provider: "resend"
+          provider: useSmtp ? "smtp" : "resend"
         }),
         { 
           status: 200, // Using 200 even for errors as requested
