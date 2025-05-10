@@ -243,7 +243,14 @@ export function useEnvios() {
 
         if (functionError) {
           console.error('Erro na chamada da function:', functionError);
-          toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
+          
+          // Mensagem de erro mais amigável para erros de conexão
+          if (functionError.message && functionError.message.includes('Failed to fetch')) {
+            toast.error('Erro de conexão com o servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.', { id: toastId });
+          } else {
+            toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
+          }
+          
           setSending(false);
 
           // Save envio with error status
@@ -304,7 +311,16 @@ export function useEnvios() {
         return true;
       } catch (error: any) {
         console.error('Erro ao executar function de envio:', error);
-        toast.error(`Erro ao enviar email: ${error.message}`, { id: toastId });
+        
+        // Criar mensagem de erro mais específica
+        let errorMessage = 'Erro ao enviar email: ';
+        if (error.message?.includes('Failed to fetch')) {
+          errorMessage = 'Erro de conexão com o servidor. Verifique sua conexão ou se a função do Supabase está online.';
+        } else {
+          errorMessage += error.message;
+        }
+        
+        toast.error(errorMessage, { id: toastId });
         setSending(false);
         return false;
       }
@@ -392,7 +408,14 @@ export function useEnvios() {
 
         if (functionError) {
           console.error('Erro ao reenviar email:', functionError);
-          toast.error(`Erro ao reenviar email: ${functionError.message}`, { id: toastId });
+          
+          // Mensagem de erro mais amigável para erros de conexão
+          if (functionError.message && functionError.message.includes('Failed to fetch')) {
+            toast.error('Erro de conexão com o servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.', { id: toastId });
+          } else {
+            toast.error(`Erro ao reenviar email: ${functionError.message}`, { id: toastId });
+          }
+          
           setSending(false);
 
           // Update envio with error status
@@ -428,7 +451,15 @@ export function useEnvios() {
         return true;
       } catch (error: any) {
         console.error('Erro ao reenviar email:', error);
-        toast.error(`Erro ao reenviar email: ${error.message}`, { id: toastId });
+        
+        let errorMessage = 'Erro ao reenviar email: ';
+        if (error.message?.includes('Failed to fetch')) {
+          errorMessage = 'Erro de conexão com o servidor. Verifique sua conexão ou se a função do Supabase está online.';
+        } else {
+          errorMessage += error.message;
+        }
+        
+        toast.error(errorMessage, { id: toastId });
         setSending(false);
         return false;
       }

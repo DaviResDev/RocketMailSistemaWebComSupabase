@@ -144,24 +144,42 @@ export async function testSmtpConnection(formData: SettingsFormData): Promise<an
     throw new Error("Preencha todos os campos de configuração SMTP antes de testar");
   }
   
-  // Chamar a função de teste SMTP
-  const response = await supabase.functions.invoke('test-smtp', {
-    body: {
-      smtp_server: formData.email_smtp,
-      smtp_port: Number(formData.email_porta),
-      smtp_user: formData.email_usuario,
-      smtp_password: formData.email_senha,
-      smtp_security: formData.smtp_seguranca,
-      use_resend: !formData.use_smtp
-    },
-  });
-  
-  console.log("Resposta do teste:", response);
-  
-  if (response.error) {
-    console.error("Erro ao testar conexão:", response.error);
-    throw new Error(`Erro ao testar conexão: ${response.error.message}`);
+  // Chamar a função de teste SMTP com tratamento de erro aprimorado
+  try {
+    const response = await supabase.functions.invoke('test-smtp', {
+      body: {
+        smtp_server: formData.email_smtp,
+        smtp_port: Number(formData.email_porta),
+        smtp_user: formData.email_usuario,
+        smtp_password: formData.email_senha,
+        smtp_security: formData.smtp_seguranca,
+        use_resend: !formData.use_smtp,
+        smtp_name: formData.smtp_nome
+      },
+    });
+    
+    console.log("Resposta do teste:", response);
+    
+    if (response.error) {
+      console.error("Erro ao testar conexão:", response.error);
+      
+      // Mensagem de erro mais amigável para erros de conexão
+      if (response.error.message && response.error.message.includes('Failed to fetch')) {
+        throw new Error('Erro de conexão com o servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.');
+      } else {
+        throw new Error(`Erro ao testar conexão: ${response.error.message}`);
+      }
+    }
+    
+    return response.data;
+  } catch (error: any) {
+    console.error("Erro ao testar conexão:", error);
+    
+    // Mensagem de erro mais amigável para erros comuns
+    if (error.message?.includes('Failed to fetch')) {
+      throw new Error('Erro de conexão com o servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.');
+    } else {
+      throw error;
+    }
   }
-  
-  return response.data;
 }

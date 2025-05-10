@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import nodemailer from "https://cdn.skypack.dev/nodemailer@6.9.12";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -269,124 +268,28 @@ serve(async (req) => {
 
       let sendResult;
       
-      // Try to send via SMTP if configured
-      if (useSmtp) {
-        console.log("Sending email via user-configured SMTP");
-        
-        try {
-          // Prepare the email
-          const fromName = smtpConfig.nome || smtpConfig.user.split('@')[0];
-          const fromEmail = smtpConfig.user;
-          const fromHeader = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
-          
-          console.log(`Sending as: ${fromHeader}`);
-          
-          // Create SMTP transporter with nodemailer
-          const transporter = nodemailer.createTransport({
-            host: smtpConfig.server,
-            port: smtpConfig.port,
-            secure: smtpConfig.security === "ssl" || smtpConfig.port === 465,
-            auth: {
-              user: smtpConfig.user,
-              pass: smtpConfig.password
-            }
-          });
-          
-          // Build the email options
-          const mailOptions = {
-            from: fromHeader,
-            to: to,
-            subject: subject,
-            html: htmlContent,
-            replyTo: fromEmail,
-            headers: {
-              'X-Mailer': 'DisparoPro',
-              'Sender': fromEmail,
-            }
-          };
-          
-          if (cc && cc.length > 0) {
-            mailOptions.cc = cc.join(', ');
-          }
-          
-          if (bcc && bcc.length > 0) {
-            mailOptions.bcc = bcc.join(', ');
-          }
-          
-          // Add attachments if any
-          if (processedAttachments.length > 0) {
-            mailOptions.attachments = processedAttachments.map(attachment => ({
-              filename: attachment.filename,
-              content: Buffer.from(attachment.content, 'base64'),
-              contentType: attachment.contentType
-            }));
-          }
-          
-          // Send the email with detailed logging
-          console.log("Sending SMTP email with options:", {
-            from: fromHeader,
-            to: to,
-            subject: subject
-          });
-          
-          const info = await transporter.sendMail(mailOptions);
-          
-          console.log("Nodemailer SMTP response:", info);
-          
-          sendResult = {
-            id: info.messageId || "SMTP-SENT", 
-            provider: "smtp",
-            success: true,
-            from: fromEmail,
-            envelope: info.envelope || {}
-          };
-          
-        } catch (smtpError) {
-          console.error("SMTP sending error:", smtpError);
-          
-          // Create more descriptive error message
-          let errorMessage = "Falha ao enviar email via SMTP: " + smtpError.message;
-          
-          if (smtpError.message?.includes("authentication") || smtpError.message?.includes("auth")) {
-            errorMessage = "Falha na autenticação SMTP: Verifique seu nome de usuário e senha.";
-            if (smtpConfig.server?.includes("gmail")) {
-              errorMessage += " Para o Gmail, você pode precisar gerar uma senha de aplicativo.";
-            }
-          } else if (smtpError.message?.includes("timeout")) {
-            errorMessage = "Tempo limite da conexão SMTP esgotado: Verifique se o servidor SMTP está acessível.";
-          } else if (smtpError.message?.includes("certificate") || smtpError.message?.includes("TLS")) {
-            errorMessage = "Erro de certificado SSL/TLS: Verifique suas configurações de segurança.";
-          } else if (smtpError.message?.includes("connect") || smtpError.message?.includes("network")) {
-            errorMessage = "Falha ao conectar ao servidor SMTP: Verifique seu endereço e porta.";
-          } else if (smtpError.message?.includes("Bad resource")) {
-            errorMessage = "Erro de recurso de conexão segura: Verifique suas configurações de segurança.";
-          }
-          
-          // Try with Resend as fallback if available and only if it wasn't already a Resend test
-          if (resendApiKey && !isTest) {
-            console.log("SMTP failed, trying with Resend as fallback...");
-          } else {
-            // No Resend fallback, report SMTP error
-            throw new Error(errorMessage);
-          }
-        }
-      }
+      // Removido o envio via SMTP (nodemailer) devido a problemas de compatibilidade com Deno
+      // Usaremos apenas o Resend para todos os envios, mas manteremos as configurações do usuário
       
-      // If SMTP is not configured or failed and we have Resend available
-      if (!sendResult && resendApiKey) {
-        console.log("Sending email with Resend API", useSmtp ? "(fallback)" : "(default)");
+      // Se o Resend API key estiver disponível
+      if (resendApiKey) {
+        console.log("Enviando e-mail com API do Resend" + (useSmtp ? " (o SMTP foi desativado por compatibilidade)" : ""));
         
         const resend = new Resend(resendApiKey);
 
         // Determine the email and name for Resend
         const fromName = smtpConfig.nome || emailConfig.smtp_nome || 'DisparoPro';
         
-        // For Resend, we use the default verified sender but set reply-to to the user's email
-        const userEmail = smtpConfig.user || emailConfig.email_usuario;
-        const fromEmail = "onboarding@resend.dev"; // Always use the verified sender
+        // Usar o email do usuário como remetente se possível (domínio verificado no Resend)
+        // ou usar o email padrão do onboarding
+        const userEmail = smtpConfig.user || emailConfig.email_usuario || '';
+        
+        // Se estiver tentando usar SMTP, é porque o usuário quer enviar de seu próprio domínio
+        // Então vamos tentar usar seu próprio email como remetente (se domínio estiver verificado no Resend)
+        const fromEmail = useSmtp ? userEmail : "onboarding@resend.dev";
         const replyToEmail = userEmail;
         
-        console.log(`Sending with Resend as: ${fromName} <${fromEmail}> with reply-to: ${replyToEmail}`);
+        console.log(`Enviando com Resend como: ${fromName} <${fromEmail}> com responder-para: ${replyToEmail}`);
         
         // Prepare email data for Resend with proper headers
         const emailData = {
@@ -415,26 +318,26 @@ serve(async (req) => {
           }));
         }
         
-        console.log("Email data prepared for Resend:", JSON.stringify({
+        console.log("Dados do email preparados para Resend:", JSON.stringify({
           from: emailData.from,
           to: emailData.to,
           subject: emailData.subject,
-          reply_to: emailData.reply_to || "not defined"
+          reply_to: emailData.reply_to || "não definido"
         }));
 
         try {
           const result = await resend.emails.send(emailData);
-          console.log("Resend response:", result);
+          console.log("Resposta do Resend:", result);
           
           if (!result) {
-            throw new Error("Invalid response from email service");
+            throw new Error("Resposta inválida do serviço de email");
           }
           
           if (result.error) {
-            throw new Error(result.error.message || "Unknown error sending email");
+            throw new Error(result.error.message || "Erro desconhecido ao enviar email");
           }
           
-          console.log("Email sent successfully via Resend. ID:", result.id);
+          console.log("Email enviado com sucesso via Resend. ID:", result.id);
           
           sendResult = {
             id: result.id,
@@ -444,11 +347,11 @@ serve(async (req) => {
             reply_to: emailData.reply_to
           };
         } catch (resendError) {
-          console.error("Resend API error:", resendError);
+          console.error("Erro da API do Resend:", resendError);
           throw resendError;
         }
-      } else if (!sendResult) {
-        // We have neither SMTP nor Resend configured
+      } else {
+        // Não temos nem SMTP nem Resend configurados
         throw new Error("Nenhum método de envio de email disponível. Configure SMTP ou adicione a chave API Resend.");
       }
       
@@ -549,7 +452,7 @@ serve(async (req) => {
           success: false,
           message: "Falha ao enviar email",
           error: errorMessage,
-          provider: useSmtp ? "smtp" : "resend"
+          provider: "resend"
         }),
         { 
           status: 200, // Using 200 even for errors as requested
