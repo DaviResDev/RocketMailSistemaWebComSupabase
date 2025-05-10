@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -8,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { BarChart, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Bar, Line } from 'recharts';
+import { BarChart, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Bar, Line, Cell } from 'recharts';
 import { Calendar, Mail, MessageSquare, Users, Clock, RefreshCcw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -146,9 +145,9 @@ export default function Dashboard() {
   }));
 
   // Define colors for the bar chart based on status
-  const getBarColor = (entry: any) => {
-    if (entry.name === 'Entregues') return "#22c55e";
-    if (entry.name === 'Pendentes') return "#f59e0b";
+  const getBarColor = (status: string) => {
+    if (status === 'Entregues') return "#22c55e";
+    if (status === 'Pendentes') return "#f59e0b";
     return "#ef4444";
   };
 
@@ -267,11 +266,9 @@ export default function Dashboard() {
                         <Bar 
                           dataKey="value" 
                           name="Quantidade"
-                          fill="#22c55e" 
-                          fillOpacity={0.8}
                         >
                           {statusChartData.map((entry, index) => (
-                            <Bar key={`cell-${index}`} fill={getBarColor(entry)} />
+                            <Cell key={`cell-${index}`} fill={getBarColor(entry.name)} />
                           ))}
                         </Bar>
                       </BarChart>
