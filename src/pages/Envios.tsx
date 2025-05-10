@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +22,23 @@ export default function Envios() {
   const [resendingId, setResendingId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Fetch envios when component mounts
     fetchEnvios();
+    
+    // Set up real-time subscription for updates
+    const enviosChannel = supabase
+      .channel('envios_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'envios' },
+        () => fetchEnvios()
+      )
+      .subscribe();
+      
+    // Clean up subscription when component unmounts
+    return () => {
+      supabase.removeChannel(enviosChannel);
+    };
   }, []);
 
   const handleResendEmail = async (id: string) => {

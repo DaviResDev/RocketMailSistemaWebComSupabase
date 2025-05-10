@@ -31,7 +31,7 @@ interface SchedulesListProps {
 }
 
 export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
-  const { sendEmail } = useEnvios();
+  const { sendEmail, fetchEnvios } = useEnvios();
   const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
 
   const handleSendNow = async (schedule: Schedule) => {
@@ -63,8 +63,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw new Error("Falha ao enviar o email");
       }
       
-      // Update schedule status to sent - this should happen in the edge function
-      // but we'll also update it here for immediate UI feedback
+      // Update schedule status to sent
       await supabase
         .from('agendamentos')
         .update({ status: 'enviado' })
@@ -72,8 +71,9 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       
       toast.success('Email enviado com sucesso!', { id: toastId });
       
-      // Refresh schedules list
-      onRefresh();
+      // Refresh both schedules list and email history
+      await fetchEnvios(); // Fetch email history to update Dashboard and Envios page
+      await onRefresh(); // Refresh schedules list
     } catch (err: any) {
       console.error('Erro ao enviar email agendado:', err);
       toast.error(`Erro ao enviar email: ${err.message}`);
