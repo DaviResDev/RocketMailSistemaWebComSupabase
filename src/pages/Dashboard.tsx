@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BarChart, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Bar, Line, Cell } from 'recharts';
-import { Calendar, Mail, MessageSquare, Users, Clock, RefreshCcw } from 'lucide-react';
+import { Calendar, Mail, MessageSquare, Users, Clock, RefreshCcw, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -81,7 +81,7 @@ export default function Dashboard() {
       if (scheduleError) throw scheduleError;
       setPendingSchedules(scheduleData || []);
 
-      // Fetch recent envios
+      // Fetch recent envios - now showing all statuses including success
       const { data: envioData, error: enviosError } = await supabase
         .from('envios')
         .select(`
@@ -392,7 +392,11 @@ export default function Dashboard() {
                         envio.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' : 
                         'bg-red-100 text-red-800'
                       }`}>
-                        <Clock className="h-3 w-3 mr-1" />
+                        {envio.status === 'entregue' ? (
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                        ) : (
+                          <Clock className="h-3 w-3 mr-1" />
+                        )}
                         {envio.status}
                       </div>
                     </div>

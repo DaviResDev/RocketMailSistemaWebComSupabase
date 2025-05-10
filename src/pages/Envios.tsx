@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Mail, MessageSquare, Paperclip, RefreshCw, AlertCircle, Download } from 'lucide-react';
+import { Mail, MessageSquare, Paperclip, RefreshCw, AlertCircle, Download, CheckCircle } from 'lucide-react';
 import { useEnvios } from '@/hooks/useEnvios';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -70,6 +70,15 @@ export default function Envios() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">Histórico de Envios</h1>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => fetchEnvios()}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Atualizar
+        </Button>
       </div>
 
       {loading ? (
@@ -128,7 +137,10 @@ export default function Envios() {
                                 envio.status === 'pendente' ? 'secondary' : 
                                 'destructive'}
                       >
-                        {envio.status}
+                        <span className="flex items-center gap-1">
+                          {envio.status === 'entregue' && <CheckCircle className="h-3 w-3" />}
+                          {envio.status}
+                        </span>
                       </Badge>
                       {envio.status === 'erro' && envio.erro && (
                         <TooltipProvider>
