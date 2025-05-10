@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useMetrics } from '@/hooks/useMetrics';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Dashboard() {
   const [period, setPeriod] = useState('7d');
@@ -144,6 +145,13 @@ export default function Dashboard() {
     value: item.count
   }));
 
+  // Define colors for the bar chart based on status
+  const getBarColor = (entry: any) => {
+    if (entry.name === 'Entregues') return "#22c55e";
+    if (entry.name === 'Pendentes') return "#f59e0b";
+    return "#ef4444";
+  };
+
   const emptyState = !stats.totalContatos && !stats.totalTemplates && !stats.totalEnvios && !stats.totalAgendamentos;
 
   return (
@@ -258,12 +266,14 @@ export default function Dashboard() {
                         <Legend />
                         <Bar 
                           dataKey="value" 
-                          name="Quantidade" 
-                          fill={({ name }) => 
-                            name === 'Entregues' ? '#22c55e' : 
-                            name === 'Pendentes' ? '#f59e0b' : '#ef4444'
-                          }
-                        />
+                          name="Quantidade"
+                          fill="#22c55e" 
+                          fillOpacity={0.8}
+                        >
+                          {statusChartData.map((entry, index) => (
+                            <Bar key={`cell-${index}`} fill={getBarColor(entry)} />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
