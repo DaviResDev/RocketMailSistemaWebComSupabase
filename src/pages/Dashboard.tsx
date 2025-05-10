@@ -9,13 +9,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BarChart, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Bar, Line } from 'recharts';
-import { Calendar, Mail, MessageSquare, Users, Clock } from 'lucide-react';
+import { Calendar, Mail, MessageSquare, Users, Clock, RefreshCcw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useMetrics } from '@/hooks/useMetrics';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const [period, setPeriod] = useState('7d');
@@ -30,89 +32,134 @@ export default function Dashboard() {
   const [recentEnvios, setRecentEnvios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { metrics, loading: metricsLoading, fetchMetrics } = useMetrics();
 
+  const fetchData = async () => {
+    if (!user) return;
+    setLoading(true);
+    
+    try {
+      const [contatos, templates, envios, agendamentos] = await Promise.all([
+        supabase.from('contatos').select('id').eq('user_id', user.id),
+        supabase.from('templates').select('id').eq('user_id', user.id),
+        supabase.from('envios').select('id').eq('user_id', user.id),
+        supabase.from('agendamentos').select('id').eq('user_id', user.id)
+      ]);
+
+      setStats({
+        totalContatos: contatos.data?.length || 0,
+        totalTemplates: templates.data?.length || 0,
+        totalEnvios: envios.data?.length || 0,
+        totalAgendamentos: agendamentos.data?.length || 0
+      });
+      
+      await fetchRecentData();
+    } catch (error) {
+      console.error('Erro ao carregar estatísticas:', error);
+      toast.error('Erro ao carregar dados do dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRecentData = async () => {
+    if (!user) return;
+
+    try {
+      // Fetch pending schedules
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('agendamentos')
+        .select(`
+          *,
+          contato:contatos(nome, email),
+          template:templates(nome)
+        `)
+        .eq('status', 'pendente')
+        .order('data_envio', { ascending: true })
+        .limit(5);
+
+      if (scheduleError) throw scheduleError;
+      setPendingSchedules(scheduleData || []);
+
+      // Fetch recent envios
+      const { data: envioData, error: enviosError } = await supabase
+        .from('envios')
+        .select(`
+          *,
+          contato:contatos(nome, email),
+          template:templates(nome)
+        `)
+        .order('data_envio', { ascending: false })
+        .limit(5);
+
+      if (enviosError) throw enviosError;
+      setRecentEnvios(envioData || []);
+    } catch (error) {
+      console.error('Erro ao carregar dados recentes:', error);
+    }
+  };
+  
+  // Subscribe to real-time updates
   useEffect(() => {
-    const fetchStats = async () => {
-      if (!user) return;
-
-      try {
-        const [contatos, templates, envios, agendamentos] = await Promise.all([
-          supabase.from('contatos').select('id').eq('user_id', user.id),
-          supabase.from('templates').select('id').eq('user_id', user.id),
-          supabase.from('envios').select('id').eq('user_id', user.id),
-          supabase.from('agendamentos').select('id').eq('user_id', user.id)
-        ]);
-
-        setStats({
-          totalContatos: contatos.data?.length || 0,
-          totalTemplates: templates.data?.length || 0,
-          totalEnvios: envios.data?.length || 0,
-          totalAgendamentos: agendamentos.data?.length || 0
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      } finally {
-        setLoading(false);
-      }
+    if (!user) return;
+    
+    fetchData();
+    
+    // Set up real-time subscription for updates
+    const enviosChannel = supabase
+      .channel('dashboard_envios_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'envios' },
+        () => fetchRecentData()
+      )
+      .subscribe();
+      
+    const agendamentosChannel = supabase
+      .channel('dashboard_agendamentos_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'agendamentos' },
+        () => fetchRecentData()
+      )
+      .subscribe();
+    
+    // Clean up subscriptions when component unmounts
+    return () => {
+      supabase.removeChannel(enviosChannel);
+      supabase.removeChannel(agendamentosChannel);
     };
-
-    fetchStats();
   }, [user]);
 
-  useEffect(() => {
-    const fetchPendingSchedules = async () => {
-      if (!user) return;
+  const handleRefresh = () => {
+    fetchData();
+    fetchMetrics();
+    toast.info('Atualizando dados do dashboard...');
+  };
 
-      try {
-        const { data, error } = await supabase
-          .from('agendamentos')
-          .select(`
-            *,
-            contato:contatos(nome, email),
-            template:templates(nome)
-          `)
-          .eq('status', 'pendente')
-          .order('data_envio', { ascending: true })
-          .limit(5);
-
-        if (error) throw error;
-        setPendingSchedules(data || []);
-      } catch (error) {
-        console.error('Error fetching pending schedules:', error);
-      }
-    };
-
-    const fetchRecentEnvios = async () => {
-      if (!user) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('envios')
-          .select(`
-            *,
-            contato:contatos(nome, email),
-            template:templates(nome)
-          `)
-          .order('data_envio', { ascending: false })
-          .limit(5);
-
-        if (error) throw error;
-        setRecentEnvios(data || []);
-      } catch (error) {
-        console.error('Error fetching recent envios:', error);
-      }
-    };
-
-    fetchPendingSchedules();
-    fetchRecentEnvios();
-  }, [user]);
+  // Prepare chart data for status distribution
+  const statusChartData = metrics.enviolPorStatus.map(item => ({
+    name: item.status === 'entregue' ? 'Entregues' : 
+          item.status === 'pendente' ? 'Pendentes' : 'Falhas',
+    value: item.count
+  }));
 
   const emptyState = !stats.totalContatos && !stats.totalTemplates && !stats.totalEnvios && !stats.totalAgendamentos;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleRefresh}
+            title="Atualizar dados"
+          >
+            <RefreshCcw className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Período:</span>
           <Select value={period} onValueChange={setPeriod}>
@@ -195,17 +242,37 @@ export default function Dashboard() {
             <>
               <Card className="col-span-2 md:col-span-1">
                 <CardHeader>
-                  <CardTitle>Envios por Canal</CardTitle>
+                  <CardTitle>Status dos Envios</CardTitle>
                   <CardDescription>
-                    Comparativo de mensagens enviadas via email e WhatsApp
+                    Distribuição dos envios por status
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="h-80">
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-muted-foreground">
-                      Dados de envio serão exibidos conforme você realizar envios
-                    </p>
-                  </div>
+                  {statusChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={statusChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar 
+                          dataKey="value" 
+                          name="Quantidade" 
+                          fill={({ name }) => 
+                            name === 'Entregues' ? '#22c55e' : 
+                            name === 'Pendentes' ? '#f59e0b' : '#ef4444'
+                          }
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-muted-foreground">
+                        Dados de envio serão exibidos conforme você realizar envios
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               <Card className="col-span-2 md:col-span-1">
@@ -240,7 +307,13 @@ export default function Dashboard() {
             <Button variant="outline" size="sm" onClick={() => navigate('/agendamentos')}>Ver todos</Button>
           </CardHeader>
           <CardContent>
-            {pendingSchedules.length === 0 ? (
+            {loading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : pendingSchedules.length === 0 ? (
               <div className="text-center py-6">
                 <p className="text-muted-foreground">
                   Nenhum envio agendado. Agende seu primeiro envio na página de agendamentos.
@@ -281,7 +354,13 @@ export default function Dashboard() {
             <Button variant="outline" size="sm" onClick={() => navigate('/envios')}>Ver todos</Button>
           </CardHeader>
           <CardContent>
-            {recentEnvios.length === 0 ? (
+            {loading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : recentEnvios.length === 0 ? (
               <div className="text-center py-6">
                 <p className="text-muted-foreground">
                   Nenhum envio realizado ainda. Comece enviando sua primeira mensagem.

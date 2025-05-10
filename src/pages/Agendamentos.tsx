@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SchedulesList } from '@/components/schedules/SchedulesList';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function Agendamentos() {
   const { schedules, loading, error, fetchSchedules } = useSchedules();
@@ -71,17 +72,19 @@ export default function Agendamentos() {
               Novo Agendamento
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Novo Agendamento</DialogTitle>
-              <DialogDescription>
-                Agende o envio de uma mensagem para um contato.
-              </DialogDescription>
-            </DialogHeader>
-            <ScheduleForm 
-              onCancel={() => setDialogOpen(false)}
-              onSuccess={handleScheduleCreated}
-            />
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh]">
+            <ScrollArea className="max-h-[80vh] pr-4">
+              <DialogHeader>
+                <DialogTitle>Novo Agendamento</DialogTitle>
+                <DialogDescription>
+                  Agende o envio de uma mensagem para um contato.
+                </DialogDescription>
+              </DialogHeader>
+              <ScheduleForm 
+                onCancel={() => setDialogOpen(false)}
+                onSuccess={handleScheduleCreated}
+              />
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       </div>

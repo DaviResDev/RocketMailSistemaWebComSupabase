@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import nodemailer from "https://cdn.skypack.dev/nodemailer@6.9.12";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,8 +60,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Server configuration error",
-          error: "Server configuration error: Missing Supabase credentials" 
+          message: "Erro de configuração do servidor",
+          error: "Erro de configuração do servidor: Credenciais Supabase faltando" 
         }),
         { 
           status: 200, 
@@ -81,8 +81,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Invalid request format",
-          error: "Invalid JSON format" 
+          message: "Formato de requisição inválido",
+          error: "Formato JSON inválido" 
         }),
         { 
           status: 200, 
@@ -99,8 +99,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Incomplete data for email sending",
-          error: "Missing required data: recipient, subject, content, or user ID" 
+          message: "Dados incompletos para envio de email",
+          error: "Dados obrigatórios faltando: destinatário, assunto, conteúdo ou ID do usuário" 
         }),
         { 
           status: 200, 
@@ -114,8 +114,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Invalid recipient email",
-          error: "Invalid email format for recipient" 
+          message: "Email de destinatário inválido",
+          error: "Formato de email inválido para o destinatário" 
         }),
         { 
           status: 200, 
@@ -124,8 +124,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Preparing to send email to: ${to}`);
-    console.log(`Subject: ${subject}`);
+    console.log(`Preparando para enviar email para: ${to}`);
+    console.log(`Assunto: ${subject}`);
     
     // Get settings from database for the specified user
     const { data: settingsData, error: settingsError } = await supabaseClient
@@ -139,8 +139,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Error fetching settings",
-          error: "Error fetching email settings: " + settingsError.message 
+          message: "Erro ao buscar configurações",
+          error: "Erro ao buscar configurações de email: " + settingsError.message 
         }),
         { 
           status: 200, 
@@ -154,8 +154,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Settings not found",
-          error: "Email settings not found for user" 
+          message: "Configurações não encontradas",
+          error: "Configurações de email não encontradas para o usuário" 
         }),
         { 
           status: 200, 
@@ -274,85 +274,50 @@ serve(async (req) => {
         console.log("Sending email via user-configured SMTP");
         
         try {
-          // SMTP sending implementation
-          const client = new SmtpClient();
-          
-          // Configure SMTP connection
-          const secure = smtpConfig.security === "ssl" || Number(smtpConfig.port) === 465;
-          console.log(`Using SMTP connection ${secure ? 'with SSL/TLS' : 'with STARTTLS'} to ${smtpConfig.server}:${smtpConfig.port}`);
-          
-          // Use standalone SMTP connection handler for better error tracking
-          if (secure) {
-            try {
-              await client.connectTLS({
-                hostname: smtpConfig.server,
-                port: Number(smtpConfig.port),
-                username: smtpConfig.user,
-                password: smtpConfig.password
-              });
-            } catch (connError) {
-              console.error("SMTP secure connection error:", connError);
-              throw new Error(`SMTP secure connection failed: ${connError.message}`);
-            }
-          } else {
-            try {
-              // For non-SSL connections, connect first then upgrade with STARTTLS
-              await client.connect({
-                hostname: smtpConfig.server,
-                port: Number(smtpConfig.port)
-              });
-            } catch (connError) {
-              console.error("SMTP connection error:", connError);
-              throw new Error(`SMTP connection failed: ${connError.message}`);
-            }
-
-            try {
-              await client.startTLS();
-            } catch (tlsError) {
-              console.error("SMTP TLS upgrade error:", tlsError);
-              throw new Error(`SMTP TLS upgrade failed: ${tlsError.message}`);
-            }
-            
-            try {
-              await client.login(smtpConfig.user, smtpConfig.password);
-            } catch (authError) {
-              console.error("SMTP authentication error:", authError);
-              throw new Error(`SMTP authentication failed: ${authError.message}`);
-            }
-          }
-          
           // Prepare the email
-          // Use the configured name if available, or just the user email
           const fromName = smtpConfig.nome || smtpConfig.user.split('@')[0];
           const fromEmail = smtpConfig.user;
-          const fromHeader = fromName 
-            ? `${fromName} <${fromEmail}>` 
-            : fromEmail;
+          const fromHeader = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
           
           console.log(`Sending as: ${fromHeader}`);
           
-          // Build the email
-          const emailOpts = {
+          // Create SMTP transporter with nodemailer
+          const transporter = nodemailer.createTransport({
+            host: smtpConfig.server,
+            port: smtpConfig.port,
+            secure: smtpConfig.security === "ssl" || smtpConfig.port === 465,
+            auth: {
+              user: smtpConfig.user,
+              pass: smtpConfig.password
+            }
+          });
+          
+          // Build the email options
+          const mailOptions = {
             from: fromHeader,
             to: to,
             subject: subject,
-            content: "text/html",
             html: htmlContent,
+            replyTo: fromEmail,
+            headers: {
+              'X-Mailer': 'DisparoPro',
+              'Sender': fromEmail,
+            }
           };
           
           if (cc && cc.length > 0) {
-            emailOpts.cc = cc;
+            mailOptions.cc = cc.join(', ');
           }
           
           if (bcc && bcc.length > 0) {
-            emailOpts.bcc = bcc;
+            mailOptions.bcc = bcc.join(', ');
           }
           
-          // Add attachments
+          // Add attachments if any
           if (processedAttachments.length > 0) {
-            emailOpts.attachments = processedAttachments.map(attachment => ({
+            mailOptions.attachments = processedAttachments.map(attachment => ({
               filename: attachment.filename,
-              content: attachment.content,
+              content: Buffer.from(attachment.content, 'base64'),
               contentType: attachment.contentType
             }));
           }
@@ -364,43 +329,37 @@ serve(async (req) => {
             subject: subject
           });
           
-          try {
-            const sendId = await client.send(emailOpts);
-            console.log("SMTP send response:", sendId);
-            await client.close();
+          const info = await transporter.sendMail(mailOptions);
           
-            console.log("Email sent successfully via SMTP:", sendId);
+          console.log("Nodemailer SMTP response:", info);
           
-            sendResult = {
-              id: sendId || "SMTP-SENT", 
-              provider: "smtp",
-              success: true,
-              from: fromEmail // Record the email address used
-            };
-          } catch (sendError) {
-            console.error("SMTP send error:", sendError);
-            throw new Error(`SMTP send failed: ${sendError.message}`);
-          }
+          sendResult = {
+            id: info.messageId || "SMTP-SENT", 
+            provider: "smtp",
+            success: true,
+            from: fromEmail,
+            envelope: info.envelope || {}
+          };
           
         } catch (smtpError) {
           console.error("SMTP sending error:", smtpError);
           
           // Create more descriptive error message
-          let errorMessage = "Failed to send email via SMTP: " + smtpError.message;
+          let errorMessage = "Falha ao enviar email via SMTP: " + smtpError.message;
           
           if (smtpError.message?.includes("authentication") || smtpError.message?.includes("auth")) {
-            errorMessage = "SMTP authentication failed: Check your username and password.";
+            errorMessage = "Falha na autenticação SMTP: Verifique seu nome de usuário e senha.";
             if (smtpConfig.server?.includes("gmail")) {
-              errorMessage += " For Gmail, you may need to generate an app password.";
+              errorMessage += " Para o Gmail, você pode precisar gerar uma senha de aplicativo.";
             }
           } else if (smtpError.message?.includes("timeout")) {
-            errorMessage = "SMTP connection timeout: Check if the SMTP server is accessible.";
+            errorMessage = "Tempo limite da conexão SMTP esgotado: Verifique se o servidor SMTP está acessível.";
           } else if (smtpError.message?.includes("certificate") || smtpError.message?.includes("TLS")) {
-            errorMessage = "SSL/TLS certificate error: Check your security settings.";
+            errorMessage = "Erro de certificado SSL/TLS: Verifique suas configurações de segurança.";
           } else if (smtpError.message?.includes("connect") || smtpError.message?.includes("network")) {
-            errorMessage = "Failed to connect to SMTP server: Check your address and port.";
+            errorMessage = "Falha ao conectar ao servidor SMTP: Verifique seu endereço e porta.";
           } else if (smtpError.message?.includes("Bad resource")) {
-            errorMessage = "Secure connection resource error: Check your security settings.";
+            errorMessage = "Erro de recurso de conexão segura: Verifique suas configurações de segurança.";
           }
           
           // Try with Resend as fallback if available and only if it wasn't already a Resend test
@@ -490,7 +449,7 @@ serve(async (req) => {
         }
       } else if (!sendResult) {
         // We have neither SMTP nor Resend configured
-        throw new Error("No email sending method available. Configure SMTP or add Resend API key.");
+        throw new Error("Nenhum método de envio de email disponível. Configure SMTP ou adicione a chave API Resend.");
       }
       
       // Email sent successfully - Update status if needed
@@ -553,7 +512,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Email sent successfully!",
+          message: "Email enviado com sucesso!",
           provider: sendResult.provider,
           from: sendResult.from, // Include sender address in response
           reply_to: sendResult.reply_to, // Include reply-to address if available
@@ -570,7 +529,7 @@ serve(async (req) => {
       console.error("Email sending error:", emailError);
       
       // Create a friendly error message
-      let errorMessage = "Error sending email: " + (emailError.message || "Unknown error");
+      let errorMessage = "Erro ao enviar email: " + (emailError.message || "Erro desconhecido");
       
       // Update agendamento for error case
       if (agendamento_id) {
@@ -588,7 +547,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false,
-          message: "Failed to send email",
+          message: "Falha ao enviar email",
           error: errorMessage,
           provider: useSmtp ? "smtp" : "resend"
         }),
@@ -602,12 +561,12 @@ serve(async (req) => {
     console.error("Error in send-email function:", error);
     
     // Create a friendly error message
-    const errorMessage = error.message || "Unknown error sending email";
+    const errorMessage = error.message || "Erro desconhecido ao enviar email";
     
     return new Response(
       JSON.stringify({ 
         success: false,
-        message: "Error processing email request",
+        message: "Erro ao processar requisição de email",
         error: errorMessage,
         timestamp: new Date().toISOString()
       }),

@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -24,10 +24,11 @@ export function useMetrics() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     if (!user) return;
 
     try {
+      setLoading(true);
       const [enviosResult, statusResult, canalResult] = await Promise.all([
         supabase
           .from('envios')
@@ -73,7 +74,37 @@ export function useMetrics() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+  
+  // Subscribe to real-time updates for the envios table
+  useEffect(() => {
+    if (!user) return;
+    
+    fetchMetrics();
+    
+    // Set up real-time subscription for new envios
+    const channel = supabase
+      .channel('envios_updates')
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'envios',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Received real-time update:', payload);
+          fetchMetrics();
+        }
+      )
+      .subscribe();
+    
+    // Clean up subscription when component unmounts
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchMetrics]);
 
   return {
     metrics,
