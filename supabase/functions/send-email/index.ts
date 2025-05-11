@@ -195,7 +195,7 @@ serve(async (req) => {
     if (useSmtp) {
       console.log("SMTP Server:", smtpConfig.server);
       console.log("SMTP Port:", smtpConfig.port);
-      console.log("SMTP User:", smtpConfig.user ? "Configured" : "Not configured");
+      console.log("SMTP User:", smtpConfig.user);
       console.log("SMTP Security:", smtpConfig.security);
     }
     
@@ -291,6 +291,14 @@ serve(async (req) => {
           // Log detalhados para debugging
           console.log(`Configurando conexão SMTP para ${smtpConfig.server}:${smtpConfig.port}`);
           console.log(`Usando fromEmail: ${fromEmail}, fromName: ${fromName}`);
+          
+          // Define message headers for proper domain identification
+          const messageHeaders = {
+            "From": `${fromName} <${fromEmail}>`,
+            "Message-ID": `<${Date.now()}.${Math.random().toString(36).substring(2)}@${fromEmail.split('@')[1]}>`,
+            "X-Mailer": "DisparoPro SMTP Client",
+            "X-Sender": fromEmail
+          };
 
           // Determinar o método de conexão com base na configuração de segurança
           if (smtpConfig.security === 'ssl') {
@@ -321,6 +329,7 @@ serve(async (req) => {
             subject: subject,
             content: "text/html",
             html: htmlContent,
+            headers: messageHeaders
           };
           
           // Adicionar CC se fornecidos
@@ -335,13 +344,18 @@ serve(async (req) => {
             console.log(`Adicionando BCC: ${bcc.join(', ')}`);
           }
           
+          // Adicionar anexos se fornecidos
+          if (processedAttachments.length > 0) {
+            emailData.attachments = processedAttachments.map(attachment => ({
+              filename: attachment.filename,
+              content: attachment.content,
+              contentType: attachment.contentType,
+            }));
+            console.log(`Adicionando ${processedAttachments.length} anexos ao email SMTP`);
+          }
+          
           // Log para rastreamento
           console.log(`Enviando email via SMTP: ${fromName} <${fromEmail}> para ${to}`);
-          
-          // TODO: Implementar anexos para SMTP direto
-          if (processedAttachments.length > 0) {
-            console.log("Aviso: Anexos ainda não são suportados com envio SMTP direto");
-          }
           
           // Enviar email
           const sendInfo = await client.send(emailData);
@@ -363,7 +377,8 @@ serve(async (req) => {
             server: smtpConfig.server,
             port: smtpConfig.port,
             sender_name: fromName,
-            sender_email: fromEmail
+            sender_email: fromEmail,
+            domain: fromEmail.split('@')[1]
           };
         } catch (smtpError) {
           console.error("Erro ao enviar via SMTP direto:", smtpError);
@@ -557,7 +572,8 @@ serve(async (req) => {
           from: sendResult.from, // Include sender address in response
           reply_to: sendResult.reply_to, // Include reply-to address if available
           info: {
-            messageId: sendResult.id
+            messageId: sendResult.id,
+            domain: sendResult.domain || (sendResult.from || '').split('@')[1]
           }
         }),
         { 

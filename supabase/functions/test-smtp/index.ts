@@ -79,6 +79,17 @@ serve(async (req) => {
         console.log(`Usando email: ${smtp_user}`);
         console.log(`Método de segurança: ${smtp_security}`);
         
+        // Get domain from email for message headers
+        const emailDomain = smtp_user.split('@')[1];
+        
+        // Define message headers for proper domain identification
+        const messageHeaders = {
+          "From": `${fromName} <${smtp_user}>`,
+          "Message-ID": `<${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}>`,
+          "X-Mailer": "DisparoPro SMTP Test",
+          "X-Sender": smtp_user
+        };
+        
         // Configurar cliente SMTP
         const client = new SmtpClient();
         
@@ -104,13 +115,14 @@ serve(async (req) => {
         
         console.log("Conexão SMTP estabelecida com sucesso!");
         
-        // Preparar dados do email
+        // Preparar dados do email com os headers personalizados
         const emailData = {
           from: `${fromName} <${smtp_user}>`,
           to: email,
           subject: "Teste de Email do DisparoPro",
           content: "text/html",
           html: htmlContent,
+          headers: messageHeaders
         };
         
         console.log(`Enviando email de teste: De: ${fromName} <${smtp_user}> Para: ${email}`);
@@ -135,7 +147,8 @@ serve(async (req) => {
               provider: "smtp",
               server: smtp_server,
               port: smtp_port,
-              from: `${fromName} <${smtp_user}>`
+              from: `${fromName} <${smtp_user}>`,
+              domain: emailDomain
             }
           }),
           {
