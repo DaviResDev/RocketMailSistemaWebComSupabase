@@ -10,17 +10,28 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Mail, MessageSquare, Paperclip, RefreshCw, AlertCircle, Download, CheckCircle } from 'lucide-react';
+import { Mail, MessageSquare, Paperclip, RefreshCw, AlertCircle, Download, CheckCircle, Trash2 } from 'lucide-react';
 import { useEnvios } from '@/hooks/useEnvios';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Envios() {
-  const { envios, loading, sending, fetchEnvios, resendEnvio } = useEnvios();
+  const { envios, loading, sending, fetchEnvios, resendEnvio, clearHistory } = useEnvios();
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
   useEffect(() => {
     // Fetch envios when component mounts
@@ -49,6 +60,15 @@ export default function Envios() {
     } finally {
       setResendingId(null);
     }
+  };
+
+  const handleClearHistory = async () => {
+    setIsConfirmDialogOpen(true);
+  };
+
+  const confirmClearHistory = async () => {
+    await clearHistory();
+    setIsConfirmDialogOpen(false);
   };
 
   const downloadAttachment = async (path: string, fileName: string) => {
@@ -86,15 +106,27 @@ export default function Envios() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">Histórico de Envios</h1>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => fetchEnvios()}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Atualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleClearHistory}
+            className="flex items-center gap-2"
+            disabled={loading || sending || envios.length === 0}
+          >
+            <Trash2 className="h-4 w-4" />
+            Limpar histórico
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => fetchEnvios()}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -212,6 +244,21 @@ export default function Envios() {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar histórico de envios</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isso removerá permanentemente todos os registros de envios do histórico.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmClearHistory}>Continuar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

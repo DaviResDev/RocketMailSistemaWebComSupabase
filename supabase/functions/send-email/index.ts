@@ -292,12 +292,18 @@ serve(async (req) => {
           console.log(`Configurando conexão SMTP para ${smtpConfig.server}:${smtpConfig.port}`);
           console.log(`Usando fromEmail: ${fromEmail}, fromName: ${fromName}`);
           
+          // Get email domain for message headers
+          const emailDomain = fromEmail.split('@')[1];
+          
           // Define message headers for proper domain identification
+          const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
           const messageHeaders = {
             "From": `${fromName} <${fromEmail}>`,
-            "Message-ID": `<${Date.now()}.${Math.random().toString(36).substring(2)}@${fromEmail.split('@')[1]}>`,
+            "Message-ID": `<${messageId}>`,
             "X-Mailer": "DisparoPro SMTP Client",
-            "X-Sender": fromEmail
+            "X-Sender": fromEmail,
+            "MIME-Version": "1.0",
+            "Content-Type": "text/html; charset=utf-8"
           };
 
           // Determinar o método de conexão com base na configuração de segurança
@@ -369,7 +375,7 @@ serve(async (req) => {
           console.log("Conexão SMTP fechada com sucesso");
           
           sendResult = {
-            id: `smtp-${Date.now()}`,
+            id: `smtp-${messageId}`,
             provider: "smtp",
             success: true,
             from: fromEmail,
@@ -378,7 +384,7 @@ serve(async (req) => {
             port: smtpConfig.port,
             sender_name: fromName,
             sender_email: fromEmail,
-            domain: fromEmail.split('@')[1]
+            domain: emailDomain
           };
         } catch (smtpError) {
           console.error("Erro ao enviar via SMTP direto:", smtpError);
@@ -629,7 +635,7 @@ serve(async (req) => {
       { 
         status: 200, // Using 200 even for errors as requested
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
-    );
-  }
-});
+        }
+      );
+    }
+  });

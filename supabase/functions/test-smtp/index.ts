@@ -82,12 +82,17 @@ serve(async (req) => {
         // Get domain from email for message headers
         const emailDomain = smtp_user.split('@')[1];
         
+        // Create a unique message ID
+        const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
+        
         // Define message headers for proper domain identification
         const messageHeaders = {
           "From": `${fromName} <${smtp_user}>`,
-          "Message-ID": `<${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}>`,
+          "Message-ID": `<${messageId}>`,
           "X-Mailer": "DisparoPro SMTP Test",
-          "X-Sender": smtp_user
+          "X-Sender": smtp_user,
+          "MIME-Version": "1.0",
+          "Content-Type": "text/html; charset=utf-8"
         };
         
         // Configurar cliente SMTP
@@ -148,7 +153,8 @@ serve(async (req) => {
               server: smtp_server,
               port: smtp_port,
               from: `${fromName} <${smtp_user}>`,
-              domain: emailDomain
+              domain: emailDomain,
+              message_id: messageId
             }
           }),
           {
