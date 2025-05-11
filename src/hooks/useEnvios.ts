@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +35,7 @@ export interface Envio {
   cc?: string[];
   bcc?: string[];
   attachments?: EnvioAttachment[];
+  resposta_smtp?: string; // Adicionado para armazenar resposta do servidor SMTP
 }
 
 // Form data including email content and recipient

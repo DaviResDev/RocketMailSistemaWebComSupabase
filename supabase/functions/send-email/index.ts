@@ -285,9 +285,12 @@ serve(async (req) => {
             password: smtpConfig.password,
           });
           
-          // Preparar dados do email
+          // Preparar dados do email - IMPORTANTE: Use o nome e email do usuário para configurar o From corretamente
+          const fromName = smtpConfig.nome || "DisparoPro";
+          const fromEmail = smtpConfig.user; // Usar o email do usuário configurado no SMTP
+          
           const emailData = {
-            from: `${smtpConfig.nome} <${smtpConfig.user}>`,
+            from: `${fromName} <${fromEmail}>`,
             to: to,
             subject: subject,
             content: "text/html",
@@ -324,7 +327,9 @@ serve(async (req) => {
             from: smtpConfig.user,
             reply_to: smtpConfig.user,
             server: smtpConfig.server,
-            port: smtpConfig.port
+            port: smtpConfig.port,
+            sender_name: fromName,
+            sender_email: fromEmail
           };
         } catch (smtpError) {
           console.error("Erro ao enviar via SMTP direto:", smtpError);
@@ -335,7 +340,7 @@ serve(async (req) => {
             
             const resend = new Resend(resendApiKey);
             const fromName = smtpConfig.nome || "DisparoPro";
-            const fromEmail = "onboarding@resend.dev";
+            const fromEmail = "onboarding@resend.dev"; // Usar endereço verificado do Resend
             const replyToEmail = smtpConfig.user;
             
             const emailData = {
@@ -455,6 +460,7 @@ serve(async (req) => {
       // Email sent successfully - Update status if needed
       if (contato_id && template_id && user_id) {
         try {
+          // Check if there's already an envio record for this combination
           const { data: envios } = await supabaseClient
             .from('envios')
             .select('id')
