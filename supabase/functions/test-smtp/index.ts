@@ -77,33 +77,54 @@ serve(async (req) => {
       try {
         console.log(`Testando conexão SMTP: ${smtp_server}:${smtp_port}`);
         console.log(`Usando email: ${smtp_user}`);
+        console.log(`Método de segurança: ${smtp_security}`);
         
         // Configurar cliente SMTP
         const client = new SmtpClient();
         
-        // Conectar ao servidor SMTP
-        await client.connectTLS({
-          hostname: smtp_server,
-          port: smtp_port,
-          username: smtp_user,
-          password: smtp_password,
-        });
+        // Conectar ao servidor SMTP usando o método apropriado para o tipo de segurança
+        if (smtp_security === 'ssl') {
+          console.log("Usando conexão SSL");
+          await client.connectTLS({
+            hostname: smtp_server,
+            port: smtp_port,
+            username: smtp_user,
+            password: smtp_password,
+          });
+        } else {
+          // Default para TLS/STARTTLS
+          console.log("Usando conexão TLS/STARTTLS");
+          await client.connectTLS({
+            hostname: smtp_server,
+            port: smtp_port,
+            username: smtp_user,
+            password: smtp_password,
+          });
+        }
         
         console.log("Conexão SMTP estabelecida com sucesso!");
         
-        // Enviar email
-        await client.send({
+        // Preparar dados do email
+        const emailData = {
           from: `${fromName} <${smtp_user}>`,
           to: email,
           subject: "Teste de Email do DisparoPro",
           content: "text/html",
           html: htmlContent,
-        });
+        };
+        
+        console.log(`Enviando email de teste: De: ${fromName} <${smtp_user}> Para: ${email}`);
+        
+        // Enviar email
+        const sendInfo = await client.send(emailData);
+        
+        // Log da resposta
+        console.log("Email de teste enviado com sucesso:", sendInfo);
         
         // Fechar conexão
         await client.close();
         
-        console.log("Email de teste enviado com sucesso via SMTP");
+        console.log("Conexão SMTP fechada com sucesso");
         
         // Retornar sucesso
         return new Response(

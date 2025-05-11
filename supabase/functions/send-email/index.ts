@@ -292,72 +292,79 @@ serve(async (req) => {
           console.log(`Configurando conexão SMTP para ${smtpConfig.server}:${smtpConfig.port}`);
           console.log(`Usando fromEmail: ${fromEmail}, fromName: ${fromName}`);
 
-          try {
-            // Conectar ao servidor SMTP com modo mais detalhado
+          // Determinar o método de conexão com base na configuração de segurança
+          if (smtpConfig.security === 'ssl') {
+            console.log("Usando conexão SSL");
             await client.connectTLS({
               hostname: smtpConfig.server,
               port: smtpConfig.port,
               username: smtpConfig.user,
               password: smtpConfig.password,
             });
-            
-            console.log("Conexão SMTP estabelecida com sucesso!");
-            
-            // Preparar dados do email
-            const emailData = {
-              from: `${fromName} <${fromEmail}>`,
-              to: to,
-              subject: subject,
-              content: "text/html",
-              html: htmlContent,
-            };
-            
-            // Adicionar CC se fornecidos
-            if (cc && cc.length > 0) {
-              emailData.cc = cc.join(', ');
-              console.log(`Adicionando CC: ${cc.join(', ')}`);
-            }
-            
-            // Adicionar BCC se fornecidos
-            if (bcc && bcc.length > 0) {
-              emailData.bcc = bcc.join(', ');
-              console.log(`Adicionando BCC: ${bcc.join(', ')}`);
-            }
-            
-            // Log para rastreamento
-            console.log(`Enviando email via SMTP: ${fromName} <${fromEmail}> para ${to}`);
-            
-            // TODO: Implementar anexos para SMTP direto
-            if (processedAttachments.length > 0) {
-              console.log("Aviso: Anexos ainda não são suportados com envio SMTP direto");
-            }
-            
-            // Enviar email
-            const sendInfo = await client.send(emailData);
-            
-            // Log da resposta
-            console.log("Email enviado com sucesso via SMTP direto:", sendInfo);
-            
-            // Fechar conexão
-            await client.close();
-            
-            console.log("Conexão SMTP fechada com sucesso");
-            
-            sendResult = {
-              id: `smtp-${Date.now()}`,
-              provider: "smtp",
-              success: true,
-              from: fromEmail,
-              reply_to: fromEmail,
-              server: smtpConfig.server,
+          } else {
+            // Usar TLS/STARTTLS para outros casos
+            console.log("Usando conexão TLS/STARTTLS");
+            await client.connectTLS({
+              hostname: smtpConfig.server,
               port: smtpConfig.port,
-              sender_name: fromName,
-              sender_email: fromEmail
-            };
-          } catch (smtpConnectionError) {
-            console.error("Erro na conexão SMTP:", smtpConnectionError);
-            throw new Error(`Erro na conexão SMTP: ${smtpConnectionError.message}`);
+              username: smtpConfig.user,
+              password: smtpConfig.password,
+            });
           }
+          
+          console.log("Conexão SMTP estabelecida com sucesso!");
+          
+          // Preparar dados do email
+          const emailData = {
+            from: `${fromName} <${fromEmail}>`,
+            to: to,
+            subject: subject,
+            content: "text/html",
+            html: htmlContent,
+          };
+          
+          // Adicionar CC se fornecidos
+          if (cc && cc.length > 0) {
+            emailData.cc = cc.join(', ');
+            console.log(`Adicionando CC: ${cc.join(', ')}`);
+          }
+          
+          // Adicionar BCC se fornecidos
+          if (bcc && bcc.length > 0) {
+            emailData.bcc = bcc.join(', ');
+            console.log(`Adicionando BCC: ${bcc.join(', ')}`);
+          }
+          
+          // Log para rastreamento
+          console.log(`Enviando email via SMTP: ${fromName} <${fromEmail}> para ${to}`);
+          
+          // TODO: Implementar anexos para SMTP direto
+          if (processedAttachments.length > 0) {
+            console.log("Aviso: Anexos ainda não são suportados com envio SMTP direto");
+          }
+          
+          // Enviar email
+          const sendInfo = await client.send(emailData);
+          
+          // Log da resposta
+          console.log("Email enviado com sucesso via SMTP direto:", sendInfo);
+          
+          // Fechar conexão
+          await client.close();
+          
+          console.log("Conexão SMTP fechada com sucesso");
+          
+          sendResult = {
+            id: `smtp-${Date.now()}`,
+            provider: "smtp",
+            success: true,
+            from: fromEmail,
+            reply_to: fromEmail,
+            server: smtpConfig.server,
+            port: smtpConfig.port,
+            sender_name: fromName,
+            sender_email: fromEmail
+          };
         } catch (smtpError) {
           console.error("Erro ao enviar via SMTP direto:", smtpError);
           
