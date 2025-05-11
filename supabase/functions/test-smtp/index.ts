@@ -76,6 +76,7 @@ serve(async (req) => {
     if (!use_resend && smtp_server && smtp_port && smtp_user && smtp_password) {
       try {
         console.log(`Testando conexão SMTP: ${smtp_server}:${smtp_port}`);
+        console.log(`Usando email: ${smtp_user}`);
         
         // Configurar cliente SMTP
         const client = new SmtpClient();
@@ -87,6 +88,8 @@ serve(async (req) => {
           username: smtp_user,
           password: smtp_password,
         });
+        
+        console.log("Conexão SMTP estabelecida com sucesso!");
         
         // Enviar email
         await client.send({
@@ -110,7 +113,8 @@ serve(async (req) => {
             details: {
               provider: "smtp",
               server: smtp_server,
-              port: smtp_port
+              port: smtp_port,
+              from: `${fromName} <${smtp_user}>`
             }
           }),
           {
