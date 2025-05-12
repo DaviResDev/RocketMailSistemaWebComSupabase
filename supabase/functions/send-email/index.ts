@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import nodemailer from "https://esm.sh/nodemailer@6.9.12";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -278,12 +278,9 @@ serve(async (req) => {
       
       // Se o usuário configurou SMTP e quer usar SMTP
       if (useSmtp) {
-        console.log("Tentando enviar e-mail via SMTP direto");
+        console.log("Tentando enviar e-mail via SMTP com Nodemailer");
         
         try {
-          // Configurar cliente SMTP
-          const client = new SmtpClient();
-          
           // Definir o fromName e fromEmail corretamente
           const fromName = smtpConfig.nome || "DisparoPro";
           const fromEmail = smtpConfig.user; // Usar o email do usuário configurado no SMTP
@@ -295,88 +292,77 @@ serve(async (req) => {
           // Get email domain for message headers
           const emailDomain = fromEmail.split('@')[1];
           
-          // Define message headers for proper domain identification
+          // Criar ID da mensagem único
           const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
-          const messageHeaders = {
-            "From": `${fromName} <${fromEmail}>`,
-            "Message-ID": `<${messageId}>`,
-            "X-Mailer": "DisparoPro SMTP Client",
-            "X-Sender": fromEmail,
-            "MIME-Version": "1.0",
-            "Content-Type": "text/html; charset=utf-8"
-          };
-
-          // Determinar o método de conexão com base na configuração de segurança
-          if (smtpConfig.security === 'ssl') {
-            console.log("Usando conexão SSL");
-            await client.connectTLS({
-              hostname: smtpConfig.server,
-              port: smtpConfig.port,
-              username: smtpConfig.user,
-              password: smtpConfig.password,
-            });
-          } else {
-            // Usar TLS/STARTTLS para outros casos
-            console.log("Usando conexão TLS/STARTTLS");
-            await client.connectTLS({
-              hostname: smtpConfig.server,
-              port: smtpConfig.port,
-              username: smtpConfig.user,
-              password: smtpConfig.password,
-            });
-          }
           
-          console.log("Conexão SMTP estabelecida com sucesso!");
+          // Configuração do transporte SMTP com Nodemailer
+          const secureConnection = smtpConfig.security === 'ssl' || smtpConfig.port === 465;
           
-          // Preparar dados do email
-          const emailData = {
-            from: `${fromName} <${fromEmail}>`,
+          let transporter = nodemailer.createTransport({
+            host: smtpConfig.server,
+            port: smtpConfig.port,
+            secure: secureConnection,
+            auth: {
+              user: smtpConfig.user,
+              pass: smtpConfig.password,
+            },
+            // Permitir conexões inseguras em desenvolvimento
+            tls: {
+              rejectUnauthorized: false,
+            },
+            // Configurações específicas para DEBUG
+            debug: true,
+            logger: true
+          });
+          
+          console.log("Transporte SMTP configurado com Nodemailer");
+          
+          // Criar opções do email
+          const mailOptions = {
+            from: `"${fromName}" <${fromEmail}>`,
             to: to,
             subject: subject,
-            content: "text/html",
             html: htmlContent,
-            headers: messageHeaders
+            messageId: `<${messageId}>`,
+            headers: {
+              'X-Mailer': 'DisparoPro Nodemailer',
+              'X-Sender': fromEmail,
+            },
           };
           
           // Adicionar CC se fornecidos
           if (cc && cc.length > 0) {
-            emailData.cc = cc.join(', ');
+            mailOptions.cc = cc.join(', ');
             console.log(`Adicionando CC: ${cc.join(', ')}`);
           }
           
           // Adicionar BCC se fornecidos
           if (bcc && bcc.length > 0) {
-            emailData.bcc = bcc.join(', ');
+            mailOptions.bcc = bcc.join(', ');
             console.log(`Adicionando BCC: ${bcc.join(', ')}`);
           }
           
           // Adicionar anexos se fornecidos
           if (processedAttachments.length > 0) {
-            emailData.attachments = processedAttachments.map(attachment => ({
+            mailOptions.attachments = processedAttachments.map(attachment => ({
               filename: attachment.filename,
-              content: attachment.content,
+              content: Buffer.from(attachment.content, 'base64'),
               contentType: attachment.contentType,
             }));
             console.log(`Adicionando ${processedAttachments.length} anexos ao email SMTP`);
           }
           
           // Log para rastreamento
-          console.log(`Enviando email via SMTP: ${fromName} <${fromEmail}> para ${to}`);
+          console.log(`Enviando email via SMTP Nodemailer: De: ${fromName} <${fromEmail}> para ${to}`);
           
           // Enviar email
-          const sendInfo = await client.send(emailData);
+          const info = await transporter.sendMail(mailOptions);
           
-          // Log da resposta
-          console.log("Email enviado com sucesso via SMTP direto:", sendInfo);
-          
-          // Fechar conexão
-          await client.close();
-          
-          console.log("Conexão SMTP fechada com sucesso");
+          console.log("Email enviado com sucesso via SMTP Nodemailer:", info);
           
           sendResult = {
-            id: `smtp-${messageId}`,
-            provider: "smtp",
+            id: info.messageId || `nodemailer-${messageId}`,
+            provider: "smtp_nodemailer",
             success: true,
             from: fromEmail,
             reply_to: fromEmail,
@@ -384,10 +370,11 @@ serve(async (req) => {
             port: smtpConfig.port,
             sender_name: fromName,
             sender_email: fromEmail,
-            domain: emailDomain
+            domain: emailDomain,
+            transport: "nodemailer"
           };
         } catch (smtpError) {
-          console.error("Erro ao enviar via SMTP direto:", smtpError);
+          console.error("Erro ao enviar via SMTP Nodemailer:", smtpError);
           
           // Tentar fallback para Resend se disponível
           if (resendApiKey) {
@@ -579,7 +566,8 @@ serve(async (req) => {
           reply_to: sendResult.reply_to, // Include reply-to address if available
           info: {
             messageId: sendResult.id,
-            domain: sendResult.domain || (sendResult.from || '').split('@')[1]
+            domain: sendResult.domain || (sendResult.from || '').split('@')[1],
+            transport: sendResult.transport || 'default'
           }
         }),
         { 

@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import nodemailer from "https://esm.sh/nodemailer@6.9.12";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,7 +63,7 @@ serve(async (req) => {
           <p>Olá,</p>
           <p>Este é um email de teste enviado pelo DisparoPro para verificar suas configurações de email.</p>
           <p>Seu email foi configurado corretamente!</p>
-          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP Direto'}</p>
+          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP usando Nodemailer'}</p>
           <p style="margin-top: 20px;">Atenciosamente,<br>Equipe DisparoPro</p>
         </div>
       </div>
@@ -85,76 +85,67 @@ serve(async (req) => {
         // Create a unique message ID
         const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
         
-        // Define message headers for proper domain identification
-        const messageHeaders = {
-          "From": `${fromName} <${smtp_user}>`,
-          "Message-ID": `<${messageId}>`,
-          "X-Mailer": "DisparoPro SMTP Test",
-          "X-Sender": smtp_user,
-          "MIME-Version": "1.0",
-          "Content-Type": "text/html; charset=utf-8"
-        };
+        // Determinar se a conexão deve ser segura
+        const secureConnection = smtp_security === 'ssl' || smtp_port === 465;
         
-        // Configurar cliente SMTP
-        const client = new SmtpClient();
+        // Configurar transporte Nodemailer
+        const transporter = nodemailer.createTransport({
+          host: smtp_server,
+          port: smtp_port,
+          secure: secureConnection,
+          auth: {
+            user: smtp_user,
+            pass: smtp_password
+          },
+          // Para desenvolvimento/teste, permitir certificados auto-assinados
+          tls: {
+            rejectUnauthorized: false
+          },
+          // Ativar logs para diagnóstico
+          debug: true,
+          logger: true
+        });
         
-        // Conectar ao servidor SMTP usando o método apropriado para o tipo de segurança
-        if (smtp_security === 'ssl') {
-          console.log("Usando conexão SSL");
-          await client.connectTLS({
-            hostname: smtp_server,
-            port: smtp_port,
-            username: smtp_user,
-            password: smtp_password,
-          });
-        } else {
-          // Default para TLS/STARTTLS
-          console.log("Usando conexão TLS/STARTTLS");
-          await client.connectTLS({
-            hostname: smtp_server,
-            port: smtp_port,
-            username: smtp_user,
-            password: smtp_password,
-          });
-        }
+        console.log("Transporte Nodemailer configurado, testando conexão...");
         
-        console.log("Conexão SMTP estabelecida com sucesso!");
+        // Testar conexão SMTP
+        await transporter.verify();
         
-        // Preparar dados do email com os headers personalizados
-        const emailData = {
-          from: `${fromName} <${smtp_user}>`,
+        console.log("Conexão SMTP testada com sucesso!");
+        
+        // Preparar dados do email
+        const mailOptions = {
+          from: `"${fromName}" <${smtp_user}>`,
           to: email,
           subject: "Teste de Email do DisparoPro",
-          content: "text/html",
           html: htmlContent,
-          headers: messageHeaders
+          messageId: `<${messageId}>`,
+          headers: {
+            'X-Mailer': 'DisparoPro Nodemailer',
+            'X-Sender': smtp_user
+          }
         };
         
         console.log(`Enviando email de teste: De: ${fromName} <${smtp_user}> Para: ${email}`);
         
         // Enviar email
-        const sendInfo = await client.send(emailData);
+        const info = await transporter.sendMail(mailOptions);
         
-        // Log da resposta
-        console.log("Email de teste enviado com sucesso:", sendInfo);
-        
-        // Fechar conexão
-        await client.close();
-        
-        console.log("Conexão SMTP fechada com sucesso");
+        console.log("Email de teste enviado com sucesso:", info);
         
         // Retornar sucesso
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Email de teste enviado com sucesso via SMTP!",
+            message: "Email de teste enviado com sucesso via SMTP com Nodemailer!",
             details: {
-              provider: "smtp",
+              provider: "smtp_nodemailer",
               server: smtp_server,
               port: smtp_port,
               from: `${fromName} <${smtp_user}>`,
               domain: emailDomain,
-              message_id: messageId
+              message_id: info.messageId || messageId,
+              transport: "nodemailer"
             }
           }),
           {

@@ -76,9 +76,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
           <div>
             <p><strong>Conexão bem-sucedida!</strong></p>
             <p>Um email de teste foi enviado para seu endereço. Verifique sua caixa de entrada.</p>
-            <p className="text-xs mt-2">{formData.use_smtp ? 
-              'Enviado via seu servidor SMTP configurado' : 
-              'Enviado via serviço Resend com seu email como resposta'}
+            <p className="text-xs mt-2">
+              {formData.use_smtp ? 
+                `Enviado via seu servidor SMTP configurado ${result.details?.transport === 'nodemailer' ? 'com Nodemailer' : ''}` : 
+                'Enviado via serviço Resend com seu email como resposta'}
             </p>
           </div>, 
           { duration: 6000 }
@@ -145,7 +146,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                   }
                 />
                 <Label htmlFor="use-smtp">
-                  {formData.use_smtp ? "Usar meu próprio servidor SMTP" : "Usar serviço Resend (recomendado)"}
+                  {formData.use_smtp ? "Usar meu próprio servidor SMTP (via Nodemailer)" : "Usar serviço Resend (recomendado)"}
                 </Label>
               </div>
 
@@ -275,10 +276,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                       </div>
                     </div>
                     
-                    <Alert className="mt-4 bg-yellow-50 text-yellow-800 border-yellow-200">
-                      <AlertCircle className="h-4 w-4" />
+                    <Alert className="mt-4 bg-green-50 text-green-800 border-green-200">
+                      <CheckCircle2 className="h-4 w-4" />
                       <AlertDescription>
-                        Certifique-se de que seu servidor SMTP permite envio de aplicativos externos e que você inseriu as configurações corretas de porta e segurança. Para Gmail, você deve criar uma senha de aplicativo.
+                        Agora usando Nodemailer, uma biblioteca robusta e amplamente utilizada para envio de emails via SMTP, proporcionando maior confiabilidade e compatibilidade com servidores.
                       </AlertDescription>
                     </Alert>
                   </div>
