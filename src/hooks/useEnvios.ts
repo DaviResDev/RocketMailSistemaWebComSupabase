@@ -170,7 +170,8 @@ export function useEnvios() {
     // Implementar proteção contra spam múltiplo (debounce)
     const now = Date.now();
     if (now - lastSendTime < DEBOUNCE_TIME) {
-      toast.warning('Por favor, aguarde alguns segundos antes de enviar outro email');
+      // Changed from toast.warning to toast.info since there's no warning method defined
+      const toastId = toast.info('Por favor, aguarde alguns segundos antes de enviar outro email');
       return false;
     }
     setLastSendTime(now);

@@ -181,39 +181,54 @@ function toast({ ...props }: Toast) {
 }
 
 // Add convenience methods to toast with proper type definitions
-toast.success = (message: string, options?: ToastOptions) => {
-  return toast({
+toast.success = (message: string, options?: ToastOptions): string => {
+  const result = toast({
     title: "Success",
     description: message,
     variant: "default",
     ...options,
   })
+  return result.id
 }
 
-toast.error = (message: string, options?: ToastOptions) => {
-  return toast({
+toast.error = (message: string, options?: ToastOptions): string => {
+  const result = toast({
     title: "Error",
     description: message,
     variant: "destructive",
     ...options,
   })
+  return result.id
 }
 
-toast.loading = (message: string, options?: ToastOptions) => {
-  return toast({
+toast.loading = (message: string, options?: ToastOptions): string => {
+  const result = toast({
     title: "Loading",
     description: message,
     ...options,
   })
+  return result.id
 }
 
-toast.info = (message: string, options?: ToastOptions) => {
-  return toast({
+toast.info = (message: string, options?: ToastOptions): string => {
+  const result = toast({
     title: "Info",
     description: message,
     variant: "default",
     ...options,
   })
+  return result.id
+}
+
+// Add a warning variant
+toast.warning = (message: string, options?: ToastOptions): string => {
+  const result = toast({
+    title: "Warning",
+    description: message,
+    variant: "default",
+    ...options,
+  })
+  return result.id
 }
 
 function useToast() {
