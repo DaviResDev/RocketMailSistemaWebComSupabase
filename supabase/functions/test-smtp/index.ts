@@ -99,7 +99,7 @@ serve(async (req) => {
         
         console.log(`Configuração de conexão segura: ${secureConnection} (baseado no security=${smtp_security} e porta=${smtp_port})`);
         
-        // Usando Denomailer em vez de Nodemailer para compatibilidade com Deno
+        // Configure the SMTP client using Denomailer
         const client = new SMTPClient({
           connection: {
             hostname: smtp_server,
