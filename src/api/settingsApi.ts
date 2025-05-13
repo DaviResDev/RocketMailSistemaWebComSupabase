@@ -53,7 +53,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       smtp_seguranca: 'tls', // Default to TLS
       smtp_nome: '',
       two_factor_enabled: false, // Default value
-      use_smtp: true // Default usa SMTP em vez de Resend
+      use_smtp: true // Default to SMTP instead of Resend
     };
   }
 }

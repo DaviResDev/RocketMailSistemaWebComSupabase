@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +17,9 @@ interface TestSmtpRequest {
   use_resend: boolean;
   smtp_name?: string;
 }
+
+// Import Nodemailer dynamically
+const nodemailer = require('nodemailer');
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -64,7 +66,7 @@ serve(async (req) => {
     // Basic check to prevent spam through this endpoint
     const email = smtp_user.trim().toLowerCase();
     
-    // Construir conteúdo HTML para email de teste
+    // Build HTML content for test email
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
@@ -72,21 +74,21 @@ serve(async (req) => {
           <p>Olá,</p>
           <p>Este é um email de teste enviado pelo DisparoPro para verificar suas configurações de email.</p>
           <p>Seu email foi configurado corretamente!</p>
-          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP via Denomailer'}</p>
+          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP via Nodemailer'}</p>
           <p style="margin-top: 20px;">Atenciosamente,<br>Equipe DisparoPro</p>
         </div>
       </div>
     `;
     
-    // Preparar dados para envio
+    // Prepare data for sending
     const fromName = smtp_name || "DisparoPro";
     
-    // Se o usuário escolheu usar SMTP e forneceu as credenciais necessárias
+    // If the user chose to use SMTP and provided the required credentials
     if (!use_resend && smtp_server && smtp_port && smtp_user && smtp_password) {
       try {
-        console.log(`Testando conexão SMTP: ${smtp_server}:${smtp_port}`);
-        console.log(`Usando email: ${smtp_user}`);
-        console.log(`Método de segurança: ${smtp_security}`);
+        console.log(`Testing SMTP connection: ${smtp_server}:${smtp_port}`);
+        console.log(`Using email: ${smtp_user}`);
+        console.log(`Security method: ${smtp_security}`);
         
         // Get domain from email for message headers
         const emailDomain = smtp_user.split('@')[1];
@@ -94,52 +96,47 @@ serve(async (req) => {
         // Create a unique message ID
         const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
         
-        // Determinar se a conexão deve ser segura
-        // Verificar porta para casos comuns
+        // Determine if connection should be secure
+        // Check port for common cases
         let correctedPort = smtp_port;
         if (smtp_port === 584) {
-          // Corrigir porta comum de digitação errada (584 em vez de 587)
-          console.log("Porta 584 detectada, corrigindo para 587 (porta padrão SMTP com TLS)");
+          // Fix common typo port (584 instead of 587)
+          console.log("Port 584 detected, correcting to 587 (standard SMTP port with TLS)");
           correctedPort = 587;
         }
         
         const secureConnection = smtp_security === 'ssl' || correctedPort === 465;
         
-        console.log(`Configuração de conexão segura: ${secureConnection} (baseado no security=${smtp_security} e porta=${correctedPort})`);
+        console.log(`Secure connection configuration: ${secureConnection} (based on security=${smtp_security} and port=${correctedPort})`);
         
-        // Configure the SMTP client using Denomailer
-        const client = new SMTPClient({
-          connection: {
-            hostname: smtp_server,
-            port: correctedPort,
-            tls: secureConnection,
-            auth: {
-              username: smtp_user,
-              password: smtp_password,
-            },
-            timeout: 30000, // 30 segundos de timeout
+        // Configure the SMTP client using Nodemailer
+        const transporter = nodemailer.createTransport({
+          host: smtp_server,
+          port: correctedPort,
+          secure: secureConnection,
+          auth: {
+            user: smtp_user,
+            pass: smtp_password,
           },
-          debug: {
-            log: true,
-          },
+          connectionTimeout: 30000, // 30 seconds timeout
+          greetingTimeout: 30000, // 30 seconds timeout
         });
 
-        console.log("Conexão SMTP configurada, enviando email de teste...");
+        console.log("SMTP connection configured, sending test email...");
         
-        // Enviar email
-        await client.send({
+        // Send email
+        const info = await transporter.sendMail({
           from: `${fromName} <${smtp_user}>`,
           to: email,
           subject: "Teste de Email do DisparoPro",
-          content: htmlContent,
           html: htmlContent,
         });
         
-        await client.close();
+        await transporter.close();
         
-        console.log("Email de teste enviado com sucesso via SMTP");
+        console.log("Test email sent successfully via SMTP");
         
-        // Retornar sucesso
+        // Return success
         return new Response(
           JSON.stringify({
             success: true,
@@ -151,7 +148,7 @@ serve(async (req) => {
               from: `${fromName} <${smtp_user}>`,
               domain: emailDomain,
               message_id: messageId,
-              transport: "denomailer"
+              transport: "nodemailer"
             }
           }),
           {
@@ -160,23 +157,23 @@ serve(async (req) => {
           }
         );
       } catch (smtpError) {
-        console.error("Erro SMTP detalhado:", smtpError);
+        console.error("Detailed SMTP error:", smtpError);
         
-        let errorMessage = smtpError.message || "Verifique suas credenciais e configurações do servidor";
+        let errorMessage = smtpError.message || "Check your credentials and server settings";
         
-        // Melhorar mensagens de erro comuns
+        // Improve common error messages
         if (errorMessage.includes('Authentication')) {
-          errorMessage = "Falha na autenticação. Verifique seu usuário e senha SMTP.";
+          errorMessage = "Authentication failed. Check your SMTP username and password.";
         } else if (errorMessage.includes('Connection refused')) {
-          errorMessage = "Conexão recusada. Verifique o servidor e porta SMTP.";
+          errorMessage = "Connection refused. Check your SMTP server and port.";
         } else if (errorMessage.includes('timeout')) {
-          errorMessage = "Conexão expirou. Verifique o servidor, porta SMTP, ou se há bloqueios de firewall. Tente usar outra rede ou verificar as configurações de firewall.";
+          errorMessage = "Connection timed out. Check your server, SMTP port, or if there are firewall blocks. Try using a different network or check firewall settings.";
         }
         
         return new Response(
           JSON.stringify({
             success: false,
-            message: `Erro de conexão SMTP: ${errorMessage}`,
+            message: `SMTP connection error: ${errorMessage}`,
             error: smtpError.message
           }),
           {
@@ -186,14 +183,14 @@ serve(async (req) => {
         );
       }
     } else {
-      // Usar Resend como fallback ou se escolhido pelo usuário
+      // Use Resend as fallback or if chosen by user
       const resendApiKey = Deno.env.get('RESEND_API_KEY');
       
       if (!resendApiKey) {
         return new Response(
           JSON.stringify({
             success: false,
-            message: "API do Resend não configurada no servidor"
+            message: "Resend API not configured on server"
           }),
           {
             status: 200,
@@ -202,26 +199,26 @@ serve(async (req) => {
         );
       }
       
-      console.log("Usando serviço Resend para teste de email");
+      console.log("Using Resend service for email test");
       
       const resend = new Resend(resendApiKey);
-      const fromEmail = "onboarding@resend.dev"; // Email verificado pelo Resend
+      const fromEmail = "onboarding@resend.dev"; // Verified email by Resend
       
-      // Enviar email de teste
+      // Send test email
       const result = await resend.emails.send({
         from: `${fromName} <${fromEmail}>`,
         to: [email],
         subject: "Teste de Email do DisparoPro",
         html: htmlContent,
-        reply_to: email // Usar o email do usuário como responder-para
+        reply_to: email // Use user's email as reply-to
       });
       
       if (result.error) {
-        console.error("Erro ao enviar email de teste com Resend:", result.error);
+        console.error("Error sending test email with Resend:", result.error);
         return new Response(
           JSON.stringify({
             success: false,
-            message: `Erro ao enviar email: ${result.error.message}`
+            message: `Error sending email: ${result.error.message}`
           }),
           {
             status: 200,
@@ -230,13 +227,13 @@ serve(async (req) => {
         );
       }
       
-      console.log("Email de teste enviado com sucesso via Resend");
+      console.log("Test email sent successfully via Resend");
       
-      // Retornar sucesso
+      // Return success
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Email de teste enviado com sucesso pelo Resend!",
+          message: "Test email sent successfully via Resend!",
           details: {
             provider: "resend",
             id: result.id,
@@ -249,12 +246,12 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error("Erro geral no teste SMTP:", error);
+    console.error("General error in SMTP test:", error);
     
     return new Response(
       JSON.stringify({
         success: false,
-        message: `Erro ao testar configurações: ${error.message || "Erro desconhecido"}`
+        message: `Error testing settings: ${error.message || "Unknown error"}`
       }),
       {
         status: 200,

@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,6 +38,9 @@ interface SmtpConfig {
   use_smtp: boolean;
 }
 
+// Import required Node.js modules
+const nodemailer = require('nodemailer');
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -60,8 +62,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Erro de configuração do servidor",
-          error: "Erro de configuração do servidor: Credenciais Supabase faltando" 
+          message: "Server configuration error",
+          error: "Server configuration error: Missing Supabase credentials" 
         }),
         { 
           status: 200, 
@@ -81,8 +83,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Formato de requisição inválido",
-          error: "Formato JSON inválido" 
+          message: "Invalid request format",
+          error: "Invalid JSON format" 
         }),
         { 
           status: 200, 
@@ -99,8 +101,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Dados incompletos para envio de email",
-          error: "Dados obrigatórios faltando: destinatário, assunto, conteúdo ou ID do usuário" 
+          message: "Incomplete data for email send",
+          error: "Missing required data: recipient, subject, content or user ID" 
         }),
         { 
           status: 200, 
@@ -114,8 +116,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Email de destinatário inválido",
-          error: "Formato de email inválido para o destinatário" 
+          message: "Invalid recipient email",
+          error: "Invalid email format for recipient" 
         }),
         { 
           status: 200, 
@@ -124,8 +126,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Preparando para enviar email para: ${to}`);
-    console.log(`Assunto: ${subject}`);
+    console.log(`Preparing to send email to: ${to}`);
+    console.log(`Subject: ${subject}`);
     
     // Get settings from database for the specified user
     const { data: settingsData, error: settingsError } = await supabaseClient
@@ -139,8 +141,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Erro ao buscar configurações",
-          error: "Erro ao buscar configurações de email: " + settingsError.message 
+          message: "Error fetching settings",
+          error: "Error fetching email settings: " + settingsError.message 
         }),
         { 
           status: 200, 
@@ -154,8 +156,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Configurações não encontradas",
-          error: "Configurações de email não encontradas para o usuário" 
+          message: "Settings not found",
+          error: "Email settings not found for user" 
         }),
         { 
           status: 200, 
@@ -184,9 +186,9 @@ serve(async (req) => {
       use_smtp: Boolean(emailConfig.use_smtp)
     };
     
-    // Corrigir porta se for um erro comum (584 em vez de 587)
+    // Fix port if it's a common error (584 instead of 587)
     if (smtpConfig.port === 584) {
-      console.log("Porta 584 detectada, corrigindo para 587 (porta padrão SMTP com TLS)");
+      console.log("Port 584 detected, correcting to 587 (standard SMTP port with TLS)");
       smtpConfig.port = 587;
     }
     
@@ -282,89 +284,85 @@ serve(async (req) => {
 
       let sendResult;
       
-      // Se o usuário configurou SMTP e quer usar SMTP
+      // If the user has configured SMTP and wants to use SMTP
       if (useSmtp) {
-        console.log("Tentando enviar e-mail via SMTP com Denomailer");
+        console.log("Attempting to send email via SMTP with Nodemailer");
         
         try {
-          // Definir o fromName e fromEmail corretamente
+          // Set fromName and fromEmail correctly
           const fromName = smtpConfig.nome || "DisparoPro";
-          const fromEmail = smtpConfig.user; // Usar o email do usuário configurado no SMTP
+          const fromEmail = smtpConfig.user; // Use the email configured in SMTP
           
-          // Log detalhados para debugging
-          console.log(`Configurando conexão SMTP para ${smtpConfig.server}:${smtpConfig.port}`);
-          console.log(`Usando fromEmail: ${fromEmail}, fromName: ${fromName}`);
+          // Detailed logs for debugging
+          console.log(`Configuring SMTP connection to ${smtpConfig.server}:${smtpConfig.port}`);
+          console.log(`Using fromEmail: ${fromEmail}, fromName: ${fromName}`);
           
           // Get email domain for message headers
           const emailDomain = fromEmail.split('@')[1];
           
-          // Criar ID da mensagem único
+          // Create unique message ID
           const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
           
-          // Configuração do transporte SMTP com Denomailer
+          // SMTP transport configuration with Nodemailer
           const secureConnection = smtpConfig.security === 'ssl' || smtpConfig.port === 465;
           
-          const client = new SMTPClient({
-            connection: {
-              hostname: smtpConfig.server,
-              port: smtpConfig.port,
-              tls: secureConnection,
-              auth: {
-                username: smtpConfig.user,
-                password: smtpConfig.password,
-              },
-              timeout: 30000, // 30 segundos de timeout em vez do padrão
+          const transporter = nodemailer.createTransport({
+            host: smtpConfig.server,
+            port: smtpConfig.port,
+            secure: secureConnection,
+            auth: {
+              user: smtpConfig.user,
+              pass: smtpConfig.password,
             },
-            debug: {
-              log: true,
-            },
+            connectionTimeout: 30000, // 30 second timeout instead of default
+            greetingTimeout: 30000,
+            socketTimeout: 60000,
           });
           
-          console.log("Transporte SMTP configurado com Denomailer");
+          console.log("SMTP transport configured with Nodemailer");
           
-          // Criar opções do email
+          // Create email options
           let emailData = {
             from: `${fromName} <${fromEmail}>`,
             to: to,
             subject: subject,
-            content: htmlContent,
             html: htmlContent,
           };
           
-          // Adicionar CC se fornecidos
+          // Add CC if provided
           if (cc && cc.length > 0) {
             emailData.cc = cc.join(', ');
-            console.log(`Adicionando CC: ${cc.join(', ')}`);
+            console.log(`Adding CC: ${cc.join(', ')}`);
           }
           
-          // Adicionar BCC se fornecidos
+          // Add BCC if provided
           if (bcc && bcc.length > 0) {
             emailData.bcc = bcc.join(', ');
-            console.log(`Adicionando BCC: ${bcc.join(', ')}`);
+            console.log(`Adding BCC: ${bcc.join(', ')}`);
           }
           
-          // Adicionar anexos se fornecidos
+          // Add attachments if provided
           if (processedAttachments.length > 0) {
             emailData.attachments = processedAttachments.map(attachment => ({
               filename: attachment.filename,
-              content: Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0)),
+              content: Buffer.from(attachment.content, 'base64'),
               contentType: attachment.contentType,
             }));
-            console.log(`Adicionando ${processedAttachments.length} anexos ao email SMTP`);
+            console.log(`Adding ${processedAttachments.length} attachments to SMTP email`);
           }
           
-          // Log para rastreamento
-          console.log(`Enviando email via SMTP Denomailer: De: ${fromName} <${fromEmail}> para ${to}`);
+          // Tracking log
+          console.log(`Sending email via SMTP Nodemailer: From: ${fromName} <${fromEmail}> to ${to}`);
           
-          // Enviar email
-          const info = await client.send(emailData);
-          await client.close();
+          // Send email
+          const info = await transporter.sendMail(emailData);
+          await transporter.close();
           
-          console.log("Email enviado com sucesso via SMTP Denomailer:", info);
+          console.log("Email sent successfully via SMTP Nodemailer:", info);
           
           sendResult = {
             id: messageId,
-            provider: "smtp_denomailer",
+            provider: "smtp_nodemailer",
             success: true,
             from: fromEmail,
             reply_to: fromEmail,
@@ -373,19 +371,19 @@ serve(async (req) => {
             sender_name: fromName,
             sender_email: fromEmail,
             domain: emailDomain,
-            transport: "denomailer"
+            transport: "nodemailer"
           };
         } catch (smtpError) {
-          console.error("Erro ao enviar via SMTP Denomailer:", smtpError);
+          console.error("Error sending via SMTP Nodemailer:", smtpError);
           
-          // Se o usuário configurou explicitamente para usar SMTP, não fazer fallback para Resend
+          // If the user explicitly configured to use SMTP, don't fallback to Resend
           if (!resendApiKey) {
-            throw new Error(`Erro no SMTP: ${smtpError.message}`);
+            throw new Error(`SMTP Error: ${smtpError.message}`);
           }
           
-          console.log("Erro SMTP, tentando fallback com Resend...");
+          console.log("SMTP error, trying fallback with Resend...");
           
-          // Usar Resend como fallback se houver erro no SMTP
+          // Use Resend as fallback if there's an error with SMTP
           const resend = new Resend(resendApiKey);
           const fromName = smtpConfig.nome || "DisparoPro";
           const fromEmail = "onboarding@resend.dev";
@@ -406,7 +404,7 @@ serve(async (req) => {
           });
           
           if (result.error) {
-            throw new Error(`Erro no SMTP e no fallback Resend: ${result.error.message}`);
+            throw new Error(`SMTP error and Resend fallback error: ${result.error.message}`);
           }
           
           sendResult = {
@@ -418,18 +416,18 @@ serve(async (req) => {
             error_original: smtpError.message
           };
           
-          console.log("Email enviado com sucesso via fallback Resend após falha SMTP");
+          console.log("Email sent successfully via fallback Resend after SMTP failure");
         }
       } else if (resendApiKey) {
-        // Usar Resend somente se o usuário escolheu não usar SMTP
-        console.log("Enviando e-mail com API do Resend");
+        // Use Resend only if the user chose not to use SMTP
+        console.log("Sending email with Resend API");
         
         const resend = new Resend(resendApiKey);
         const fromName = smtpConfig.nome || "DisparoPro";
         const fromEmail = "onboarding@resend.dev";
         const replyToEmail = smtpConfig.user;
         
-        console.log(`Enviando com Resend como: ${fromName} <${fromEmail}> com responder-para: ${replyToEmail}`);
+        console.log(`Sending with Resend as: ${fromName} <${fromEmail}> with reply-to: ${replyToEmail}`);
         
         // Prepare email data for Resend with proper headers
         const emailData = {
@@ -458,25 +456,25 @@ serve(async (req) => {
           }));
         }
         
-        console.log("Dados do email preparados para Resend:", JSON.stringify({
+        console.log("Email data prepared for Resend:", JSON.stringify({
           from: emailData.from,
           to: emailData.to,
           subject: emailData.subject,
-          reply_to: emailData.reply_to || "não definido"
+          reply_to: emailData.reply_to || "not defined"
         }));
 
         const result = await resend.emails.send(emailData);
-        console.log("Resposta do Resend:", result);
+        console.log("Resend response:", result);
         
         if (!result) {
-          throw new Error("Resposta inválida do serviço de email");
+          throw new Error("Invalid response from email service");
         }
         
         if (result.error) {
-          throw new Error(result.error.message || "Erro desconhecido ao enviar email");
+          throw new Error(result.error.message || "Unknown error sending email");
         }
         
-        console.log("Email enviado com sucesso via Resend. ID:", result.id);
+        console.log("Email sent successfully via Resend. ID:", result.id);
         
         sendResult = {
           id: result.id,
@@ -486,8 +484,8 @@ serve(async (req) => {
           reply_to: emailData.reply_to
         };
       } else {
-        // Não temos nem SMTP nem Resend configurados
-        throw new Error("Nenhum método de envio de email disponível. Configure SMTP ou adicione a chave API Resend.");
+        // We have neither SMTP nor Resend configured
+        throw new Error("No email sending method available. Configure SMTP or add Resend API key.");
       }
       
       // Email sent successfully - Update status if needed
@@ -551,7 +549,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Email enviado com sucesso!",
+          message: "Email sent successfully!",
           provider: sendResult.provider,
           from: sendResult.from, // Include sender address in response
           reply_to: sendResult.reply_to, // Include reply-to address if available
@@ -570,7 +568,7 @@ serve(async (req) => {
       console.error("Email sending error:", emailError);
       
       // Create a friendly error message
-      let errorMessage = "Erro ao enviar email: " + (emailError.message || "Erro desconhecido");
+      let errorMessage = "Error sending email: " + (emailError.message || "Unknown error");
       
       // Update agendamento for error case
       if (agendamento_id) {
@@ -588,7 +586,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false,
-          message: "Falha ao enviar email",
+          message: "Failed to send email",
           error: errorMessage,
           provider: useSmtp ? "smtp" : "resend"
         }),
@@ -602,12 +600,12 @@ serve(async (req) => {
     console.error("Error in send-email function:", error);
     
     // Create a friendly error message
-    const errorMessage = error.message || "Erro desconhecido ao enviar email";
+    const errorMessage = error.message || "Unknown error sending email";
     
     return new Response(
       JSON.stringify({ 
         success: false,
-        message: "Erro ao processar requisição de email",
+        message: "Error processing email request",
         error: errorMessage,
         timestamp: new Date().toISOString()
       }),
