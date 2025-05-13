@@ -137,7 +137,10 @@ function dispatch(action: Action) {
   })
 }
 
-interface Toast extends Omit<ToasterToast, "id"> {}
+// Updated interface with optional id
+interface Toast extends Omit<ToasterToast, "id"> {
+  id?: string;
+}
 
 type ToastOptions = Partial<Omit<Toast, "description">> & {
   id?: string;
