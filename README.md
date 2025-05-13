@@ -30,6 +30,7 @@ Users can configure their email sending preferences in the Settings page:
 
 - Backend uses Nodemailer for SMTP connections
 - Resend API integration for fallback or when SMTP isn't configured
+- Modular system with shared email-sender.js module
 - Automatic error handling and connection timeout settings
 - Built with security and reliability in mind
 
@@ -41,3 +42,10 @@ The system features comprehensive error handling:
 - Authentication failure handling
 - Port auto-correction for common typos (584 → 587)
 - Fallback to Resend if SMTP fails
+
+## Domain Configuration
+
+To send emails from your own domain:
+- Use the SMTP option with your email provider's SMTP settings (Gmail, Outlook, etc.)
+- Ensure your email provider allows SMTP access (may require app password for Gmail)
+- For Gmail, enable 2FA and create an app password at: https://myaccount.google.com/apppasswords

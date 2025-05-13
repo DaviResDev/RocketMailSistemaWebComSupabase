@@ -48,3 +48,7 @@ verify_jwt = true
 [[edge_functions.import_map]]
 from = "nodemailer"
 to = "npm:nodemailer@6.9.12"
+
+[[edge_functions.import_map]]
+from = "resend"
+to = "npm:resend@1.1.0"

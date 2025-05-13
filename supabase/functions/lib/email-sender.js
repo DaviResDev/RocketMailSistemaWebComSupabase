@@ -24,7 +24,7 @@ const sendEmailViaSMTP = async (config, payload) => {
   const transporter = nodemailer.createTransport({
     host: config.host,
     port: config.port,
-    secure: config.port === 465, // true for 465, false for other ports
+    secure: config.secure || config.port === 465, // true for 465, false for other ports
     auth: {
       user: config.user,
       pass: config.pass,

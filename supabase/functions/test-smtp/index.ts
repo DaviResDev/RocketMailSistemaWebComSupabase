@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Resend } from "https://esm.sh/resend@1.1.0";
+import { Resend } from "npm:resend@1.1.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,8 +18,8 @@ interface TestSmtpRequest {
   smtp_name?: string;
 }
 
-// Import Nodemailer dynamically
-const nodemailer = require('nodemailer');
+// Import email sender module
+import emailSender from "../lib/email-sender.js";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -109,30 +109,22 @@ serve(async (req) => {
         
         console.log(`Secure connection configuration: ${secureConnection} (based on security=${smtp_security} and port=${correctedPort})`);
         
-        // Configure the SMTP client using Nodemailer
-        const transporter = nodemailer.createTransport({
-          host: smtp_server,
-          port: correctedPort,
-          secure: secureConnection,
-          auth: {
+        // Configure the SMTP client and send test email
+        const result = await emailSender.sendEmailViaSMTP(
+          {
+            host: smtp_server,
+            port: correctedPort,
+            secure: secureConnection,
             user: smtp_user,
             pass: smtp_password,
+            name: fromName
           },
-          connectionTimeout: 30000, // 30 seconds timeout
-          greetingTimeout: 30000, // 30 seconds timeout
-        });
-
-        console.log("SMTP connection configured, sending test email...");
-        
-        // Send email
-        const info = await transporter.sendMail({
-          from: `${fromName} <${smtp_user}>`,
-          to: email,
-          subject: "Teste de Email do DisparoPro",
-          html: htmlContent,
-        });
-        
-        await transporter.close();
+          {
+            to: email,
+            subject: "Teste de Email do DisparoPro",
+            html: htmlContent
+          }
+        );
         
         console.log("Test email sent successfully via SMTP");
         
@@ -201,24 +193,42 @@ serve(async (req) => {
       
       console.log("Using Resend service for email test");
       
-      const resend = new Resend(resendApiKey);
-      const fromEmail = "onboarding@resend.dev"; // Verified email by Resend
-      
-      // Send test email
-      const result = await resend.emails.send({
-        from: `${fromName} <${fromEmail}>`,
-        to: [email],
-        subject: "Teste de Email do DisparoPro",
-        html: htmlContent,
-        reply_to: email // Use user's email as reply-to
-      });
-      
-      if (result.error) {
-        console.error("Error sending test email with Resend:", result.error);
+      try {
+        // Send email via our module
+        const result = await emailSender.sendEmailViaResend(
+          resendApiKey,
+          fromName,
+          email,
+          {
+            to: email,
+            subject: "Teste de Email do DisparoPro",
+            html: htmlContent
+          }
+        );
+        
+        console.log("Test email sent successfully via Resend");
+        
+        // Return success
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Test email sent successfully via Resend!",
+            details: {
+              provider: "resend",
+              id: result.id,
+            }
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          }
+        );
+      } catch (error) {
+        console.error("Error sending test email with Resend:", error);
         return new Response(
           JSON.stringify({
             success: false,
-            message: `Error sending email: ${result.error.message}`
+            message: `Error sending email: ${error.message}`
           }),
           {
             status: 200,
@@ -226,24 +236,6 @@ serve(async (req) => {
           }
         );
       }
-      
-      console.log("Test email sent successfully via Resend");
-      
-      // Return success
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Test email sent successfully via Resend!",
-          details: {
-            provider: "resend",
-            id: result.id,
-          }
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        }
-      );
     }
   } catch (error) {
     console.error("General error in SMTP test:", error);

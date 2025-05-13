@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Resend } from "https://esm.sh/resend@1.1.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,8 +37,8 @@ interface SmtpConfig {
   use_smtp: boolean;
 }
 
-// Import required Node.js modules
-const nodemailer = require('nodemailer');
+// Import our email sender module
+import emailSender from "../lib/email-sender.js";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -192,21 +191,6 @@ serve(async (req) => {
       smtpConfig.port = 587;
     }
     
-    // Check if all required fields for SMTP are present
-    const useSmtp = smtpConfig.use_smtp && 
-                    smtpConfig.server && 
-                    smtpConfig.port && 
-                    smtpConfig.user && 
-                    smtpConfig.password;
-    
-    console.log("Using SMTP:", useSmtp);
-    if (useSmtp) {
-      console.log("SMTP Server:", smtpConfig.server);
-      console.log("SMTP Port:", smtpConfig.port);
-      console.log("SMTP User:", smtpConfig.user);
-      console.log("SMTP Security:", smtpConfig.security);
-    }
-    
     // Generate signature with area_negocio if available
     let signature = "";
     if (emailConfig.area_negocio) {
@@ -282,211 +266,46 @@ serve(async (req) => {
         }
       }
 
-      let sendResult;
+      // Check if all required fields for SMTP are present
+      const useSmtp = smtpConfig.use_smtp && 
+                    smtpConfig.server && 
+                    smtpConfig.port && 
+                    smtpConfig.user && 
+                    smtpConfig.password;
       
-      // If the user has configured SMTP and wants to use SMTP
+      console.log("Using SMTP:", useSmtp);
       if (useSmtp) {
-        console.log("Attempting to send email via SMTP with Nodemailer");
-        
-        try {
-          // Set fromName and fromEmail correctly
-          const fromName = smtpConfig.nome || "DisparoPro";
-          const fromEmail = smtpConfig.user; // Use the email configured in SMTP
-          
-          // Detailed logs for debugging
-          console.log(`Configuring SMTP connection to ${smtpConfig.server}:${smtpConfig.port}`);
-          console.log(`Using fromEmail: ${fromEmail}, fromName: ${fromName}`);
-          
-          // Get email domain for message headers
-          const emailDomain = fromEmail.split('@')[1];
-          
-          // Create unique message ID
-          const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
-          
-          // SMTP transport configuration with Nodemailer
-          const secureConnection = smtpConfig.security === 'ssl' || smtpConfig.port === 465;
-          
-          const transporter = nodemailer.createTransport({
-            host: smtpConfig.server,
-            port: smtpConfig.port,
-            secure: secureConnection,
-            auth: {
-              user: smtpConfig.user,
-              pass: smtpConfig.password,
-            },
-            connectionTimeout: 30000, // 30 second timeout instead of default
-            greetingTimeout: 30000,
-            socketTimeout: 60000,
-          });
-          
-          console.log("SMTP transport configured with Nodemailer");
-          
-          // Create email options
-          let emailData = {
-            from: `${fromName} <${fromEmail}>`,
-            to: to,
-            subject: subject,
-            html: htmlContent,
-          };
-          
-          // Add CC if provided
-          if (cc && cc.length > 0) {
-            emailData.cc = cc.join(', ');
-            console.log(`Adding CC: ${cc.join(', ')}`);
-          }
-          
-          // Add BCC if provided
-          if (bcc && bcc.length > 0) {
-            emailData.bcc = bcc.join(', ');
-            console.log(`Adding BCC: ${bcc.join(', ')}`);
-          }
-          
-          // Add attachments if provided
-          if (processedAttachments.length > 0) {
-            emailData.attachments = processedAttachments.map(attachment => ({
-              filename: attachment.filename,
-              content: Buffer.from(attachment.content, 'base64'),
-              contentType: attachment.contentType,
-            }));
-            console.log(`Adding ${processedAttachments.length} attachments to SMTP email`);
-          }
-          
-          // Tracking log
-          console.log(`Sending email via SMTP Nodemailer: From: ${fromName} <${fromEmail}> to ${to}`);
-          
-          // Send email
-          const info = await transporter.sendMail(emailData);
-          await transporter.close();
-          
-          console.log("Email sent successfully via SMTP Nodemailer:", info);
-          
-          sendResult = {
-            id: messageId,
-            provider: "smtp_nodemailer",
-            success: true,
-            from: fromEmail,
-            reply_to: fromEmail,
-            server: smtpConfig.server,
-            port: smtpConfig.port,
-            sender_name: fromName,
-            sender_email: fromEmail,
-            domain: emailDomain,
-            transport: "nodemailer"
-          };
-        } catch (smtpError) {
-          console.error("Error sending via SMTP Nodemailer:", smtpError);
-          
-          // If the user explicitly configured to use SMTP, don't fallback to Resend
-          if (!resendApiKey) {
-            throw new Error(`SMTP Error: ${smtpError.message}`);
-          }
-          
-          console.log("SMTP error, trying fallback with Resend...");
-          
-          // Use Resend as fallback if there's an error with SMTP
-          const resend = new Resend(resendApiKey);
-          const fromName = smtpConfig.nome || "DisparoPro";
-          const fromEmail = "onboarding@resend.dev";
-          
-          const result = await resend.emails.send({
-            from: `${fromName} <${fromEmail}>`,
-            to: [to],
-            subject: subject,
-            html: htmlContent,
-            cc: cc,
-            bcc: bcc,
-            reply_to: smtpConfig.user,
-            attachments: processedAttachments.length > 0 ? 
-              processedAttachments.map(attachment => ({
-                filename: attachment.filename,
-                content: attachment.content,
-              })) : undefined
-          });
-          
-          if (result.error) {
-            throw new Error(`SMTP error and Resend fallback error: ${result.error.message}`);
-          }
-          
-          sendResult = {
-            id: result.id,
-            provider: "resend_fallback",
-            success: true,
-            from: fromEmail,
-            reply_to: smtpConfig.user,
-            error_original: smtpError.message
-          };
-          
-          console.log("Email sent successfully via fallback Resend after SMTP failure");
-        }
-      } else if (resendApiKey) {
-        // Use Resend only if the user chose not to use SMTP
-        console.log("Sending email with Resend API");
-        
-        const resend = new Resend(resendApiKey);
-        const fromName = smtpConfig.nome || "DisparoPro";
-        const fromEmail = "onboarding@resend.dev";
-        const replyToEmail = smtpConfig.user;
-        
-        console.log(`Sending with Resend as: ${fromName} <${fromEmail}> with reply-to: ${replyToEmail}`);
-        
-        // Prepare email data for Resend with proper headers
-        const emailData = {
-          from: `${fromName} <${fromEmail}>`,
-          to: [to],
-          subject: subject,
-          html: htmlContent,
-          reply_to: replyToEmail
-        };
-        
-        // Add CC recipients if provided
-        if (cc && cc.length > 0) {
-          emailData.cc = cc;
-        }
-        
-        // Add BCC recipients if provided
-        if (bcc && bcc.length > 0) {
-          emailData.bcc = bcc;
-        }
-        
-        // Add attachments if any
-        if (processedAttachments.length > 0) {
-          emailData.attachments = processedAttachments.map(attachment => ({
-            filename: attachment.filename,
-            content: attachment.content, // Resend expects content as base64 string
-          }));
-        }
-        
-        console.log("Email data prepared for Resend:", JSON.stringify({
-          from: emailData.from,
-          to: emailData.to,
-          subject: emailData.subject,
-          reply_to: emailData.reply_to || "not defined"
-        }));
-
-        const result = await resend.emails.send(emailData);
-        console.log("Resend response:", result);
-        
-        if (!result) {
-          throw new Error("Invalid response from email service");
-        }
-        
-        if (result.error) {
-          throw new Error(result.error.message || "Unknown error sending email");
-        }
-        
-        console.log("Email sent successfully via Resend. ID:", result.id);
-        
-        sendResult = {
-          id: result.id,
-          provider: "resend",
-          success: true,
-          from: fromEmail,
-          reply_to: emailData.reply_to
-        };
-      } else {
-        // We have neither SMTP nor Resend configured
-        throw new Error("No email sending method available. Configure SMTP or add Resend API key.");
+        console.log("SMTP Server:", smtpConfig.server);
+        console.log("SMTP Port:", smtpConfig.port);
+        console.log("SMTP User:", smtpConfig.user);
+        console.log("SMTP Security:", smtpConfig.security);
       }
+
+      // Create email payload
+      const emailPayload = {
+        to: to,
+        subject: subject,
+        html: htmlContent,
+        cc: cc,
+        bcc: bcc,
+        attachments: processedAttachments.length > 0 ? processedAttachments : undefined
+      };
+
+      // Send email using our module
+      const sendResult = await emailSender.sendEmail(
+        emailPayload, 
+        useSmtp, 
+        {
+          host: smtpConfig.server,
+          port: smtpConfig.port,
+          secure: smtpConfig.security === 'ssl' || smtpConfig.port === 465,
+          user: smtpConfig.user,
+          pass: smtpConfig.password,
+          name: smtpConfig.nome || 'DisparoPro'
+        },
+        resendApiKey,
+        smtpConfig.nome || 'DisparoPro'
+      );
       
       // Email sent successfully - Update status if needed
       if (contato_id && template_id && user_id) {
@@ -551,12 +370,12 @@ serve(async (req) => {
           success: true, 
           message: "Email sent successfully!",
           provider: sendResult.provider,
-          from: sendResult.from, // Include sender address in response
-          reply_to: sendResult.reply_to, // Include reply-to address if available
+          from: sendResult.from,
+          reply_to: sendResult.reply_to,
           info: {
             messageId: sendResult.id,
-            domain: sendResult.domain || (sendResult.from || '').split('@')[1],
-            transport: sendResult.transport || 'default'
+            domain: (sendResult.from || '').split('@')[1],
+            transport: 'nodemailer'
           }
         }),
         { 
@@ -588,7 +407,7 @@ serve(async (req) => {
           success: false,
           message: "Failed to send email",
           error: errorMessage,
-          provider: useSmtp ? "smtp" : "resend"
+          provider: smtpConfig.use_smtp ? "smtp" : "resend"
         }),
         { 
           status: 200, // Using 200 even for errors as requested
