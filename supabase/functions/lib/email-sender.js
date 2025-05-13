@@ -20,10 +20,11 @@
  * @returns {Promise<Object>} - Send result
  */
 async function sendEmailViaSMTP(config, payload) {
-  const nodemailer = require('nodemailer');
+  // Import nodemailer using dynamic import for Deno compatibility
+  const nodemailer = await import('npm:nodemailer@6.9.12');
   
   // Create transporter with timeouts to prevent hanging connections
-  const transporter = nodemailer.createTransport({
+  const transporter = nodemailer.default.createTransport({
     host: config.host,
     port: config.port,
     secure: config.secure || config.port === 465, // true for 465, false for other ports
@@ -88,7 +89,8 @@ async function sendEmailViaSMTP(config, payload) {
  * @returns {Promise<Object>} - Send result
  */
 async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
-  const { Resend } = require('resend');
+  // Import Resend using dynamic import for Deno compatibility
+  const { Resend } = await import('npm:resend@1.1.0');
   const resend = new Resend(resendApiKey);
   
   // Create email data for Resend
@@ -191,5 +193,5 @@ async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
   return await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
 }
 
-// Export functions so they can be imported in other modules
+// Export functions as ES modules
 export { sendEmail, sendEmailViaSMTP, sendEmailViaResend };

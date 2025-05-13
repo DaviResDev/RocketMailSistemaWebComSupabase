@@ -1,6 +1,6 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { sendEmail } from "../lib/email-sender.js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,8 +36,6 @@ interface SmtpConfig {
   nome: string;
   use_smtp: boolean;
 }
-
-import { sendEmail } from "../lib/email-sender.js";
 
 serve(async (req) => {
   // Handle CORS preflight requests
