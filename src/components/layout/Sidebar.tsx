@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -124,14 +123,12 @@ export function Sidebar() {
       >
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between p-4 border-b">
-            <Link to="/dashboard" className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <img 
-                  src="/lovable-uploads/649c0e06-7f41-4d18-9e08-554b28327854.png" 
-                  alt="Rocket Mail Logo" 
-                  className="h-10 w-auto"
-                />
-              </div>
+            <Link to="/dashboard" className="flex items-center justify-center w-full">
+              <img 
+                src="/lovable-uploads/649c0e06-7f41-4d18-9e08-554b28327854.png" 
+                alt="Rocket Mail Logo" 
+                className="h-16 w-auto"
+              />
             </Link>
             {isMobile && (
               <Button
