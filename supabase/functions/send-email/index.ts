@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -37,8 +36,9 @@ interface SmtpConfig {
   use_smtp: boolean;
 }
 
-// Import email sender module correctly - note the change from default import to named imports
-import { sendEmail, sendEmailViaSMTP, sendEmailViaResend } from "../lib/email-sender.js";
+// Importação corrigida para usar CommonJS require
+const emailSender = require("../lib/email-sender.js");
+const { sendEmail, sendEmailViaSMTP, sendEmailViaResend } = emailSender;
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -435,3 +435,4 @@ serve(async (req) => {
       );
     }
   });
+}
