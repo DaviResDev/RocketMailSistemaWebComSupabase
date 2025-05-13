@@ -16,7 +16,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEnvios } from '@/hooks/useEnvios';
 import { Schedule } from '@/hooks/useSchedules';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/use-toast';
 import {
   DropdownMenu,
   DropdownMenuContent,

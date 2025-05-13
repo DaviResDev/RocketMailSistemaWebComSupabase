@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { fetchUserSettings, saveUserSettings, uploadProfilePhoto, testSmtpConnection } from '@/api/settingsApi';
