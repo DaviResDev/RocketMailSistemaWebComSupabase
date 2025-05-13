@@ -38,6 +38,15 @@ serve(async (req) => {
       smtp_name 
     } = requestData;
     
+    console.log("Received test request with data:", {
+      server: smtp_server,
+      port: smtp_port,
+      user: smtp_user ? smtp_user.substring(0, 3) + "***" : "not provided",
+      security: smtp_security,
+      use_resend: use_resend,
+      name: smtp_name
+    });
+    
     // Check if we have a valid email to send to
     if (!smtp_user || !smtp_user.includes('@')) {
       return new Response(
@@ -88,6 +97,8 @@ serve(async (req) => {
         // Determinar se a conexão deve ser segura
         const secureConnection = smtp_security === 'ssl' || smtp_port === 465;
         
+        console.log(`Configuração de conexão segura: ${secureConnection} (baseado no security=${smtp_security} e porta=${smtp_port})`);
+        
         // Configurar transporte Nodemailer
         const transporter = nodemailer.createTransport({
           host: smtp_server,
@@ -111,7 +122,7 @@ serve(async (req) => {
         // Testar conexão SMTP
         await transporter.verify();
         
-        console.log("Conexão SMTP testada com sucesso!");
+        console.log("Conexão SMTP verificada com sucesso!");
         
         // Preparar dados do email
         const mailOptions = {
@@ -154,12 +165,23 @@ serve(async (req) => {
           }
         );
       } catch (smtpError) {
-        console.error("Erro SMTP:", smtpError);
+        console.error("Erro SMTP detalhado:", smtpError);
+        
+        let errorMessage = smtpError.message || "Verifique suas credenciais e configurações do servidor";
+        
+        // Melhorar mensagens de erro comuns
+        if (errorMessage.includes('Authentication')) {
+          errorMessage = "Falha na autenticação. Verifique seu usuário e senha SMTP.";
+        } else if (errorMessage.includes('Connection refused')) {
+          errorMessage = "Conexão recusada. Verifique o servidor e porta SMTP.";
+        } else if (errorMessage.includes('timeout')) {
+          errorMessage = "Conexão expirou. Verifique o servidor e porta SMTP ou se há bloqueios de firewall.";
+        }
         
         return new Response(
           JSON.stringify({
             success: false,
-            message: `Erro de conexão SMTP: ${smtpError.message || "Verifique suas credenciais e configurações do servidor"}`,
+            message: `Erro de conexão SMTP: ${errorMessage}`,
             error: smtpError.message
           }),
           {
@@ -185,6 +207,8 @@ serve(async (req) => {
         );
       }
       
+      console.log("Usando serviço Resend para teste de email");
+      
       const resend = new Resend(resendApiKey);
       const fromEmail = "onboarding@resend.dev"; // Email verificado pelo Resend
       
@@ -198,7 +222,7 @@ serve(async (req) => {
       });
       
       if (result.error) {
-        console.error("Erro ao enviar email de teste:", result.error);
+        console.error("Erro ao enviar email de teste com Resend:", result.error);
         return new Response(
           JSON.stringify({
             success: false,
@@ -210,6 +234,8 @@ serve(async (req) => {
           }
         );
       }
+      
+      console.log("Email de teste enviado com sucesso via Resend");
       
       // Retornar sucesso
       return new Response(
@@ -228,7 +254,7 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error("Erro no teste SMTP:", error);
+    console.error("Erro geral no teste SMTP:", error);
     
     return new Response(
       JSON.stringify({

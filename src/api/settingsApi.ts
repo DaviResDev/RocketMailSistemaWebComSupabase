@@ -144,7 +144,15 @@ export async function testSmtpConnection(formData: SettingsFormData): Promise<an
     throw new Error("Preencha todos os campos de configuração SMTP antes de testar");
   }
   
-  // Chamar a função de teste SMTP com tratamento de erro aprimorado
+  // Enhanced error logging and improved connection test
+  console.log("Iniciando teste de conexão com configurações:", {
+    servidor: formData.email_smtp,
+    porta: formData.email_porta,
+    usuario: formData.email_usuario ? "configurado" : "não configurado",
+    seguranca: formData.smtp_seguranca || "tls",
+    usando_smtp: formData.use_smtp
+  });
+  
   try {
     const response = await supabase.functions.invoke('test-smtp', {
       body: {
@@ -158,7 +166,7 @@ export async function testSmtpConnection(formData: SettingsFormData): Promise<an
       },
     });
     
-    console.log("Resposta do teste:", response);
+    console.log("Resposta detalhada do teste:", JSON.stringify(response));
     
     if (response.error) {
       console.error("Erro ao testar conexão:", response.error);
@@ -173,13 +181,17 @@ export async function testSmtpConnection(formData: SettingsFormData): Promise<an
     
     return response.data;
   } catch (error: any) {
-    console.error("Erro ao testar conexão:", error);
+    console.error("Erro detalhado ao testar conexão:", error);
     
     // Mensagem de erro mais amigável para erros comuns
     if (error.message?.includes('Failed to fetch')) {
       throw new Error('Erro de conexão com o servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.');
-    } else {
-      throw error;
+    } else if (error.message?.includes('timeout')) {
+      throw new Error('A conexão com o servidor SMTP demorou muito tempo. Verifique as configurações e tente novamente.');
+    } else if (error.message?.includes('Authentication')) {
+      throw new Error('Falha na autenticação SMTP. Verifique seu usuário e senha.');
     }
+    
+    throw error;
   }
 }
