@@ -14,13 +14,13 @@ import {
   Sun,
   Menu,
   X,
-  Rocket
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSettings } from '@/hooks/useSettings';
+import { Logo } from './Logo';
 
 interface SidebarItemProps {
   to: string;
@@ -124,11 +124,7 @@ export function Sidebar() {
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between p-4 border-b">
             <Link to="/dashboard" className="flex items-center justify-center w-full">
-              <img 
-                src="/lovable-uploads/649c0e06-7f41-4d18-9e08-554b28327854.png" 
-                alt="Rocket Mail Logo" 
-                className="h-16 w-auto"
-              />
+              <Logo size="medium" />
             </Link>
             {isMobile && (
               <Button
