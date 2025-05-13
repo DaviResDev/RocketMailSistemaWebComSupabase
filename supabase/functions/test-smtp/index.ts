@@ -72,7 +72,7 @@ serve(async (req) => {
           <p>Olá,</p>
           <p>Este é um email de teste enviado pelo DisparoPro para verificar suas configurações de email.</p>
           <p>Seu email foi configurado corretamente!</p>
-          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP usando Denomailer'}</p>
+          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP via Denomailer'}</p>
           <p style="margin-top: 20px;">Atenciosamente,<br>Equipe DisparoPro</p>
         </div>
       </div>
@@ -95,20 +95,29 @@ serve(async (req) => {
         const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
         
         // Determinar se a conexão deve ser segura
-        const secureConnection = smtp_security === 'ssl' || smtp_port === 465;
+        // Verificar porta para casos comuns
+        let correctedPort = smtp_port;
+        if (smtp_port === 584) {
+          // Corrigir porta comum de digitação errada (584 em vez de 587)
+          console.log("Porta 584 detectada, corrigindo para 587 (porta padrão SMTP com TLS)");
+          correctedPort = 587;
+        }
         
-        console.log(`Configuração de conexão segura: ${secureConnection} (baseado no security=${smtp_security} e porta=${smtp_port})`);
+        const secureConnection = smtp_security === 'ssl' || correctedPort === 465;
+        
+        console.log(`Configuração de conexão segura: ${secureConnection} (baseado no security=${smtp_security} e porta=${correctedPort})`);
         
         // Configure the SMTP client using Denomailer
         const client = new SMTPClient({
           connection: {
             hostname: smtp_server,
-            port: smtp_port,
+            port: correctedPort,
             tls: secureConnection,
             auth: {
               username: smtp_user,
               password: smtp_password,
             },
+            timeout: 30000, // 30 segundos de timeout
           },
           debug: {
             log: true,
@@ -138,7 +147,7 @@ serve(async (req) => {
             details: {
               provider: "smtp",
               server: smtp_server,
-              port: smtp_port,
+              port: correctedPort,
               from: `${fromName} <${smtp_user}>`,
               domain: emailDomain,
               message_id: messageId,
@@ -161,7 +170,7 @@ serve(async (req) => {
         } else if (errorMessage.includes('Connection refused')) {
           errorMessage = "Conexão recusada. Verifique o servidor e porta SMTP.";
         } else if (errorMessage.includes('timeout')) {
-          errorMessage = "Conexão expirou. Verifique o servidor e porta SMTP ou se há bloqueios de firewall.";
+          errorMessage = "Conexão expirou. Verifique o servidor, porta SMTP, ou se há bloqueios de firewall. Tente usar outra rede ou verificar as configurações de firewall.";
         }
         
         return new Response(

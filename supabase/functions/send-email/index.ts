@@ -184,6 +184,12 @@ serve(async (req) => {
       use_smtp: Boolean(emailConfig.use_smtp)
     };
     
+    // Corrigir porta se for um erro comum (584 em vez de 587)
+    if (smtpConfig.port === 584) {
+      console.log("Porta 584 detectada, corrigindo para 587 (porta padrão SMTP com TLS)");
+      smtpConfig.port = 587;
+    }
+    
     // Check if all required fields for SMTP are present
     const useSmtp = smtpConfig.use_smtp && 
                     smtpConfig.server && 
@@ -307,6 +313,7 @@ serve(async (req) => {
                 username: smtpConfig.user,
                 password: smtpConfig.password,
               },
+              timeout: 30000, // 30 segundos de timeout em vez do padrão
             },
             debug: {
               log: true,
@@ -371,8 +378,47 @@ serve(async (req) => {
         } catch (smtpError) {
           console.error("Erro ao enviar via SMTP Denomailer:", smtpError);
           
-          // Não fazer fallback para Resend, retornar o erro diretamente
-          throw new Error(`Erro no SMTP: ${smtpError.message}`);
+          // Se o usuário configurou explicitamente para usar SMTP, não fazer fallback para Resend
+          if (!resendApiKey) {
+            throw new Error(`Erro no SMTP: ${smtpError.message}`);
+          }
+          
+          console.log("Erro SMTP, tentando fallback com Resend...");
+          
+          // Usar Resend como fallback se houver erro no SMTP
+          const resend = new Resend(resendApiKey);
+          const fromName = smtpConfig.nome || "DisparoPro";
+          const fromEmail = "onboarding@resend.dev";
+          
+          const result = await resend.emails.send({
+            from: `${fromName} <${fromEmail}>`,
+            to: [to],
+            subject: subject,
+            html: htmlContent,
+            cc: cc,
+            bcc: bcc,
+            reply_to: smtpConfig.user,
+            attachments: processedAttachments.length > 0 ? 
+              processedAttachments.map(attachment => ({
+                filename: attachment.filename,
+                content: attachment.content,
+              })) : undefined
+          });
+          
+          if (result.error) {
+            throw new Error(`Erro no SMTP e no fallback Resend: ${result.error.message}`);
+          }
+          
+          sendResult = {
+            id: result.id,
+            provider: "resend_fallback",
+            success: true,
+            from: fromEmail,
+            reply_to: smtpConfig.user,
+            error_original: smtpError.message
+          };
+          
+          console.log("Email enviado com sucesso via fallback Resend após falha SMTP");
         }
       } else if (resendApiKey) {
         // Usar Resend somente se o usuário escolheu não usar SMTP
