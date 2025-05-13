@@ -37,9 +37,7 @@ interface SmtpConfig {
   use_smtp: boolean;
 }
 
-// Importação corrigida para usar CommonJS require
-const emailSender = require("../lib/email-sender.js");
-const { sendEmail, sendEmailViaSMTP, sendEmailViaResend } = emailSender;
+import { sendEmail } from "../lib/email-sender.js";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -432,7 +430,7 @@ serve(async (req) => {
       { 
         status: 200, // Using 200 even for errors as requested
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-  });
+      }
+    );
+  }
+});

@@ -1,5 +1,5 @@
 
-const nodemailer = require('nodemailer');
+// email-sender.js - Module for sending emails via SMTP or Resend API
 
 /**
  * Send email via SMTP using Nodemailer
@@ -19,7 +19,9 @@ const nodemailer = require('nodemailer');
  * @param {Array<Object>} [payload.attachments] - Email attachments
  * @returns {Promise<Object>} - Send result
  */
-const sendEmailViaSMTP = async (config, payload) => {
+async function sendEmailViaSMTP(config, payload) {
+  const nodemailer = require('nodemailer');
+  
   // Create transporter with timeouts to prevent hanging connections
   const transporter = nodemailer.createTransport({
     host: config.host,
@@ -75,7 +77,7 @@ const sendEmailViaSMTP = async (config, payload) => {
     console.error("Failed to send email via SMTP:", error);
     throw error;
   }
-};
+}
 
 /**
  * Send email via Resend API
@@ -85,7 +87,7 @@ const sendEmailViaSMTP = async (config, payload) => {
  * @param {Object} payload - Email payload
  * @returns {Promise<Object>} - Send result
  */
-const sendEmailViaResend = async (resendApiKey, fromName, replyTo, payload) => {
+async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   const { Resend } = require('resend');
   const resend = new Resend(resendApiKey);
   
@@ -142,7 +144,7 @@ const sendEmailViaResend = async (resendApiKey, fromName, replyTo, payload) => {
     console.error("Failed to send email via Resend:", error);
     throw error;
   }
-};
+}
 
 /**
  * Send email with SMTP or Resend fallback
@@ -153,7 +155,7 @@ const sendEmailViaResend = async (resendApiKey, fromName, replyTo, payload) => {
  * @param {string} fromName - Sender name
  * @returns {Promise<Object>} - Send result
  */
-const sendEmail = async (payload, useSmtp, smtpConfig, resendApiKey, fromName) => {
+async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
   // First try with SMTP if configured and requested
   if (useSmtp && smtpConfig && smtpConfig.host && smtpConfig.port && 
       smtpConfig.user && smtpConfig.pass) {
@@ -187,11 +189,7 @@ const sendEmail = async (payload, useSmtp, smtpConfig, resendApiKey, fromName) =
   }
   
   return await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
-};
+}
 
-// Export functions as named exports
-module.exports = {
-  sendEmail,
-  sendEmailViaSMTP,
-  sendEmailViaResend
-};
+// Export functions so they can be imported in other modules
+export { sendEmail, sendEmailViaSMTP, sendEmailViaResend };
