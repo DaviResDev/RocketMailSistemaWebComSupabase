@@ -139,8 +139,12 @@ function dispatch(action: Action) {
 
 interface Toast extends Omit<ToasterToast, "id"> {}
 
+type ToastOptions = Partial<Omit<Toast, "description">> & {
+  id?: string;
+}
+
 function toast({ ...props }: Toast) {
-  const id = genId()
+  const id = props.id || genId()
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -173,8 +177,8 @@ function toast({ ...props }: Toast) {
   }
 }
 
-// Add convenience methods to toast
-toast.success = (message: string, options?: Omit<Toast, "description">) => {
+// Add convenience methods to toast with proper type definitions
+toast.success = (message: string, options?: ToastOptions) => {
   return toast({
     title: "Success",
     description: message,
@@ -183,7 +187,7 @@ toast.success = (message: string, options?: Omit<Toast, "description">) => {
   })
 }
 
-toast.error = (message: string, options?: Omit<Toast, "description">) => {
+toast.error = (message: string, options?: ToastOptions) => {
   return toast({
     title: "Error",
     description: message,
@@ -192,10 +196,19 @@ toast.error = (message: string, options?: Omit<Toast, "description">) => {
   })
 }
 
-toast.loading = (message: string, options?: Omit<Toast, "description">) => {
+toast.loading = (message: string, options?: ToastOptions) => {
   return toast({
     title: "Loading",
     description: message,
+    ...options,
+  })
+}
+
+toast.info = (message: string, options?: ToastOptions) => {
+  return toast({
+    title: "Info",
+    description: message,
+    variant: "default",
     ...options,
   })
 }

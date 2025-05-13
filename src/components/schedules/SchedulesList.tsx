@@ -40,11 +40,11 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       setLoadingItems(prev => ({ ...prev, [schedule.id]: true }));
       
       // Show sending toast
-      const toastId = toast.loading(`Enviando email para ${schedule.contato?.nome || 'contato'}...`);
+      const toastId = toast.loading(`Enviando email para ${schedule.contato?.nome || 'contato'}`);
       
       // Check if we have all required data
       if (!schedule.contato_id || !schedule.template_id) {
-        toast.error("Dados incompletos para envio: contato ou template faltando", { id: toastId });
+        toast.error("Dados incompletos para envio: contato ou template faltando");
         throw new Error("Dados incompletos para envio: contato ou template faltando");
       }
       
@@ -59,7 +59,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       const result = await sendEmail(envioData);
       
       if (!result) {
-        toast.error("Falha ao enviar o email. Verifique os logs para mais detalhes.", { id: toastId });
+        toast.error("Falha ao enviar o email. Verifique os logs para mais detalhes.");
         throw new Error("Falha ao enviar o email");
       }
       
@@ -69,7 +69,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         .update({ status: 'enviado' })
         .eq('id', schedule.id);
       
-      toast.success('Email enviado com sucesso!', { id: toastId });
+      toast.success('Email enviado com sucesso!');
       
       // Refresh both schedules list and email history
       await fetchEnvios(); // Fetch email history to update Dashboard and Envios page
