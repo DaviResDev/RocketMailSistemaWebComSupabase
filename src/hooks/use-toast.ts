@@ -173,6 +173,33 @@ function toast({ ...props }: Toast) {
   }
 }
 
+// Add convenience methods to toast
+toast.success = (message: string, options?: Omit<Toast, "description">) => {
+  return toast({
+    title: "Success",
+    description: message,
+    variant: "default",
+    ...options,
+  })
+}
+
+toast.error = (message: string, options?: Omit<Toast, "description">) => {
+  return toast({
+    title: "Error",
+    description: message,
+    variant: "destructive",
+    ...options,
+  })
+}
+
+toast.loading = (message: string, options?: Omit<Toast, "description">) => {
+  return toast({
+    title: "Loading",
+    description: message,
+    ...options,
+  })
+}
+
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
 

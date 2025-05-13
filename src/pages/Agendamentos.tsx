@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useSchedules } from '@/hooks/useSchedules';
 import { ScheduleForm } from '@/components/schedules/ScheduleForm';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/use-toast';
 import { Plus, RefreshCcw } from 'lucide-react';
 import {
   Dialog,
