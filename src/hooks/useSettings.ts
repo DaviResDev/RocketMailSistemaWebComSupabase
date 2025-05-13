@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { fetchUserSettings, saveUserSettings, uploadProfilePhoto, testSmtpConnection } from '@/api/settingsApi';
@@ -31,7 +31,11 @@ export function useSettings() {
       setError(`Erro ao carregar configurações: ${error.message}`);
       // Don't show toast on initial load if settings don't exist yet
       if (error.code !== 'PGRST116') {
-        toast.error('Erro ao carregar configurações: ' + error.message);
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: 'Erro ao carregar configurações: ' + error.message
+        });
       }
     } finally {
       setLoading(false);
@@ -40,7 +44,11 @@ export function useSettings() {
 
   const saveSettings = async (formData: SettingsFormData) => {
     if (!user) {
-      toast.error('Você precisa estar logado para salvar configurações');
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: 'Você precisa estar logado para salvar configurações'
+      });
       return false;
     }
 
@@ -50,13 +58,20 @@ export function useSettings() {
       
       if (savedSettings) {
         setSettings(savedSettings);
-        toast.success('Configurações salvas com sucesso!');
+        toast({
+          title: "Sucesso",
+          description: 'Configurações salvas com sucesso!'
+        });
         return true;
       }
       return false;
     } catch (error: any) {
       console.error('Error saving settings:', error);
-      toast.error('Erro ao salvar configurações: ' + error.message);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: 'Erro ao salvar configurações: ' + error.message
+      });
       return false;
     } finally {
       setLoading(false);
@@ -68,15 +83,26 @@ export function useSettings() {
       const result = await testSmtpConnection(formData);
       
       if (result.success) {
-        toast.success(`Conexão testada com sucesso via ${result.provider === 'smtp' ? 'SMTP' : 'Resend'}!`);
+        toast({
+          title: "Sucesso",
+          description: `Conexão testada com sucesso via ${result.provider === 'smtp' ? 'SMTP' : 'Resend'}!`
+        });
       } else {
-        toast.error(result.message || "Falha no teste de conexão");
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: result.message || "Falha no teste de conexão"
+        });
       }
       
       return result;
     } catch (error: any) {
       console.error("Erro ao testar configurações:", error);
-      toast.error(`Erro ao testar: ${error.message}`);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: `Erro ao testar: ${error.message}`
+      });
       return { success: false, message: error.message };
     }
   };
@@ -89,14 +115,22 @@ export function useSettings() {
     saveSettings,
     uploadProfilePhoto: async (file: File) => {
       if (!user) {
-        toast.error('Você precisa estar logado para fazer upload de fotos');
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: 'Você precisa estar logado para fazer upload de fotos'
+        });
         return null;
       }
       try {
         return await uploadProfilePhoto(file, user.id);
       } catch (error: any) {
         console.error('Error uploading profile photo:', error);
-        toast.error('Erro ao fazer upload da foto de perfil: ' + error.message);
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: 'Erro ao fazer upload da foto de perfil: ' + error.message
+        });
         return null;
       }
     },
