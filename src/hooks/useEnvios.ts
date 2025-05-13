@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/use-toast';
 
 // Define the shape of attachments
 export interface EnvioAttachment {
@@ -116,7 +116,11 @@ export function useEnvios() {
 
   const clearHistory = useCallback(async () => {
     if (!user) {
-      toast.error('Você precisa estar logado para limpar o histórico');
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: 'Você precisa estar logado para limpar o histórico',
+      });
       return false;
     }
 
@@ -130,16 +134,27 @@ export function useEnvios() {
 
       if (error) {
         console.error('Erro ao limpar histórico:', error);
-        toast.error(`Erro ao limpar histórico: ${error.message}`);
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: `Erro ao limpar histórico: ${error.message}`,
+        });
         return false;
       }
 
       setEnvios([]);
-      toast.success('Histórico de envios limpo com sucesso!');
+      toast({
+        title: "Sucesso",
+        description: 'Histórico de envios limpo com sucesso!',
+      });
       return true;
     } catch (error: any) {
       console.error('Erro ao limpar histórico:', error.message);
-      toast.error(`Erro ao limpar histórico: ${error.message}`);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: `Erro ao limpar histórico: ${error.message}`,
+      });
       return false;
     } finally {
       setLoading(false);

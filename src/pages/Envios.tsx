@@ -27,11 +27,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useToast } from '@/components/ui/use-toast';
 
 export default function Envios() {
   const { envios, loading, sending, fetchEnvios, resendEnvio, clearHistory } = useEnvios();
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Fetch envios when component mounts
@@ -67,8 +70,21 @@ export default function Envios() {
   };
 
   const confirmClearHistory = async () => {
-    await clearHistory();
-    setIsConfirmDialogOpen(false);
+    setIsClearing(true);
+    try {
+      const success = await clearHistory();
+      if (success) {
+        // Fetch updated envios list after clearing history
+        await fetchEnvios();
+        toast({
+          title: "Sucesso",
+          description: "Histórico de envios foi completamente limpo",
+        });
+      }
+    } finally {
+      setIsClearing(false);
+      setIsConfirmDialogOpen(false);
+    }
   };
 
   const downloadAttachment = async (path: string, fileName: string) => {
@@ -98,7 +114,11 @@ export default function Envios() {
       }
     } catch (error: any) {
       console.error('Error downloading attachment:', error);
-      alert(`Erro ao baixar o anexo: ${error.message}`);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: `Erro ao baixar o anexo: ${error.message}`,
+      });
     }
   };
 
@@ -112,19 +132,44 @@ export default function Envios() {
             size="sm" 
             onClick={handleClearHistory}
             className="flex items-center gap-2"
-            disabled={loading || sending || envios.length === 0}
+            disabled={loading || sending || envios.length === 0 || isClearing}
           >
-            <Trash2 className="h-4 w-4" />
-            Limpar histórico
+            {isClearing ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Limpando...
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-4 w-4" />
+                Limpar histórico
+              </>
+            )}
           </Button>
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => fetchEnvios()}
             className="flex items-center gap-2"
+            disabled={loading}
           >
-            <RefreshCw className="h-4 w-4" />
-            Atualizar
+            {loading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Atualizando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -254,8 +299,22 @@ export default function Envios() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmClearHistory}>Continuar</AlertDialogAction>
+            <AlertDialogCancel disabled={isClearing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmClearHistory} 
+              disabled={isClearing}
+              className="flex items-center gap-2"
+            >
+              {isClearing ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processando...
+                </>
+              ) : "Limpar histórico"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
