@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import nodemailer from "https://esm.sh/nodemailer@6.9.12";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -278,7 +278,7 @@ serve(async (req) => {
       
       // Se o usuário configurou SMTP e quer usar SMTP
       if (useSmtp) {
-        console.log("Tentando enviar e-mail via SMTP com Nodemailer");
+        console.log("Tentando enviar e-mail via SMTP com Denomailer");
         
         try {
           // Definir o fromName e fromEmail corretamente
@@ -295,74 +295,69 @@ serve(async (req) => {
           // Criar ID da mensagem único
           const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
           
-          // Configuração do transporte SMTP com Nodemailer
+          // Configuração do transporte SMTP com Denomailer
           const secureConnection = smtpConfig.security === 'ssl' || smtpConfig.port === 465;
           
-          let transporter = nodemailer.createTransport({
-            host: smtpConfig.server,
-            port: smtpConfig.port,
-            secure: secureConnection,
-            auth: {
-              user: smtpConfig.user,
-              pass: smtpConfig.password,
+          const client = new SMTPClient({
+            connection: {
+              hostname: smtpConfig.server,
+              port: smtpConfig.port,
+              tls: secureConnection,
+              auth: {
+                username: smtpConfig.user,
+                password: smtpConfig.password,
+              },
             },
-            // Permitir conexões inseguras em desenvolvimento
-            tls: {
-              rejectUnauthorized: false,
+            debug: {
+              log: true,
             },
-            // Configurações específicas para DEBUG
-            debug: true,
-            logger: true
           });
           
-          console.log("Transporte SMTP configurado com Nodemailer");
+          console.log("Transporte SMTP configurado com Denomailer");
           
           // Criar opções do email
-          const mailOptions = {
-            from: `"${fromName}" <${fromEmail}>`,
+          let emailData = {
+            from: `${fromName} <${fromEmail}>`,
             to: to,
             subject: subject,
+            content: htmlContent,
             html: htmlContent,
-            messageId: `<${messageId}>`,
-            headers: {
-              'X-Mailer': 'DisparoPro Nodemailer',
-              'X-Sender': fromEmail,
-            },
           };
           
           // Adicionar CC se fornecidos
           if (cc && cc.length > 0) {
-            mailOptions.cc = cc.join(', ');
+            emailData.cc = cc.join(', ');
             console.log(`Adicionando CC: ${cc.join(', ')}`);
           }
           
           // Adicionar BCC se fornecidos
           if (bcc && bcc.length > 0) {
-            mailOptions.bcc = bcc.join(', ');
+            emailData.bcc = bcc.join(', ');
             console.log(`Adicionando BCC: ${bcc.join(', ')}`);
           }
           
           // Adicionar anexos se fornecidos
           if (processedAttachments.length > 0) {
-            mailOptions.attachments = processedAttachments.map(attachment => ({
+            emailData.attachments = processedAttachments.map(attachment => ({
               filename: attachment.filename,
-              content: Buffer.from(attachment.content, 'base64'),
+              content: Uint8Array.from(atob(attachment.content), c => c.charCodeAt(0)),
               contentType: attachment.contentType,
             }));
             console.log(`Adicionando ${processedAttachments.length} anexos ao email SMTP`);
           }
           
           // Log para rastreamento
-          console.log(`Enviando email via SMTP Nodemailer: De: ${fromName} <${fromEmail}> para ${to}`);
+          console.log(`Enviando email via SMTP Denomailer: De: ${fromName} <${fromEmail}> para ${to}`);
           
           // Enviar email
-          const info = await transporter.sendMail(mailOptions);
+          const info = await client.send(emailData);
+          await client.close();
           
-          console.log("Email enviado com sucesso via SMTP Nodemailer:", info);
+          console.log("Email enviado com sucesso via SMTP Denomailer:", info);
           
           sendResult = {
-            id: info.messageId || `nodemailer-${messageId}`,
-            provider: "smtp_nodemailer",
+            id: messageId,
+            provider: "smtp_denomailer",
             success: true,
             from: fromEmail,
             reply_to: fromEmail,
@@ -371,66 +366,16 @@ serve(async (req) => {
             sender_name: fromName,
             sender_email: fromEmail,
             domain: emailDomain,
-            transport: "nodemailer"
+            transport: "denomailer"
           };
         } catch (smtpError) {
-          console.error("Erro ao enviar via SMTP Nodemailer:", smtpError);
+          console.error("Erro ao enviar via SMTP Denomailer:", smtpError);
           
-          // Tentar fallback para Resend se disponível
-          if (resendApiKey) {
-            console.log("Falha no SMTP, tentando fallback para Resend");
-            
-            const resend = new Resend(resendApiKey);
-            const fromName = smtpConfig.nome || "DisparoPro";
-            const fromEmail = "onboarding@resend.dev"; // Usar endereço verificado do Resend
-            const replyToEmail = smtpConfig.user;
-            
-            const emailData = {
-              from: `${fromName} <${fromEmail}>`,
-              to: [to],
-              subject: subject,
-              html: htmlContent,
-              reply_to: replyToEmail
-            };
-            
-            if (cc && cc.length > 0) {
-              emailData.cc = cc;
-            }
-            
-            if (bcc && bcc.length > 0) {
-              emailData.bcc = bcc;
-            }
-            
-            if (processedAttachments.length > 0) {
-              emailData.attachments = processedAttachments.map(attachment => ({
-                filename: attachment.filename,
-                content: attachment.content,
-              }));
-            }
-            
-            const result = await resend.emails.send(emailData);
-            
-            if (result.error) {
-              throw new Error(`Falha no SMTP e no fallback Resend: ${smtpError.message} e ${result.error.message}`);
-            }
-            
-            console.log("Email enviado com sucesso via Resend (fallback após falha SMTP)");
-            
-            sendResult = {
-              id: result.id,
-              provider: "resend_fallback",
-              success: true,
-              from: fromEmail,
-              reply_to: replyToEmail,
-              original_error: smtpError.message
-            };
-          } else {
-            // Sem fallback disponível, lançar erro original
-            throw smtpError;
-          }
+          // Não fazer fallback para Resend, retornar o erro diretamente
+          throw new Error(`Erro no SMTP: ${smtpError.message}`);
         }
       } else if (resendApiKey) {
-        // Usar Resend se configurado e SMTP não estiver disponível ou não for desejado
+        // Usar Resend somente se o usuário escolheu não usar SMTP
         console.log("Enviando e-mail com API do Resend");
         
         const resend = new Resend(resendApiKey);

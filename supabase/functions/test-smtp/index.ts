@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Resend } from "https://esm.sh/resend@1.1.0";
-import nodemailer from "https://esm.sh/nodemailer@6.9.12";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,7 +72,7 @@ serve(async (req) => {
           <p>Olá,</p>
           <p>Este é um email de teste enviado pelo DisparoPro para verificar suas configurações de email.</p>
           <p>Seu email foi configurado corretamente!</p>
-          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP usando Nodemailer'}</p>
+          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP usando Denomailer'}</p>
           <p style="margin-top: 20px;">Atenciosamente,<br>Equipe DisparoPro</p>
         </div>
       </div>
@@ -99,64 +99,50 @@ serve(async (req) => {
         
         console.log(`Configuração de conexão segura: ${secureConnection} (baseado no security=${smtp_security} e porta=${smtp_port})`);
         
-        // Configurar transporte Nodemailer
-        const transporter = nodemailer.createTransport({
-          host: smtp_server,
-          port: smtp_port,
-          secure: secureConnection,
-          auth: {
-            user: smtp_user,
-            pass: smtp_password
+        // Usando Denomailer em vez de Nodemailer para compatibilidade com Deno
+        const client = new SMTPClient({
+          connection: {
+            hostname: smtp_server,
+            port: smtp_port,
+            tls: secureConnection,
+            auth: {
+              username: smtp_user,
+              password: smtp_password,
+            },
           },
-          // Para desenvolvimento/teste, permitir certificados auto-assinados
-          tls: {
-            rejectUnauthorized: false
+          debug: {
+            log: true,
           },
-          // Ativar logs para diagnóstico
-          debug: true,
-          logger: true
         });
-        
-        console.log("Transporte Nodemailer configurado, testando conexão...");
-        
-        // Testar conexão SMTP
-        await transporter.verify();
-        
-        console.log("Conexão SMTP verificada com sucesso!");
-        
-        // Preparar dados do email
-        const mailOptions = {
-          from: `"${fromName}" <${smtp_user}>`,
-          to: email,
-          subject: "Teste de Email do DisparoPro",
-          html: htmlContent,
-          messageId: `<${messageId}>`,
-          headers: {
-            'X-Mailer': 'DisparoPro Nodemailer',
-            'X-Sender': smtp_user
-          }
-        };
-        
-        console.log(`Enviando email de teste: De: ${fromName} <${smtp_user}> Para: ${email}`);
+
+        console.log("Conexão SMTP configurada, enviando email de teste...");
         
         // Enviar email
-        const info = await transporter.sendMail(mailOptions);
+        await client.send({
+          from: `${fromName} <${smtp_user}>`,
+          to: email,
+          subject: "Teste de Email do DisparoPro",
+          content: htmlContent,
+          html: htmlContent,
+        });
         
-        console.log("Email de teste enviado com sucesso:", info);
+        await client.close();
+        
+        console.log("Email de teste enviado com sucesso via SMTP");
         
         // Retornar sucesso
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Email de teste enviado com sucesso via SMTP com Nodemailer!",
+            message: "Email de teste enviado com sucesso via SMTP!",
             details: {
-              provider: "smtp_nodemailer",
+              provider: "smtp",
               server: smtp_server,
               port: smtp_port,
               from: `${fromName} <${smtp_user}>`,
               domain: emailDomain,
-              message_id: info.messageId || messageId,
-              transport: "nodemailer"
+              message_id: messageId,
+              transport: "denomailer"
             }
           }),
           {
