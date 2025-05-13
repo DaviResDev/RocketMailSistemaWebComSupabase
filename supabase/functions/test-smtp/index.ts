@@ -1,25 +1,27 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Resend } from "npm:resend@1.1.0";
+import { serve } from 'https://deno.land/std@0.170.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.8.0';
+
+// Import the email sender functions correctly - named imports instead of default import
+import { sendEmailViaSMTP, sendEmailViaResend } from '../lib/email-sender.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface TestSmtpRequest {
-  smtp_server: string;
-  smtp_port: number;
-  smtp_user: string;
-  smtp_password: string;
-  smtp_security: string;
-  use_resend: boolean;
-  smtp_name?: string;
+interface RequestBody {
+  config: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+    name?: string;
+  };
+  testEmail?: string;
+  use_smtp?: boolean;
 }
-
-// Import email sender module
-import emailSender from "../lib/email-sender.js";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -28,226 +30,170 @@ serve(async (req) => {
   }
 
   try {
-    // Extract request data
-    const requestData: TestSmtpRequest = await req.json();
-    const { 
-      smtp_server, 
-      smtp_port, 
-      smtp_user, 
-      smtp_password, 
-      smtp_security, 
-      use_resend,
-      smtp_name 
-    } = requestData;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
     
-    console.log("Received test request with data:", {
-      server: smtp_server,
-      port: smtp_port,
-      user: smtp_user ? smtp_user.substring(0, 3) + "***" : "not provided",
-      security: smtp_security,
-      use_resend: use_resend,
-      name: smtp_name
-    });
-    
-    // Check if we have a valid email to send to
-    if (!smtp_user || !smtp_user.includes('@')) {
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Missing environment variables");
       return new Response(
-        JSON.stringify({
-          success: false,
-          message: "Email inválido"
+        JSON.stringify({ 
+          success: false, 
+          message: "Server configuration error" 
         }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     }
+    
+    const requestData = await req.json() as RequestBody;
+    const { config, testEmail, use_smtp = true } = requestData;
+    
+    // Fix port if it's a common error (584 instead of 587)
+    if (config.port === 584) {
+      console.log("Port 584 detected, correcting to 587 (standard SMTP port with TLS)");
+      config.port = 587;
+    }
 
-    // Basic check to prevent spam through this endpoint
-    const email = smtp_user.trim().toLowerCase();
+    console.log("Testing with configuration:", {
+      host: config.host,
+      port: config.port,
+      secure: config.secure || config.port === 465,
+      user: config.user ? "provided" : "not provided",
+      pass: config.pass ? "provided" : "not provided", 
+      name: config.name || 'DisparoPro',
+      testEmail
+    });
     
-    // Build HTML content for test email
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
-          <h2 style="color: #333;">Teste de Email do DisparoPro</h2>
-          <p>Olá,</p>
-          <p>Este é um email de teste enviado pelo DisparoPro para verificar suas configurações de email.</p>
-          <p>Seu email foi configurado corretamente!</p>
-          <p>Método de envio: ${use_resend ? 'Serviço Resend' : 'SMTP via Nodemailer'}</p>
-          <p style="margin-top: 20px;">Atenciosamente,<br>Equipe DisparoPro</p>
-        </div>
-      </div>
-    `;
-    
-    // Prepare data for sending
-    const fromName = smtp_name || "DisparoPro";
-    
-    // If the user chose to use SMTP and provided the required credentials
-    if (!use_resend && smtp_server && smtp_port && smtp_user && smtp_password) {
-      try {
-        console.log(`Testing SMTP connection: ${smtp_server}:${smtp_port}`);
-        console.log(`Using email: ${smtp_user}`);
-        console.log(`Security method: ${smtp_security}`);
-        
-        // Get domain from email for message headers
-        const emailDomain = smtp_user.split('@')[1];
-        
-        // Create a unique message ID
-        const messageId = `${Date.now()}.${Math.random().toString(36).substring(2)}@${emailDomain}`;
-        
-        // Determine if connection should be secure
-        // Check port for common cases
-        let correctedPort = smtp_port;
-        if (smtp_port === 584) {
-          // Fix common typo port (584 instead of 587)
-          console.log("Port 584 detected, correcting to 587 (standard SMTP port with TLS)");
-          correctedPort = 587;
+    if (!config.user || !config.pass) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: "Missing email credentials" 
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
-        
-        const secureConnection = smtp_security === 'ssl' || correctedPort === 465;
-        
-        console.log(`Secure connection configuration: ${secureConnection} (based on security=${smtp_security} and port=${correctedPort})`);
-        
-        // Configure the SMTP client and send test email
-        const result = await emailSender.sendEmailViaSMTP(
+      );
+    }
+    
+    const recipientEmail = testEmail || config.user;
+    
+    try {
+      const htmlContent = `
+        <h1>Teste de Configuração SMTP</h1>
+        <p>Seu servidor SMTP foi configurado com sucesso!</p>
+        <p>Detalhes da configuração:</p>
+        <ul>
+          <li><strong>Servidor:</strong> ${config.host}</li>
+          <li><strong>Porta:</strong> ${config.port}</li>
+          <li><strong>Segurança:</strong> ${config.secure ? 'SSL/TLS' : 'STARTTLS'}</li>
+          <li><strong>Usuário:</strong> ${config.user}</li>
+          <li><strong>Nome do Remetente:</strong> ${config.name || 'DisparoPro'}</li>
+        </ul>
+        <p>Data e hora do teste: ${new Date().toLocaleString('pt-BR')}</p>
+      `;
+      
+      let result;
+      
+      if (use_smtp) {
+        // Test SMTP configuration
+        result = await sendEmailViaSMTP(
           {
-            host: smtp_server,
-            port: correctedPort,
-            secure: secureConnection,
-            user: smtp_user,
-            pass: smtp_password,
-            name: fromName
+            host: config.host,
+            port: config.port,
+            secure: config.secure || config.port === 465,
+            user: config.user,
+            pass: config.pass,
+            name: config.name || 'DisparoPro'
           },
           {
-            to: email,
-            subject: "Teste de Email do DisparoPro",
+            to: recipientEmail,
+            subject: "Teste de configuração SMTP - DisparoPro",
             html: htmlContent
           }
         );
-        
-        console.log("Test email sent successfully via SMTP");
-        
-        // Return success
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Email de teste enviado com sucesso via SMTP!",
-            details: {
-              provider: "smtp",
-              server: smtp_server,
-              port: correctedPort,
-              from: `${fromName} <${smtp_user}>`,
-              domain: emailDomain,
-              message_id: messageId,
-              transport: "nodemailer"
-            }
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          }
-        );
-      } catch (smtpError) {
-        console.error("Detailed SMTP error:", smtpError);
-        
-        let errorMessage = smtpError.message || "Check your credentials and server settings";
-        
-        // Improve common error messages
-        if (errorMessage.includes('Authentication')) {
-          errorMessage = "Authentication failed. Check your SMTP username and password.";
-        } else if (errorMessage.includes('Connection refused')) {
-          errorMessage = "Connection refused. Check your SMTP server and port.";
-        } else if (errorMessage.includes('timeout')) {
-          errorMessage = "Connection timed out. Check your server, SMTP port, or if there are firewall blocks. Try using a different network or check firewall settings.";
-        }
-        
-        return new Response(
-          JSON.stringify({
-            success: false,
-            message: `SMTP connection error: ${errorMessage}`,
-            error: smtpError.message
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          }
-        );
-      }
-    } else {
-      // Use Resend as fallback or if chosen by user
-      const resendApiKey = Deno.env.get('RESEND_API_KEY');
-      
-      if (!resendApiKey) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            message: "Resend API not configured on server"
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          }
-        );
-      }
-      
-      console.log("Using Resend service for email test");
-      
-      try {
-        // Send email via our module
-        const result = await emailSender.sendEmailViaResend(
+      } else if (resendApiKey) {
+        // Fallback to Resend if SMTP is not being used
+        result = await sendEmailViaResend(
           resendApiKey,
-          fromName,
-          email,
+          config.name || 'DisparoPro',
+          config.user,
           {
-            to: email,
-            subject: "Teste de Email do DisparoPro",
+            to: recipientEmail,
+            subject: "Teste de configuração de email - DisparoPro",
             html: htmlContent
           }
         );
-        
-        console.log("Test email sent successfully via Resend");
-        
-        // Return success
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Test email sent successfully via Resend!",
-            details: {
-              provider: "resend",
-              id: result.id,
-            }
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          }
-        );
-      } catch (error) {
-        console.error("Error sending test email with Resend:", error);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            message: `Error sending email: ${error.message}`
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          }
-        );
+      } else {
+        throw new Error("No email sending method available");
       }
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Email de teste enviado com sucesso!",
+          details: {
+            recipient: recipientEmail,
+            messageId: result.id,
+            provider: result.provider,
+            from: result.from,
+            transport: 'nodemailer'
+          }
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      
+      // Try to provide a more user-friendly error message
+      let errorMessage = error.message;
+      
+      if (error.message.includes('ECONNREFUSED')) {
+        errorMessage = `Não foi possível conectar ao servidor SMTP ${config.host}:${config.port}. Verifique se o servidor está correto e acessível.`;
+      } else if (error.message.includes('ETIMEDOUT')) {
+        errorMessage = `Tempo esgotado ao conectar ao servidor SMTP ${config.host}:${config.port}. Verifique sua conexão ou as configurações do firewall.`;
+      } else if (error.message.includes('Invalid login')) {
+        errorMessage = 'Login inválido. Verifique seu nome de usuário e senha.';
+      } else if (error.message.includes('certificate')) {
+        errorMessage = 'Problema com o certificado SSL do servidor. Tente desativar a opção "Seguro" se estiver usando a porta 587.';
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: "Falha no teste SMTP",
+          error: errorMessage,
+          details: {
+            host: config.host,
+            port: config.port,
+            user: config.user
+          }
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
     }
   } catch (error) {
-    console.error("General error in SMTP test:", error);
+    console.error("General error in test-smtp function:", error);
     
     return new Response(
-      JSON.stringify({
-        success: false,
-        message: `Error testing settings: ${error.message || "Unknown error"}`
+      JSON.stringify({ 
+        success: false, 
+        message: "Erro ao testar configuração SMTP",
+        error: error.message || "Erro desconhecido"
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
   }

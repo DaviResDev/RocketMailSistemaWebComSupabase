@@ -189,6 +189,7 @@ const sendEmail = async (payload, useSmtp, smtpConfig, resendApiKey, fromName) =
   return await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
 };
 
+// Export functions as named exports instead of default export
 module.exports = {
   sendEmail,
   sendEmailViaSMTP,

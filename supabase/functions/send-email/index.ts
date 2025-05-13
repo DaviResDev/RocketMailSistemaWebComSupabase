@@ -37,8 +37,8 @@ interface SmtpConfig {
   use_smtp: boolean;
 }
 
-// Import our email sender module
-import emailSender from "../lib/email-sender.js";
+// Import email sender module correctly - note the change from default import to named imports
+import { sendEmail, sendEmailViaSMTP, sendEmailViaResend } from "../lib/email-sender.js";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -292,7 +292,7 @@ serve(async (req) => {
       };
 
       // Send email using our module
-      const sendResult = await emailSender.sendEmail(
+      const sendResult = await sendEmail(
         emailPayload, 
         useSmtp, 
         {
