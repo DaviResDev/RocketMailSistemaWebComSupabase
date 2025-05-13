@@ -39,7 +39,7 @@ export const Logo: React.FC<LogoProps> = ({
         </span>
         <span className={cn("text-muted-foreground leading-tight", 
           size === 'large' ? 'text-sm' : size === 'medium' ? 'text-xs' : 'text-[10px]')}>
-          Email marketing simplificado
+          Email marketing
         </span>
       </div>
     </div>

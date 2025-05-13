@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -327,7 +326,7 @@ export default function Dashboard() {
             <div>
               <CardTitle className="text-xl">Próximos Agendamentos</CardTitle>
               <CardDescription>
-                Visualize os envios programados para os próximos dias
+                Envios programados para os próximos dias
               </CardDescription>
             </div>
             <Button 
@@ -348,26 +347,36 @@ export default function Dashboard() {
               </div>
             ) : pendingSchedules.length === 0 ? (
               <div className="text-center py-8 px-4">
-                <Clock className="h-10 w-10 text-blue-300 dark:text-blue-700 mx-auto mb-3" />
+                <Calendar className="h-10 w-10 text-blue-300 dark:text-blue-700 mx-auto mb-3" />
                 <p className="text-muted-foreground">
-                  Nenhum envio agendado. Agende seu primeiro envio na página de agendamentos.
+                  Nenhum envio agendado. Crie seu primeiro agendamento na página de agendamentos.
                 </p>
+                <Button 
+                  onClick={() => navigate('/agendamentos')} 
+                  variant="outline"
+                  className="mt-4 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                >
+                  Criar agendamento
+                </Button>
               </div>
             ) : (
               <div className="divide-y divide-blue-100 dark:divide-blue-900">
                 {pendingSchedules.map((schedule) => (
-                  <div key={schedule.id} className="py-4 flex justify-between items-center">
+                  <div key={schedule.id} className="py-4 flex justify-between items-center hover:bg-blue-50/50 dark:hover:bg-blue-900/20 px-3 rounded-md transition-colors">
                     <div>
                       <p className="font-medium">{schedule.template?.nome}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Para: {schedule.contato?.nome}
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Users size={14} />
+                        {schedule.contato?.nome}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">
+                      <p className="text-sm font-medium flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" />
                         {format(new Date(schedule.data_envio), "dd/MM/yyyy", { locale: ptBR })}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
+                        <Clock className="h-3 w-3" />
                         {format(new Date(schedule.data_envio), "HH:mm", { locale: ptBR })}
                       </p>
                     </div>
@@ -411,11 +420,12 @@ export default function Dashboard() {
             ) : (
               <div className="divide-y divide-blue-100 dark:divide-blue-900">
                 {recentEnvios.map((envio) => (
-                  <div key={envio.id} className="py-4 flex justify-between items-center">
+                  <div key={envio.id} className="py-4 flex justify-between items-center hover:bg-blue-50/50 dark:hover:bg-blue-900/20 px-3 rounded-md transition-colors">
                     <div>
                       <p className="font-medium">{envio.template?.nome}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Para: {envio.contato?.nome}
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Users size={14} />
+                        {envio.contato?.nome}
                       </p>
                     </div>
                     <div className="text-right">
