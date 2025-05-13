@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -7,8 +8,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { BarChart, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Bar, Line, Cell } from 'recharts';
-import { Calendar, Mail, MessageSquare, Users, Clock, RefreshCcw, CheckCircle } from 'lucide-react';
+import { BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Bar, Cell, ResponsiveContainer } from 'recharts';
+import { Calendar, Mail, MessageSquare, Users, Clock, RefreshCcw, CheckCircle, Rocket } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -163,6 +164,7 @@ export default function Dashboard() {
             size="icon" 
             onClick={handleRefresh}
             title="Atualizar dados"
+            className="hover:bg-primary/10"
           >
             <RefreshCcw className="h-4 w-4" />
           </Button>
@@ -184,10 +186,10 @@ export default function Dashboard() {
       </div>
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="shadow-sm hover:shadow transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Contatos</CardTitle>
-            <Users className="w-4 h-4 text-muted-foreground" />
+            <Users className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalContatos}</div>
@@ -196,10 +198,10 @@ export default function Dashboard() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-sm hover:shadow transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Templates</CardTitle>
-            <Mail className="w-4 h-4 text-muted-foreground" />
+            <Mail className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalTemplates}</div>
@@ -208,10 +210,10 @@ export default function Dashboard() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-sm hover:shadow transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Envios</CardTitle>
-            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+            <MessageSquare className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalEnvios}</div>
@@ -220,10 +222,10 @@ export default function Dashboard() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-sm hover:shadow transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Agendamentos</CardTitle>
-            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <Calendar className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalAgendamentos}</div>
@@ -235,8 +237,9 @@ export default function Dashboard() {
       </div>
       
       {emptyState ? (
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm border border-blue-100 bg-blue-50/50 dark:bg-blue-950/10 dark:border-blue-900">
           <div className="text-center">
+            <Rocket className="h-12 w-12 mx-auto text-blue-500 mb-3"/>
             <h3 className="text-lg font-medium mb-2">Bem-vindo ao seu Dashboard!</h3>
             <p className="text-muted-foreground mb-4">
               Comece adicionando contatos e criando templates para visualizar suas estatísticas aqui.
@@ -246,64 +249,46 @@ export default function Dashboard() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {stats.totalEnvios > 0 ? (
-            <>
-              <Card className="col-span-2 md:col-span-1">
-                <CardHeader>
-                  <CardTitle>Status dos Envios</CardTitle>
-                  <CardDescription>
-                    Distribuição dos envios por status
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="h-80">
-                  {statusChartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={statusChartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar 
-                          dataKey="value" 
-                          name="Quantidade"
-                        >
-                          {statusChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={getBarColor(entry.name)} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <p className="text-muted-foreground">
-                        Dados de envio serão exibidos conforme você realizar envios
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              <Card className="col-span-2 md:col-span-1">
-                <CardHeader>
-                  <CardTitle>Engajamento</CardTitle>
-                  <CardDescription>
-                    Taxa de aberturas e cliques ao longo do tempo
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="h-80">
+            <Card className="col-span-2 md:col-span-2 shadow-sm hover:shadow transition-shadow duration-200">
+              <CardHeader>
+                <CardTitle>Status dos Envios</CardTitle>
+                <CardDescription>
+                  Distribuição dos envios por status
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                {statusChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={statusChartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar 
+                        dataKey="value" 
+                        name="Quantidade"
+                      >
+                        {statusChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getBarColor(entry.name)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
                   <div className="flex items-center justify-center h-full">
                     <p className="text-muted-foreground">
-                      Métricas de engajamento serão exibidas conforme suas mensagens forem abertas
+                      Dados de envio serão exibidos conforme você realizar envios
                     </p>
                   </div>
-                </CardContent>
-              </Card>
-            </>
+                )}
+              </CardContent>
+            </Card>
           ) : null}
         </div>
       )}
       
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="shadow-sm hover:shadow transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Próximos Agendamentos</CardTitle>
@@ -311,7 +296,10 @@ export default function Dashboard() {
                 Visualize os envios programados para os próximos dias
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/agendamentos')}>Ver todos</Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/agendamentos')} 
+              className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/30">
+              Ver todos
+            </Button>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -350,7 +338,7 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-sm hover:shadow transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Status dos Envios Recentes</CardTitle>
@@ -358,7 +346,10 @@ export default function Dashboard() {
                 Resumo dos últimos envios realizados
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/envios')}>Ver todos</Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/envios')}
+              className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/30">
+              Ver todos
+            </Button>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -388,9 +379,9 @@ export default function Dashboard() {
                         {format(new Date(envio.data_envio), "dd/MM/yyyy", { locale: ptBR })}
                       </p>
                       <div className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center ${
-                        envio.status === 'entregue' ? 'bg-green-100 text-green-800' : 
-                        envio.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' : 
-                        'bg-red-100 text-red-800'
+                        envio.status === 'entregue' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                        envio.status === 'pendente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 
+                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
                       }`}>
                         {envio.status === 'entregue' ? (
                           <CheckCircle className="h-3 w-3 mr-1" />

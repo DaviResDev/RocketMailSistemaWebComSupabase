@@ -15,7 +15,7 @@ import {
   Sun,
   Menu,
   X,
-  User
+  Rocket
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -125,10 +125,13 @@ export function Sidebar() {
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between p-4 border-b">
             <Link to="/dashboard" className="flex items-center gap-2">
-              <div className="bg-primary text-primary-foreground p-1.5 rounded">
-                <Mail size={20} />
+              <div className="flex items-center gap-2">
+                <img 
+                  src="/lovable-uploads/649c0e06-7f41-4d18-9e08-554b28327854.png" 
+                  alt="Rocket Mail Logo" 
+                  className="h-10 w-auto"
+                />
               </div>
-              <h1 className="text-xl font-bold">DisparoPro</h1>
             </Link>
             {isMobile && (
               <Button
