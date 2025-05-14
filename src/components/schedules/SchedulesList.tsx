@@ -72,12 +72,14 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw templateError;
       }
       
-      // Convert schedule to EnvioFormData
+      // Convert schedule to EnvioFormData - Fix for TypeScript error
+      // We pass the attachments directly from the template without converting
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
         agendamento_id: schedule.id,
-        attachments: template.attachments // Garantir que os anexos são incluídos
+        // Pass the attachments without conversion since sendEmail will handle it
+        attachments: template.attachments 
       };
       
       // Adicionar logs para verificar os dados de envio

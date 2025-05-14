@@ -1,8 +1,8 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { Json } from '@/integrations/supabase/types';
 
 // Define the shape of attachments
 export interface EnvioAttachment {
@@ -16,22 +16,16 @@ export interface Envio {
   id: string;
   contato_id: string;
   template_id: string;
-  status: string;
   data_envio: string;
-  erro: string | null;
+  status: string;
+  erro?: string;
   user_id: string;
-  contato: {
+  contato?: {
     nome: string;
     email: string;
-    telefone: string | null;
-    razao_social: string | null;
-    cliente: string | null;
   };
-  template: {
+  template?: {
     nome: string;
-    conteudo: string;
-    canal: string;
-    assinatura: string | null;
   };
   cc?: string[];
   bcc?: string[];
@@ -44,12 +38,7 @@ export interface EnvioFormData {
   contato_id: string;
   template_id: string;
   agendamento_id?: string;
-  cc?: string[];
-  bcc?: string[];
-  attachments?: {
-    file: File;
-    name: string;
-  }[];
+  attachments?: Json | { file: File; name: string; }[] | null;
 }
 
 export function useEnvios() {

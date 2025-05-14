@@ -64,12 +64,9 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
           if (Array.isArray(attachmentsList) && attachmentsList.length > 0) {
             // Criar "arquivos" para exibição na interface
             const displayFiles = attachmentsList.map((attachment, index) => {
-              // Criar um objeto File-like para exibição
-              return new File(
-                [new Blob(['placeholder'])], 
-                attachment.name || `anexo-${index + 1}.pdf`,
-                { type: 'application/octet-stream' }
-              );
+              // Fix: Create a File object correctly
+              const blob = new Blob(['placeholder'], { type: 'application/octet-stream' });
+              return new File([blob], attachment.name || `anexo-${index + 1}.pdf`, { type: 'application/octet-stream' });
             });
             
             setAttachments(displayFiles);
