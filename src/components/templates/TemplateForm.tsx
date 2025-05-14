@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Save, Send, File as FileIcon, Loader2, X, Upload, PaperclipIcon } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { Template } from '@/hooks/useTemplates';
+import { Template } from '@/types/template';
 
 export interface TemplateFormProps {
   template?: Template;

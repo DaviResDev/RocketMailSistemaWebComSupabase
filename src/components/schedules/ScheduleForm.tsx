@@ -9,7 +9,7 @@ import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check, Search } from '
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
-import { useEnvios } from '@/hooks/useEnvios';
+import useEnvios from '@/hooks/useEnvios';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';

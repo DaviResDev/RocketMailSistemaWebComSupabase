@@ -1,3 +1,4 @@
+
 import { useState, useEffect, FormEvent } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
@@ -11,11 +12,11 @@ import { Card } from '@/components/ui/card';
 import { Layout } from '@/components/layout/Layout';
 
 const Templates = () => {
-  const { templates, loading, error, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
+  const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { user } = useAuth();
 
   const [formData, setFormData] = useState<TemplateFormData>({
@@ -28,7 +29,7 @@ const Templates = () => {
   useEffect(() => {
     if (user) {
       fetchTemplates().catch(err => {
-        setError(err.message);
+        setErrorMessage(err.message);
       });
     }
   }, [fetchTemplates, user]);
@@ -43,44 +44,6 @@ const Templates = () => {
     setIsCreating(true);
     setIsEditing(false);
     setSelectedTemplate(null);
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!formData.nome || !formData.conteudo) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Por favor, preencha todos os campos obrigatórios."
-      });
-      return;
-    }
-
-    try {
-      if (isEditing && selectedTemplate) {
-        await updateTemplate(selectedTemplate.id, formData);
-        toast({
-          title: "Sucesso",
-          description: "Template atualizado com sucesso!"
-        });
-      } else {
-        await createTemplate(formData);
-        toast({
-          title: "Sucesso",
-          description: "Template criado com sucesso!"
-        });
-      }
-      setIsCreating(false);
-      setIsEditing(false);
-      setSelectedTemplate(null);
-    } catch (error) {
-      console.error("Erro ao salvar template:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Ocorreu um erro ao salvar o template."
-      });
-    }
   };
 
   const handleEditClick = (template: Template) => {
@@ -157,9 +120,9 @@ const Templates = () => {
           <div className="flex justify-center items-center h-64">
             <p className="text-muted-foreground">Carregando templates...</p>
           </div>
-        ) : error ? (
+        ) : errorMessage ? (
           <div className="flex justify-center items-center h-64">
-            <p className="text-red-500">Erro ao carregar templates: {error}</p>
+            <p className="text-red-500">Erro ao carregar templates: {errorMessage}</p>
           </div>
         ) : templates.length === 0 ? (
           <Card className="p-6 text-center">
