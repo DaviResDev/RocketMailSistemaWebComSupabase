@@ -18,10 +18,14 @@ export function Toaster() {
         // Extract type from props and provide default
         const { type, ...restProps } = props;
         
-        // Handle the type safely with a type guard approach
-        // First convert to string if it exists, then compare
-        const typeString = type ? String(type) : "";
-        const toastType = typeString === "background" ? "background" : "foreground";
+        // Certificar que temos uma string para comparação
+        // e definir um tipo seguro para o componente Toast
+        let toastType: "foreground" | "background" = "foreground";
+        
+        // Verificar se o tipo é "background" e atualizar apenas nesse caso
+        if (typeof type === 'string' && type === "background") {
+          toastType = "background";
+        }
         
         return (
           <Toast key={id} {...restProps} type={toastType}>
