@@ -40,11 +40,18 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       setLoadingItems(prev => ({ ...prev, [schedule.id]: true }));
       
       // Show sending toast
-      const toastId = toast.loading(`Enviando email para ${schedule.contato?.nome || 'contato'}`);
+      toast({
+        title: "Enviando email",
+        description: `Enviando para ${schedule.contato?.nome || 'contato'}`,
+      });
       
       // Check if we have all required data
       if (!schedule.contato_id || !schedule.template_id) {
-        toast.error("Dados incompletos para envio: contato ou template faltando");
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Dados incompletos para envio: contato ou template faltando"
+        });
         throw new Error("Dados incompletos para envio: contato ou template faltando");
       }
       
@@ -59,7 +66,11 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       const result = await sendEmail(envioData);
       
       if (!result) {
-        toast.error("Falha ao enviar o email. Verifique sua conexão com a internet.");
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Falha ao enviar o email. Verifique sua conexão com a internet."
+        });
         throw new Error("Falha ao enviar o email");
       }
       
@@ -69,14 +80,31 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         .update({ status: 'enviado' })
         .eq('id', schedule.id);
       
-      toast.success('Email enviado com sucesso!');
+      toast({
+        title: "Sucesso",
+        description: 'Email enviado com sucesso!'
+      });
       
       // Refresh both schedules list and email history
       await fetchEnvios(); // Fetch email history to update Dashboard and Envios page
       await onRefresh(); // Refresh schedules list
     } catch (err: any) {
       console.error('Erro ao enviar email agendado:', err);
-      toast.error(`Erro ao enviar email: ${err.message || 'Erro de conexão com o servidor'}`);
+      
+      // More detailed error message
+      let errorMessage = "Erro desconhecido";
+      
+      if (err.message?.includes('non-2xx status code')) {
+        errorMessage = "Erro no servidor de email. Verifique suas configurações SMTP ou tente novamente mais tarde.";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Erro ao enviar email",
+        description: errorMessage
+      });
       
       // Log detailed error for debugging
       console.error('Detalhes do erro:', {
@@ -104,13 +132,20 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw error;
       }
       
-      toast.success('Agendamento cancelado com sucesso!');
+      toast({
+        title: "Sucesso",
+        description: 'Agendamento cancelado com sucesso!'
+      });
       
       // Refresh schedules list
       onRefresh();
     } catch (err: any) {
       console.error('Erro ao cancelar agendamento:', err);
-      toast.error(`Erro ao cancelar agendamento: ${err.message}`);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: `Erro ao cancelar agendamento: ${err.message}`
+      });
     } finally {
       // Always unmark the item as loading
       setLoadingItems(prev => ({ ...prev, [scheduleId]: false }));

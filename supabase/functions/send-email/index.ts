@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
 
 // Since there are Buffer issues with nodemailer in Deno environment, we'll use only Resend
-import { Resend } from "https://esm.sh/resend@0.15.3";
+import { Resend } from "https://esm.sh/resend@1.0.0";
 
 console.log("SUPABASE_URL available:", !!Deno.env.get("SUPABASE_URL"));
 console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
@@ -25,7 +25,7 @@ serve(async (req: Request) => {
 
   try {
     // Parse request body
-    const { to, subject, content, isTest, signature_image, attachments } = await req.json();
+    const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id } = await req.json();
 
     // Validate required inputs
     if (!to || !subject || !content) {
@@ -41,42 +41,49 @@ serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get the user ID from the authorization header
-    const authHeader = req.headers.get("authorization")?.split(" ")[1];
-    let userId;
-
-    if (authHeader) {
-      const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(authHeader);
-      if (userError) throw new Error("Unauthorized: " + userError.message);
-      userId = user?.id;
-    } else if (isTest) {
-      // For test emails we allow without auth, but would need to verify recipient is own email
-      // For now we simplify by just allowing test emails without auth
-    } else {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Get the user ID from the authorization header or from the request body
+    let userId = user_id;
+    
+    if (!userId) {
+      const authHeader = req.headers.get("authorization")?.split(" ")[1];
+      
+      if (authHeader) {
+        const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(authHeader);
+        if (userError) throw new Error("Unauthorized: " + userError.message);
+        userId = user?.id;
+      } else if (isTest) {
+        // For test emails we allow without auth
+      } else {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Create initial envio record for tracking
     let envioId = null;
     if (userId) {
-      const { data: envioData, error: envioError } = await supabaseAdmin
-        .from("envios")
-        .insert({
-          user_id: userId,
-          contato_id: isTest ? null : to,
-          template_id: isTest ? null : subject,
-          status: "processando",
-        })
-        .select("id")
-        .single();
+      try {
+        const { data: envioData, error: envioError } = await supabaseAdmin
+          .from("envios")
+          .insert({
+            user_id: userId,
+            contato_id: contato_id || null, // Make sure we use null instead of a non-UUID value
+            template_id: template_id || null, // Make sure we use null instead of a non-UUID value
+            status: "processando",
+            agendamento_id: agendamento_id || null
+          })
+          .select("id")
+          .single();
 
-      if (envioError) {
-        console.error("Error creating envio record:", envioError);
-      } else {
-        envioId = envioData.id;
+        if (envioError) {
+          console.error("Error creating envio record:", envioError);
+        } else {
+          envioId = envioData.id;
+        }
+      } catch (err) {
+        console.error("Exception creating envio record:", err);
       }
     }
 
@@ -86,7 +93,7 @@ serve(async (req: Request) => {
           .from("configuracoes")
           .select("*")
           .eq("user_id", userId)
-          .single()
+          .maybeSingle()
       : { data: null, error: null };
 
     if (settingsError && !isTest) {
@@ -141,11 +148,11 @@ serve(async (req: Request) => {
           }
         }
       } catch (err) {
-        console.error("Error processing attachments for Resend:", err);
+        console.error("Error processing attachments:", err);
       }
     }
 
-    // Send via Resend
+    // Determine email sending method based on user settings
     let success = false;
     let error = null;
     
@@ -163,7 +170,7 @@ serve(async (req: Request) => {
         to: [emailData.to],
         subject: emailData.subject,
         html: emailData.html,
-        attachments: resendAttachments
+        attachments: resendAttachments.length > 0 ? resendAttachments : undefined
       });
 
       if (resendError) throw resendError;
