@@ -18,9 +18,11 @@ export function Toaster() {
         // Extract type from props
         const { type, ...restProps } = props;
         
-        // Convert any type to a valid Toast type (foreground or background)
+        // Set a default value for the Toast
         let validType: "foreground" | "background" = "foreground";
-        if (typeof type === "string" && (type === "foreground" || type === "background")) {
+        
+        // Only try to use the provided type if it's one of the allowed values
+        if (type === "foreground" || type === "background") {
           validType = type;
         }
         
