@@ -18,5 +18,6 @@ export interface TemplateFormData {
   canal?: string;
   assinatura?: string;
   signature_image?: string | null;
-  status?: string; // Adding status to form data as well
+  status: string; // Changed from optional to required to match usage
+  attachments?: any; // Adding attachments property to match Template interface
 }

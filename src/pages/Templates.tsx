@@ -2,7 +2,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
-import { useTemplates, Template, TemplateFormData } from '@/hooks/useTemplates';
+import { useTemplates } from '@/hooks/useTemplates';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Layout } from '@/components/layout/Layout';
+import { Template, TemplateFormData } from '@/types/template';
 
 const Templates = () => {
   const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();

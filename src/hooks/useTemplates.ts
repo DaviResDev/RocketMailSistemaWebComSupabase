@@ -1,30 +1,9 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { Json } from '@/integrations/supabase/types';
-
-export type Template = {
-  id: string;
-  nome: string;
-  conteudo: string;
-  canal: string;
-  assinatura?: string;
-  signature_image?: string | null;
-  attachments?: Json | any[] | string;
-  created_at: string;
-};
-
-export type TemplateFormData = {
-  id?: string;
-  nome: string;
-  conteudo: string;
-  canal: string;
-  assinatura?: string;
-  signature_image?: string | null;
-  attachments?: Json | any[] | string;
-};
+import { Template, TemplateFormData } from '@/types/template';
 
 export function useTemplates() {
   const [templates, setTemplates] = useState<Template[]>([]);

@@ -18,8 +18,11 @@ export function Toaster() {
         // Extract variant from props and provide default
         const variant = props.variant || "default";
         
+        // Remove type from props if it exists to avoid type conflicts
+        const { type, ...restProps } = props;
+        
         return (
-          <Toast key={id} {...props}>
+          <Toast key={id} {...restProps} variant={variant}>
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
