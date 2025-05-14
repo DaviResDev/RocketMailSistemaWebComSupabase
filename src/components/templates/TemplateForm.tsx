@@ -13,6 +13,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
+// Define a type for attachments to use in the UI
+interface AttachmentFile extends File {
+  url?: string;
+}
+
+// Define a type for attachment-like objects
+interface AttachmentLike {
+  name: string;
+  type: string;
+  size: number;
+  content?: string;
+  url?: string;
+}
+
 interface TemplateFormProps {
   formData: TemplateFormData;
   setFormData: React.Dispatch<React.SetStateAction<TemplateFormData>>;
@@ -26,7 +40,7 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
   const [previewHTML, setPreviewHTML] = useState('');
   const [signature, setSignature] = useState<File | null>(null);
   const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const { user } = useAuth();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,12 +76,25 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
           
           // Atualizar a interface com os anexos existentes
           if (Array.isArray(attachmentsList) && attachmentsList.length > 0) {
-            // Criar "arquivos" para exibição na interface
+            // Criar arquivos para exibição na interface
             const displayFiles = attachmentsList.map((attachment, index) => {
-              // Fix: Create File objects correctly with proper parameters
-              const blob = new Blob(['placeholder'], { type: 'application/octet-stream' });
+              // Fix: Create a proper File-like object for display purposes
               const fileName = attachment.name || `anexo-${index + 1}.pdf`;
-              return new File([blob], fileName, { type: 'application/octet-stream' });
+              const fileType = attachment.type || 'application/octet-stream';
+              const fileSize = attachment.size || 0;
+              
+              // Create a minimal Blob
+              const blob = new Blob([''], { type: fileType });
+              
+              // Create a File object from the Blob
+              const file = new File([blob], fileName, { type: fileType }) as AttachmentFile;
+              
+              // Add the URL if available
+              if (attachment.url) {
+                file.url = attachment.url;
+              }
+              
+              return file;
             });
             
             setAttachments(displayFiles);
@@ -304,8 +331,17 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         }
       }
       
-      // Add files to attachments list in UI
-      setAttachments(prev => [...prev, ...files]);
+      // Add files to attachments list in UI (preserve type safety)
+      const newAttachments: AttachmentFile[] = files.map(file => {
+        const newFile = file as AttachmentFile;
+        const matchingMetadata = attachmentsList.find(a => a.name === file.name);
+        if (matchingMetadata?.url) {
+          newFile.url = matchingMetadata.url;
+        }
+        return newFile;
+      });
+      
+      setAttachments(prev => [...prev, ...newAttachments]);
       
       // Update form data with attachment metadata
       const currentAttachments = typeof formData.attachments === 'string'
@@ -338,15 +374,15 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
       reader.onload = () => {
         const fileContent = reader.result;
         if (typeof fileContent === 'string') {
-          const fileObj = {
-            name: file.name,
+          // Create a copy of the file with URL added
+          const fileWithUrl = new File([file], file.name, { 
             type: file.type,
-            size: file.size,
-            content: fileContent.split(',')[1], // Extract base64 content
-            url: fileContent // Full data URL
-          };
+            lastModified: file.lastModified 
+          }) as AttachmentFile;
           
-          setAttachments(prev => [...prev, fileObj]);
+          fileWithUrl.url = fileContent;
+          
+          setAttachments(prev => [...prev, fileWithUrl]);
         }
       };
       reader.readAsDataURL(file);

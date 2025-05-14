@@ -33,6 +33,7 @@ export interface Envio {
   bcc?: string[];
   attachments?: EnvioAttachment[];
   resposta_smtp?: string; // Adicionado para armazenar resposta do servidor SMTP
+  agendamento_id?: string; // Added to link to agendamentos table
 }
 
 // Update form data to include all needed properties
@@ -166,21 +167,33 @@ export function useEnvios() {
 
   const sendEmail = useCallback(async (formData: EnvioFormData) => {
     if (!user) {
-      toast.error('Você precisa estar logado para enviar emails');
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: 'Você precisa estar logado para enviar emails'
+      });
       return false;
     }
 
     // Implementar proteção contra spam múltiplo (debounce)
     const now = Date.now();
     if (now - lastSendTime < DEBOUNCE_TIME) {
-      // Changed from toast.warning to toast.info since there's no warning method defined
-      const toastId = toast.info('Por favor, aguarde alguns segundos antes de enviar outro email');
+      toast({
+        variant: "destructive",
+        title: "Aguarde",
+        description: 'Por favor, aguarde alguns segundos antes de enviar outro email'
+      });
       return false;
     }
     setLastSendTime(now);
 
     // Create a unique toast ID we can reference later
-    const toastId = toast.loading('Enviando email...');
+    const toastId = "sending-email";
+    toast({
+      id: toastId,
+      title: "Enviando email...",
+      description: "Por favor, aguarde enquanto processamos seu envio."
+    });
     
     try {
       setSending(true);
@@ -195,7 +208,11 @@ export function useEnvios() {
 
       if (templateError) {
         console.error('Erro ao carregar template:', templateError);
-        toast.error(`Erro ao carregar template: ${templateError.message}`, { id: toastId });
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: `Erro ao carregar template: ${templateError.message}`
+        });
         setSending(false);
         return false;
       }
@@ -208,20 +225,32 @@ export function useEnvios() {
 
       if (contatoError) {
         console.error('Erro ao carregar contato:', contatoError);
-        toast.error(`Erro ao carregar contato: ${contatoError.message}`, { id: toastId });
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: `Erro ao carregar contato: ${contatoError.message}`
+        });
         setSending(false);
         return false;
       }
 
       if (!templateData || !contatoData) {
-        toast.error('Template ou contato não encontrado.', { id: toastId });
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: 'Template ou contato não encontrado.'
+        });
         setSending(false);
         return false;
       }
 
       // Validar dados críticos antes do envio
       if (!contatoData.email || !templateData.conteudo) {
-        toast.error("Dados incompletos para envio. Verifique se o contato possui email e se o template possui conteúdo.", { id: toastId });
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Dados incompletos para envio. Verifique se o contato possui email e se o template possui conteúdo."
+        });
         setSending(false);
         return false;
       }
@@ -235,14 +264,22 @@ export function useEnvios() {
 
       if (settingsError) {
         console.error('Erro ao carregar configurações:', settingsError);
-        toast.error(`Erro ao verificar configurações: ${settingsError.message}`, { id: toastId });
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: `Erro ao verificar configurações: ${settingsError.message}`
+        });
         setSending(false);
         return false;
       }
 
       // Verificar apenas configurações básicas necessárias para Resend
       if (!settingsData) {
-        toast.error('Configurações de email não encontradas. Acesse "Configurações > Email" para configurar seus dados de envio.', { id: toastId });
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: 'Configurações de email não encontradas. Acesse "Configurações > Email" para configurar seus dados de envio.'
+        });
         setSending(false);
         return false;
       }
@@ -254,7 +291,8 @@ export function useEnvios() {
         // Handle different types of attachments
         if (Array.isArray(formData.attachments) && formData.attachments.length > 0 && 'file' in formData.attachments[0]) {
           // Handle File objects if they exist
-          attachments = await Promise.all((formData.attachments as { file: File; name: string }[]).map(async (item) => {
+          const fileAttachments = formData.attachments as { file: File; name: string }[];
+          attachments = await Promise.all(fileAttachments.map(async (item) => {
             const fileContent = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = () => resolve(reader.result as string);
@@ -282,11 +320,7 @@ export function useEnvios() {
         } else if (typeof formData.attachments === 'object' && formData.attachments !== null && !Array.isArray(formData.attachments)) {
           // If it's a JSON object from Supabase
           // Convert to array if needed
-          if (!Array.isArray(formData.attachments)) {
-            attachments = [formData.attachments as AttachmentType];
-          } else {
-            attachments = formData.attachments as AttachmentType[];
-          }
+          attachments = [formData.attachments as AttachmentType];
         }
       }
 
@@ -298,7 +332,9 @@ export function useEnvios() {
         contato_id: formData.contato_id,
         template_id: formData.template_id,
         user_id: user.id,
-        agendamento_id: formData.agendamento_id
+        agendamento_id: formData.agendamento_id,
+        hasCC: formData.cc && formData.cc.length > 0,
+        hasBCC: formData.bcc && formData.bcc.length > 0
       });
       
       try {
@@ -325,9 +361,17 @@ export function useEnvios() {
           
           // Mensagem de erro mais amigável para erros de conexão
           if (functionError.message && functionError.message.includes('Failed to fetch')) {
-            toast.error('Erro de conexão com o servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.', { id: toastId });
+            toast({
+              variant: "destructive",
+              title: "Erro",
+              description: 'Erro de conexão com o servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.'
+            });
           } else {
-            toast.error(`Erro ao enviar email: ${functionError.message}`, { id: toastId });
+            toast({
+              variant: "destructive",
+              title: "Erro",
+              description: `Erro ao enviar email: ${functionError.message}`
+            });
           }
           
           setSending(false);
@@ -342,6 +386,7 @@ export function useEnvios() {
                 status: 'erro',
                 erro: functionError.message,
                 user_id: user.id,
+                agendamento_id: formData.agendamento_id
               },
             ]);
 
@@ -358,7 +403,11 @@ export function useEnvios() {
             errorMsg = "Seu domínio de email precisa ser verificado no Resend. Acesse Configurações > Email para instruções.";
           }
           
-          toast.error(`Erro ao enviar email: ${errorMsg}`, { id: toastId });
+          toast({
+            variant: "destructive",
+            title: "Erro",
+            description: `Erro ao enviar email: ${errorMsg}`
+          });
           setSending(false);
 
           // Save envio with error status
@@ -371,6 +420,7 @@ export function useEnvios() {
                 status: 'erro',
                 erro: functionData.error,
                 user_id: user.id,
+                agendamento_id: formData.agendamento_id
               },
             ]);
 
@@ -380,10 +430,11 @@ export function useEnvios() {
         // Success case
         console.log('Email enviado com sucesso:', functionData);
         
-        // Usando string template em vez de JSX
-        toast.success(`Email enviado com sucesso para ${contatoData.nome}! Se o destinatário não receber, peça para verificar a pasta de spam.`, 
-          { id: toastId, duration: 5000 }
-        );
+        toast({
+          title: "Sucesso",
+          description: `Email enviado com sucesso para ${contatoData.nome}! Se o destinatário não receber, peça para verificar a pasta de spam.`,
+          duration: 5000
+        });
         
         setSending(false);
         fetchEnvios();
@@ -399,7 +450,11 @@ export function useEnvios() {
           errorMessage += error.message;
         }
         
-        toast.error(errorMessage, { id: toastId });
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: errorMessage
+        });
         setSending(false);
         return false;
       }
@@ -415,7 +470,11 @@ export function useEnvios() {
         errorMessage += error.message;
       }
       
-      toast.error(errorMessage, { id: toastId });
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: errorMessage
+      });
       setSending(false);
       return false;
     }

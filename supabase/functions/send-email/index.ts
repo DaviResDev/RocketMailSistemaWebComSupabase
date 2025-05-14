@@ -77,17 +77,23 @@ serve(async (req: Request) => {
     let envioId = null;
     if (userId) {
       try {
-        // Create an envio record
+        // Create an envio record with agendamento_id field
+        const insertData: any = {
+          user_id: userId,
+          contato_id: contato_id || null,
+          template_id: template_id || null,
+          status: "processando",
+          data_envio: new Date().toISOString(),
+        };
+        
+        // Only add agendamento_id if it's provided
+        if (agendamento_id) {
+          insertData.agendamento_id = agendamento_id;
+        }
+        
         const { data: envioData, error: envioError } = await supabaseAdmin
           .from("envios")
-          .insert({
-            user_id: userId,
-            contato_id: contato_id || null,
-            template_id: template_id || null,
-            status: "processando",
-            data_envio: new Date().toISOString(),
-            agendamento_id: agendamento_id || null
-          })
+          .insert(insertData)
           .select("id")
           .single();
 
