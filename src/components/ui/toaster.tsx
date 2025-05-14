@@ -15,12 +15,14 @@ export function Toaster() {
   return (
     <ToastProvider>
       {toasts && toasts.map(function ({ id, title, description, action, ...props }) {
-        // Remova 'type' se não for 'foreground' ou 'background'
+        // Extract type from props and convert it to a valid Toast type
         const { type, ...restProps } = props;
-        const validType = type === 'foreground' || type === 'background' ? type : 'foreground';
+        // Default to 'foreground' if type isn't a valid Toast type
+        const validType = (type === 'foreground' || type === 'background') ? 
+          type : 'foreground';
         
         return (
-          <Toast key={id} {...restProps} type={validType}>
+          <Toast key={id} {...restProps} type={validType as "foreground" | "background"}>
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
