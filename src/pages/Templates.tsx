@@ -5,7 +5,6 @@ import { TemplateCard } from '@/components/templates/TemplateCard';
 import { useTemplates } from '@/hooks/useTemplates';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, AlertCircle } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -20,6 +19,7 @@ const Templates = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
   const { user } = useAuth();
 
   const [formData, setFormData] = useState<TemplateFormData>({
@@ -33,16 +33,20 @@ const Templates = () => {
       try {
         setErrorMessage(null);
         await fetchTemplates();
+        setIsInitialized(true);
       } catch (err: any) {
         console.error("Error loading templates:", err);
         setErrorMessage(err.message || "Falha na conexão com o servidor");
+        setIsInitialized(true);
       }
     }
   }, [fetchTemplates, user]);
 
   useEffect(() => {
-    loadTemplates();
-  }, [loadTemplates, retryCount]);
+    if (!isInitialized) {
+      loadTemplates();
+    }
+  }, [loadTemplates, retryCount, isInitialized]);
 
   const handleCreateClick = () => {
     setFormData({
@@ -61,7 +65,7 @@ const Templates = () => {
       nome: template.nome,
       conteudo: template.conteudo,
       signature_image: template.signature_image || null,
-      status: template.status,
+      status: template.status || 'ativo',
     });
     setIsEditing(true);
     setIsCreating(true);
@@ -69,6 +73,7 @@ const Templates = () => {
 
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
+    setIsInitialized(false);
   };
 
   if (!user) {
@@ -148,7 +153,7 @@ const Templates = () => {
             setSelectedTemplate(null);
           }}
         />
-      ) : loading ? (
+      ) : loading && !isInitialized ? (
         <TemplateSkeletons />
       ) : errorMessage ? (
         <Alert variant="destructive" className="mb-6">

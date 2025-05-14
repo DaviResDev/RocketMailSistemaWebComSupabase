@@ -1,0 +1,69 @@
+
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+
+export function useTemplateEmail() {
+  const { user } = useAuth();
+
+  const sendTestEmail = async (templateId: string, email: string) => {
+    if (!user) {
+      toast.error('Você precisa estar logado para enviar emails de teste');
+      return false;
+    }
+
+    try {
+      toast.info('Enviando email de teste...');
+      
+      // Get the template first
+      const { data: template, error: templateError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+      
+      if (templateError) throw templateError;
+      
+      // Process template with sample data
+      const currentDate = new Date();
+      const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+      
+      let processedContent = template.conteudo
+        .replace(/{nome}/g, "Usuário Teste")
+        .replace(/{email}/g, email)
+        .replace(/{telefone}/g, "(00) 00000-0000")
+        .replace(/{razao_social}/g, "Empresa Teste")
+        .replace(/{cliente}/g, "Cliente Teste")
+        .replace(/{dia}/g, formattedDate);
+        
+      // Add signature if it exists
+      if (template.assinatura && template.assinatura !== 'não') {
+        // The signature content will be added in the edge function
+        // based on signature_image parameter
+      }
+      
+      // Call our send-email edge function
+      const response = await supabase.functions.invoke('send-email', {
+        body: {
+          to: email,
+          subject: `[TESTE] ${template.nome}`,
+          content: processedContent,
+          isTest: true,
+          signature_image: template.signature_image,
+          attachments: template.attachments
+        },
+      });
+      
+      if (response.error) throw new Error(response.error.message);
+      
+      toast.success(`Email de teste enviado para ${email}!`);
+      return true;
+    } catch (error: any) {
+      console.error('Erro ao enviar email de teste:', error);
+      toast.error('Erro ao enviar email de teste: ' + (error.message || 'Falha na conexão com o servidor'));
+      return false;
+    }
+  };
+
+  return { sendTestEmail };
+}

@@ -1,10 +1,6 @@
 
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
-import * as nodemailer from "https://esm.sh/nodemailer@6.9.12";
 import { sendEmail, sendEmailViaSMTP, sendEmailViaResend } from "../lib/email-sender.js";
 
 console.log("SUPABASE_URL available:", !!Deno.env.get("SUPABASE_URL"));
@@ -152,15 +148,15 @@ serve(async (req: Request) => {
           ${signature_image ? `<div style="margin-top: 20px;"><img src="${signature_image}" alt="Assinatura" style="max-height: 60px;" /></div>` : ''}
         </div>
       `,
-    };
+    } as any;
     
     // Add CC and BCC if provided
     if (Array.isArray(cc) && cc.length > 0) {
-      emailData["cc"] = cc;
+      emailData.cc = cc;
     }
     
     if (Array.isArray(bcc) && bcc.length > 0) {
-      emailData["bcc"] = bcc;
+      emailData.bcc = bcc;
     }
 
     // Process attachments
@@ -212,6 +208,10 @@ serve(async (req: Request) => {
       }
     }
 
+    if (emailAttachments.length > 0) {
+      emailData.attachments = emailAttachments;
+    }
+
     // Check if SMTP is configured and should be used
     const useSmtp = settingsData?.email_smtp && 
                     settingsData?.email_porta && 
@@ -238,26 +238,8 @@ serve(async (req: Request) => {
           name: settingsData?.smtp_nome || ''
         };
         
-        // Prepare complete email data for sending
-        const emailToSend = {
-          to: emailData.to,
-          subject: emailData.subject,
-          html: emailData.html,
-          cc: emailData.cc,
-          bcc: emailData.bcc,
-          attachments: emailAttachments.length > 0 ? emailAttachments : undefined
-        };
-        
-        console.log("Sending email with SMTP using:", {
-          host: smtpConfig.host,
-          port: smtpConfig.port,
-          secure: smtpConfig.secure,
-          hasUser: !!smtpConfig.user,
-          hasAttachments: emailAttachments.length > 0
-        });
-        
         // Use the sendEmailViaSMTP function from the email-sender module
-        const smtpResult = await sendEmailViaSMTP(smtpConfig, emailToSend);
+        const smtpResult = await sendEmailViaSMTP(smtpConfig, emailData);
         
         console.log("SMTP Email sent successfully:", smtpResult.id);
         smtpResponse = smtpResult.response;
@@ -285,14 +267,7 @@ serve(async (req: Request) => {
               resendApiKey,
               settingsData?.smtp_nome || "RocketMail",
               settingsData?.email_usuario,
-              {
-                to: emailData.to,
-                subject: emailData.subject,
-                html: emailData.html,
-                cc: emailData.cc,
-                bcc: emailData.bcc,
-                attachments: emailAttachments.length > 0 ? emailAttachments : undefined
-              }
+              emailData
             );
             
             console.log("Resend Email sent successfully as fallback:", resendResult.id);
@@ -330,14 +305,7 @@ serve(async (req: Request) => {
           resendApiKey,
           settingsData?.smtp_nome || "RocketMail",
           settingsData?.email_usuario,
-          {
-            to: emailData.to,
-            subject: emailData.subject,
-            html: emailData.html,
-            cc: emailData.cc,
-            bcc: emailData.bcc,
-            attachments: emailAttachments.length > 0 ? emailAttachments : undefined
-          }
+          emailData
         );
         
         console.log("Resend Email sent:", resendResult.id);

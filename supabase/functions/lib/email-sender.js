@@ -164,6 +164,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   
   console.log(`Sending email via Resend`);
   console.log(`From: ${emailData.from} To: ${payload.to}`);
+  console.log(`Subject: ${payload.subject}`);
   
   try {
     const result = await resend.emails.send(emailData);
