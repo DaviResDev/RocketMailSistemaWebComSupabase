@@ -77,8 +77,7 @@ const reducer = (state: State, action: Action): State => {
         return {
           ...state,
           toasts: state.toasts.map((t) => ({
-            ...t,
-            open: false,
+            ...t
           })),
         }
       }
@@ -89,8 +88,7 @@ const reducer = (state: State, action: Action): State => {
         toasts: state.toasts.map((t) =>
           t.id === toastId
             ? {
-                ...t,
-                open: false,
+                ...t
               }
             : t
         ),
@@ -151,7 +149,6 @@ function toast({ ...props }: Toast) {
     toast: {
       ...props,
       id,
-      open: true,
       onOpenChange: (open) => {
         if (!open) dismiss()
       },
