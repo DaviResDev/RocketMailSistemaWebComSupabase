@@ -1,106 +1,186 @@
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
-import { useTemplates, TemplateFormData } from '@/hooks/useTemplates';
+import { useState, useEffect, FormEvent } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
+import { useTemplates, Template, TemplateFormData } from '@/hooks/useTemplates';
+import { Button } from '@/components/ui/button';
+import { PlusCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { Card } from '@/components/ui/card';
+import Layout from '@/components/layout/Layout';
 
-export default function Templates() {
+const Templates = () => {
+  const { templates, loading, error, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
   const [isCreating, setIsCreating] = useState(false);
-  const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const { user } = useAuth();
+
   const [formData, setFormData] = useState<TemplateFormData>({
     nome: '',
     conteudo: '',
-    canal: 'email'
+    canal: 'email',
   });
 
-  const {
-    templates,
-    loading,
-    fetchTemplates,
-    createTemplate,
-    updateTemplate,
-    deleteTemplate
-  } = useTemplates();
-
   useEffect(() => {
-    fetchTemplates();
-  }, []);
+    if (user) {
+      fetchTemplates();
+    }
+  }, [fetchTemplates, user]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCreateClick = () => {
+    setFormData({
+      nome: '',
+      conteudo: '',
+      canal: 'email',
+    });
+    setIsCreating(true);
+    setIsEditing(false);
+    setSelectedTemplate(null);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
-    const success = isEditing
-      ? await updateTemplate(isEditing, formData)
-      : await createTemplate(formData);
+    if (!formData.nome || !formData.conteudo) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Por favor, preencha todos os campos obrigatórios."
+      });
+      return;
+    }
 
-    if (success) {
-      handleCancel();
+    try {
+      if (isEditing && selectedTemplate) {
+        await updateTemplate(selectedTemplate.id, formData);
+        toast({
+          title: "Sucesso",
+          description: "Template atualizado com sucesso!"
+        });
+      } else {
+        await createTemplate(formData);
+        toast({
+          title: "Sucesso",
+          description: "Template criado com sucesso!"
+        });
+      }
+      setIsCreating(false);
+      setIsEditing(false);
+      setSelectedTemplate(null);
+    } catch (error) {
+      console.error("Erro ao salvar template:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Ocorreu um erro ao salvar o template."
+      });
     }
   };
 
-  const handleEdit = (template: any) => {
+  const handleEditClick = (template: Template) => {
+    setSelectedTemplate(template);
     setFormData({
       nome: template.nome,
       conteudo: template.conteudo,
-      canal: template.canal
+      canal: template.canal || 'email',
+      signature_image: template.signature_image || null,
     });
-    setIsEditing(template.id);
+    setIsEditing(true);
     setIsCreating(true);
   };
 
   const handleCancel = () => {
     setIsCreating(false);
-    setIsEditing(null);
-    setFormData({ nome: '', conteudo: '', canal: 'email' });
+    setIsEditing(false);
+    setSelectedTemplate(null);
   };
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Templates</h1>
-        {!isCreating && (
-          <Button onClick={() => setIsCreating(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Novo Template
-          </Button>
-        )}
-      </div>
+  if (!user) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-96">
+          <p className="text-muted-foreground">Você precisa estar logado para ver os templates.</p>
+        </div>
+      </Layout>
+    );
+  }
 
-      {isCreating ? (
-        <TemplateForm
-          formData={formData}
-          setFormData={setFormData}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-          isEditing={!!isEditing}
-        />
-      ) : loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
+  return (
+    <Layout>
+      <div className="container mx-auto py-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Templates</h1>
+          {!isCreating && (
+            <Button onClick={handleCreateClick} className="flex items-center">
+              <PlusCircle className="mr-2 h-4 w-4" /> Novo Template
+            </Button>
+          )}
+        </div>
+
+        {isCreating ? (
+          <TemplateForm
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+            isEditing={isEditing}
+            formData={formData}
+            setFormData={setFormData}
+          />
+        ) : loading ? (
+          <div className="flex justify-center items-center h-64">
             <p className="text-muted-foreground">Carregando templates...</p>
           </div>
-        </div>
-      ) : templates.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Plus className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">Nenhum template criado</h3>
-          <p className="text-muted-foreground mt-2 text-center">
-            Crie seu primeiro template clicando no botão "Novo Template" acima.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((template) => (
-            <TemplateCard
-              key={template.id}
-              template={template}
-              onEdit={handleEdit}
-              onDelete={deleteTemplate}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+        ) : error ? (
+          <div className="flex justify-center items-center h-64">
+            <p className="text-red-500">Erro ao carregar templates: {error}</p>
+          </div>
+        ) : templates.length === 0 ? (
+          <Card className="p-6 text-center">
+            <p className="text-muted-foreground mb-4">Você ainda não criou nenhum template.</p>
+            <Button onClick={handleCreateClick} className="flex items-center mx-auto">
+              <PlusCircle className="mr-2 h-4 w-4" /> Criar primeiro template
+            </Button>
+          </Card>
+        ) : (
+          <Tabs defaultValue="email">
+            <div className="mb-4">
+              <TabsList>
+                <TabsTrigger value="email">Email</TabsTrigger>
+                <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+                <TabsTrigger value="sms">SMS</TabsTrigger>
+              </TabsList>
+            </div>
+            
+            {['email', 'whatsapp', 'sms'].map(canal => (
+              <TabsContent key={canal} value={canal} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {templates
+                  .filter(template => template.canal === canal)
+                  .map(template => (
+                    <TemplateCard
+                      key={template.id}
+                      template={template}
+                      onEdit={() => handleEditClick(template)}
+                      onDelete={() => deleteTemplate(template.id)}
+                    />
+                  ))}
+                {templates.filter(template => template.canal === canal).length === 0 && (
+                  <div className="col-span-full">
+                    <Card className="p-6 text-center">
+                      <p className="text-muted-foreground mb-4">Nenhum template de {canal} encontrado.</p>
+                      <Button onClick={handleCreateClick} className="flex items-center mx-auto">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Criar template de {canal}
+                      </Button>
+                    </Card>
+                  </div>
+                )}
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
+      </div>
+    </Layout>
   );
-}
+};
+
+export default Templates;

@@ -6,6 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
 import { Resend } from "https://esm.sh/resend@1.1.0";
 import * as nodemailer from "https://esm.sh/nodemailer@6.9.12";
+import { sendEmail, sendEmailViaSMTP, sendEmailViaResend } from "../lib/email-sender.js";
 
 console.log("SUPABASE_URL available:", !!Deno.env.get("SUPABASE_URL"));
 console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
@@ -203,8 +204,8 @@ serve(async (req: Request) => {
       }
     }
 
-    // Determine email sending method based on user settings
-    // Default to true if not explicitly set to false
+    // IMPORTANT: Always default to use SMTP if configured
+    // Instead of checking if use_smtp is false, we check if it's explicitly set to false
     const useSmtp = settingsData?.use_smtp !== false && 
                     settingsData?.email_smtp && 
                     settingsData?.email_porta && 
@@ -221,140 +222,81 @@ serve(async (req: Request) => {
       try {
         console.log("Sending via SMTP:", settingsData?.email_smtp);
         
-        // Create SMTP transport with extended timeouts
-        const transport = nodemailer.default.createTransport({
+        const smtpConfig = {
           host: settingsData?.email_smtp,
           port: settingsData?.email_porta || 587,
           secure: settingsData?.smtp_seguranca === "ssl" || settingsData?.email_porta === 465,
-          auth: {
-            user: settingsData?.email_usuario,
-            pass: settingsData?.email_senha
-          },
-          tls: {
-            rejectUnauthorized: false // Accept self-signed certificates
-          },
-          connectionTimeout: 30000, // 30 seconds
-          greetingTimeout: 30000,   // 30 seconds
-          socketTimeout: 60000      // 60 seconds
-        });
+          user: settingsData?.email_usuario,
+          pass: settingsData?.email_senha,
+          name: settingsData?.smtp_nome || ''
+        };
         
-        // Prepare email options
-        const mailOptions = {
-          from: emailData.from,
+        // Use the sendEmailViaSMTP function from the email-sender module
+        const smtpResult = await sendEmailViaSMTP(smtpConfig, {
           to: emailData.to,
           subject: emailData.subject,
           html: emailData.html,
+          cc: emailData.cc,
+          bcc: emailData.bcc,
           attachments: emailAttachments.length > 0 ? emailAttachments : undefined
-        };
+        });
         
-        // Add CC and BCC if provided
-        if (emailData.cc) {
-          mailOptions["cc"] = emailData.cc;
-        }
-        
-        if (emailData.bcc) {
-          mailOptions["bcc"] = emailData.bcc;
-        }
-        
-        console.log("SMTP Options:", JSON.stringify({
-          host: settingsData?.email_smtp,
-          port: settingsData?.email_porta,
-          secure: settingsData?.smtp_seguranca === "ssl" || settingsData?.email_porta === 465,
-          user: settingsData?.email_usuario, 
-          // senha omitida por segurança
-          to: emailData.to,
-          subject: emailData.subject,
-          hasAttachments: emailAttachments.length > 0,
-          hasCC: !!emailData.cc,
-          hasBCC: !!emailData.bcc
-        }));
-        
-        // Send email
-        const info = await transport.sendMail(mailOptions);
-        console.log("SMTP Email sent:", info.messageId);
-        smtpResponse = info.response;
+        console.log("SMTP Email sent:", smtpResult.id);
+        smtpResponse = smtpResult.response;
         
         success = true;
         details = {
           transport: "smtp",
-          id: info.messageId,
-          response: info.response
+          id: smtpResult.id,
+          response: smtpResult.response,
+          from: smtpResult.from
         };
       } catch (smtpErr) {
         console.error("SMTP error:", smtpErr);
         error = smtpErr;
         
-        // If SMTP fails, try using Resend as fallback only if not Gmail or other major provider
-        // For Gmail we don't want a fallback as it's likely a credentials issue
-        const isMajorProvider = 
-          settingsData?.email_smtp?.includes("gmail.com") || 
-          settingsData?.email_smtp?.includes("outlook.com") || 
-          settingsData?.email_smtp?.includes("yahoo.com") ||
-          settingsData?.email_smtp?.includes("hotmail.com");
-          
-        if (isMajorProvider) {
-          // For major providers, don't try Resend fallback as that would change the from address
-          console.log("Not using Resend fallback for major email provider:", settingsData?.email_smtp);
-        } else {
-          // For other providers, we can try Resend as a fallback
-          console.log("SMTP failed, trying Resend fallback");
-        }
+        // We will not use Resend as fallback - as requested by the user
+        throw new Error(`SMTP error: ${smtpErr.message}. Verifique suas configurações SMTP.`);
       }
-    }
-    
-    // If SMTP failed or wasn't configured, try Resend
-    if (!success) {
+    } else {
+      // If SMTP is not configured, use Resend
       const resendApiKey = Deno.env.get("RESEND_API_KEY");
       
       if (!resendApiKey) {
         console.error("No Resend API key available");
-        if (error) {
-          // If we already tried SMTP and it failed
-          throw new Error(`SMTP error: ${error.message}. No Resend API key available for fallback.`);
-        } else {
-          throw new Error("No email sending method available. Configure SMTP or provide Resend API key.");
-        }
+        throw new Error("Nenhum método de envio disponível. Configure SMTP ou forneça uma chave de API Resend.");
       }
       
       try {
         console.log("Sending via Resend");
-        const resend = new Resend(resendApiKey);
         
-        const resendResponse = await resend.emails.send({
-          from: emailData.from,
-          to: [emailData.to],
-          subject: emailData.subject,
-          html: emailData.html,
-          cc: emailData.cc,
-          bcc: emailData.bcc,
-          attachments: emailAttachments.length > 0
-            ? emailAttachments.map(att => ({
-                filename: att.filename,
-                content: att.content
-              }))
-            : undefined
-        });
+        // Use the sendEmailViaResend function from the email-sender module
+        const resendResult = await sendEmailViaResend(
+          resendApiKey,
+          settingsData?.smtp_nome || "RocketMail",
+          settingsData?.email_usuario,
+          {
+            to: emailData.to,
+            subject: emailData.subject,
+            html: emailData.html,
+            cc: emailData.cc,
+            bcc: emailData.bcc,
+            attachments: emailAttachments.length > 0 ? emailAttachments : undefined
+          }
+        );
         
-        if (resendResponse.error) {
-          throw new Error(resendResponse.error.message || "Unknown Resend error");
-        }
-        
-        console.log("Resend Email sent:", resendResponse.data?.id);
+        console.log("Resend Email sent:", resendResult.id);
         
         success = true;
         details = {
           transport: "resend",
-          id: resendResponse.data?.id
+          id: resendResult.id,
+          from: resendResult.from,
+          reply_to: resendResult.reply_to
         };
       } catch (resendErr) {
         console.error("Resend error:", resendErr);
-        
-        if (error) {
-          // If we already tried SMTP and it failed
-          throw new Error(`SMTP error: ${error.message}. Resend fallback error: ${resendErr.message}`);
-        } else {
-          throw resendErr;
-        }
+        throw resendErr;
       }
     }
 

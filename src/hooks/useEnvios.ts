@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -10,6 +9,12 @@ export interface EnvioAttachment {
   file_name: string;
   file_path: string;
   content_type: string;
+}
+
+// Define custom attachment type for file uploads
+export interface AttachmentFile {
+  file: File;
+  name: string;
 }
 
 // Update Envio interface to include the missing properties
@@ -41,7 +46,7 @@ export interface EnvioFormData {
   contato_id: string;
   template_id: string;
   agendamento_id?: string;
-  attachments?: Json | { file: File; name: string; }[] | null;
+  attachments?: Json | AttachmentFile[] | null;
   cc?: string[];
   bcc?: string[];
 }
@@ -289,7 +294,7 @@ export function useEnvios() {
         // Handle different types of attachments
         if (Array.isArray(formData.attachments) && formData.attachments.length > 0 && 'file' in formData.attachments[0]) {
           // Handle File objects if they exist
-          const fileAttachments = formData.attachments as { file: File; name: string }[];
+          const fileAttachments = formData.attachments as AttachmentFile[];
           attachments = await Promise.all(fileAttachments.map(async (item) => {
             const fileContent = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();

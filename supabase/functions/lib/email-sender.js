@@ -9,8 +9,7 @@
  * @param {boolean} config.secure - Whether to use SSL/TLS
  * @param {string} config.user - SMTP username
  * @param {string} config.pass - SMTP password
- * @param {string} config.from - Sender email address
- * @param {string} config.name - Sender name
+ * @param {string} config.name - Sender name (optional)
  * @param {Object} payload - Email payload
  * @param {string} payload.to - Recipient email address
  * @param {Array<string>} [payload.cc] - CC recipients
@@ -159,7 +158,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
 }
 
 /**
- * Send email with SMTP or Resend fallback
+ * Send email with SMTP or Resend
  * @param {Object} payload - Email payload
  * @param {boolean} useSmtp - Whether to use SMTP
  * @param {Object} smtpConfig - SMTP configuration
@@ -176,14 +175,12 @@ async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
     } catch (smtpError) {
       console.error("SMTP send failed:", smtpError.message);
       
-      // For any email provider, we don't want to use Resend fallback
-      // This ensures emails always come from the configured domain
-      // This is especially important for major providers like Gmail
+      // We don't want to use Resend as fallback - as requested by the user
       throw new Error(`SMTP error with ${smtpConfig.host}: ${smtpError.message}. Check your SMTP credentials and settings.`);
     }
   }
   
-  // Use Resend if SMTP is not configured or not requested
+  // Use Resend if SMTP is not configured
   if (!resendApiKey) {
     throw new Error("No email sending method available. Configure SMTP or provide Resend API key.");
   }
