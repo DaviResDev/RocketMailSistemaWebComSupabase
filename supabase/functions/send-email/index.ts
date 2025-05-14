@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
-import { sendEmail, sendEmailViaSMTP, sendEmailViaResend } from "../lib/email-sender.js";
+import { sendEmail } from "../lib/email-sender.js";
 
 console.log("SUPABASE_URL available:", !!Deno.env.get("SUPABASE_URL"));
 console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
@@ -40,7 +40,7 @@ serve(async (req: Request) => {
     // Validate required inputs
     if (!to && !contato_email) {
       return new Response(
-        JSON.stringify({ error: "Missing recipient email address" }),
+        JSON.stringify({ success: false, error: "Missing recipient email address" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -49,7 +49,7 @@ serve(async (req: Request) => {
     
     if (!subject || !content) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: subject or content" }),
+        JSON.stringify({ success: false, error: "Missing required fields: subject or content" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -74,7 +74,7 @@ serve(async (req: Request) => {
         // For test emails we allow without auth
       } else {
         return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
+          JSON.stringify({ success: false, error: "Unauthorized" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -124,7 +124,7 @@ serve(async (req: Request) => {
           .maybeSingle()
       : { data: null, error: null };
 
-    if (settingsError && !isTest) {
+    if (settingsError) {
       console.error("Error fetching email settings:", settingsError);
     }
 
@@ -222,105 +222,59 @@ serve(async (req: Request) => {
     let success = false;
     let error = null;
     let details = null;
-    let smtpResponse = null;
 
-    // Try to send via SMTP if configured
-    if (useSmtp) {
-      try {
-        console.log("Sending via SMTP:", settingsData?.email_smtp);
-        
-        const smtpConfig = {
+    try {
+      // Use the sendEmail function from email-sender module
+      const result = await sendEmail(
+        emailData,
+        useSmtp,
+        useSmtp ? {
           host: settingsData?.email_smtp,
           port: settingsData?.email_porta || 587,
           secure: settingsData?.smtp_seguranca === "ssl" || settingsData?.email_porta === 465,
           user: settingsData?.email_usuario,
           pass: settingsData?.email_senha,
           name: settingsData?.smtp_nome || ''
-        };
-        
-        // Use the sendEmailViaSMTP function from the email-sender module
-        const smtpResult = await sendEmailViaSMTP(smtpConfig, emailData);
-        
-        console.log("SMTP Email sent successfully:", smtpResult.id);
-        smtpResponse = smtpResult.response;
-        
-        success = true;
-        details = {
-          transport: "smtp",
-          id: smtpResult.id,
-          response: smtpResult.response,
-          from: smtpResult.from
-        };
-      } catch (smtpErr) {
-        console.error("SMTP error:", smtpErr);
-        error = smtpErr;
-        
-        console.log("SMTP failed, trying Resend as fallback...");
-        
-        // Use Resend as fallback if SMTP fails
-        const resendApiKey = Deno.env.get("RESEND_API_KEY");
-        
-        if (resendApiKey) {
-          try {
-            // Use the sendEmailViaResend function from the email-sender module
-            const resendResult = await sendEmailViaResend(
-              resendApiKey,
-              settingsData?.smtp_nome || "RocketMail",
-              settingsData?.email_usuario,
-              emailData
-            );
-            
-            console.log("Resend Email sent successfully as fallback:", resendResult.id);
-            
-            success = true;
-            details = {
-              transport: "resend",
-              id: resendResult.id,
-              from: resendResult.from,
-              reply_to: resendResult.reply_to,
-              note: "Fallback from SMTP failure"
-            };
-          } catch (resendErr) {
-            console.error("Resend fallback error:", resendErr);
-            throw new Error(`SMTP error: ${smtpErr.message}. Resend fallback also failed: ${resendErr.message}`);
-          }
-        } else {
-          throw new Error(`SMTP error: ${smtpErr.message}. Verifique suas configurações SMTP. Nenhuma chave Resend disponível para fallback.`);
+        } : null,
+        Deno.env.get("RESEND_API_KEY") || "",
+        settingsData?.smtp_nome || "RocketMail"
+      );
+      
+      console.log("Email sent successfully:", result);
+      success = true;
+      details = result;
+      
+    } catch (sendError) {
+      console.error("Error sending email:", sendError);
+      error = sendError;
+      
+      // Update the envio record with error info
+      if (envioId) {
+        await supabaseAdmin
+          .from("envios")
+          .update({
+            status: "erro",
+            erro: sendError.message,
+          })
+          .eq("id", envioId);
+          
+        if (agendamento_id) {
+          await supabaseAdmin
+            .from("agendamentos")
+            .update({
+              status: "falha",
+            })
+            .eq("id", agendamento_id);
         }
       }
-    } else {
-      // If SMTP is not configured, use Resend
-      const resendApiKey = Deno.env.get("RESEND_API_KEY");
       
-      if (!resendApiKey) {
-        console.error("No Resend API key available");
-        throw new Error("Nenhum método de envio disponível. Configure SMTP ou forneça uma chave de API Resend.");
-      }
-      
-      try {
-        console.log("Sending via Resend");
-        
-        // Use the sendEmailViaResend function from the email-sender module
-        const resendResult = await sendEmailViaResend(
-          resendApiKey,
-          settingsData?.smtp_nome || "RocketMail",
-          settingsData?.email_usuario,
-          emailData
-        );
-        
-        console.log("Resend Email sent:", resendResult.id);
-        
-        success = true;
-        details = {
-          transport: "resend",
-          id: resendResult.id,
-          from: resendResult.from,
-          reply_to: resendResult.reply_to
-        };
-      } catch (resendErr) {
-        console.error("Resend error:", resendErr);
-        throw resendErr;
-      }
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: sendError.message,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Update the envio record with the result
@@ -331,7 +285,7 @@ serve(async (req: Request) => {
           .from("envios")
           .update({
             status: "entregue",
-            resposta_smtp: smtpResponse // Save SMTP response for debugging
+            resposta_smtp: details?.response // Save SMTP response for debugging
           })
           .eq("id", envioId);
           
@@ -345,51 +299,24 @@ serve(async (req: Request) => {
             .eq("id", agendamento_id);
           console.log("Updated agendamento status to 'enviado'");
         }
-      } else {
-        console.log("Updated sending status to 'erro'");
-        await supabaseAdmin
-          .from("envios")
-          .update({
-            status: "erro",
-            erro: error ? error.message : "Unknown error",
-          })
-          .eq("id", envioId);
-          
-        // If this was an agendamento, update its status too
-        if (agendamento_id) {
-          await supabaseAdmin
-            .from("agendamentos")
-            .update({
-              status: "falha",
-            })
-            .eq("id", agendamento_id);
-          console.log("Updated agendamento status to 'falha'");
-        }
       }
     }
 
-    if (success) {
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: "Email enviado com sucesso", 
-          details: details
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } else {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: error ? error.message : "Failed to send email",
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-  } catch (error) {
-    console.error("Error sending email:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: true, 
+        message: "Email enviado com sucesso", 
+        details: details
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    console.error("Unexpected error sending email:", error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || "Erro inesperado ao enviar email" 
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

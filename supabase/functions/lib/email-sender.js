@@ -40,13 +40,12 @@ async function sendEmailViaSMTP(config, payload) {
       user: config.user,
       pass: config.pass,
     },
-    connectionTimeout: 30000, // 30 seconds
-    greetingTimeout: 30000, // 30 seconds
-    socketTimeout: 60000, // 60 seconds
-    logger: true, // Enable logging
+    connectionTimeout: 15000, // 15 seconds
+    greetingTimeout: 15000, // 15 seconds
+    socketTimeout: 30000, // 30 seconds
     debug: true, // Include SMTP traffic in the logs
     tls: {
-      rejectUnauthorized: false // Accept self-signed certificates
+      rejectUnauthorized: false // Accept self-signed certificates for better compatibility
     },
   });
   
@@ -188,7 +187,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
 }
 
 /**
- * Send email with SMTP or Resend
+ * Send email with SMTP or Resend with robust error handling
  * @param {Object} payload - Email payload
  * @param {boolean} useSmtp - Whether to use SMTP
  * @param {Object} smtpConfig - SMTP configuration
@@ -197,22 +196,24 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
  * @returns {Promise<Object>} - Send result
  */
 async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
-  // Always try with SMTP if configured, regardless of the useSmtp flag
-  if (smtpConfig && smtpConfig.host && smtpConfig.port && 
+  // Always try with SMTP if configured and useSmtp is true
+  if (useSmtp && smtpConfig && smtpConfig.host && smtpConfig.port && 
       smtpConfig.user && smtpConfig.pass) {
     try {
+      console.log("Attempting to send via SMTP first");
       return await sendEmailViaSMTP(smtpConfig, payload);
     } catch (smtpError) {
       console.error("SMTP send failed:", smtpError.message);
       
+      // If SMTP fails, try Resend if available
       if (resendApiKey) {
-        console.log("Trying Resend as fallback...");
+        console.log("SMTP failed. Trying Resend as fallback...");
         try {
           const result = await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
           result.note = "Fallback from SMTP failure";
           return result;
         } catch (resendError) {
-          console.error("Resend fallback failed:", resendError.message);
+          console.error("Resend fallback also failed:", resendError.message);
           throw new Error(`SMTP error: ${smtpError.message}. Resend fallback also failed: ${resendError.message}`);
         }
       } else {
@@ -221,11 +222,12 @@ async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
     }
   }
   
-  // Use Resend if SMTP is not configured
+  // If SMTP is not configured, use Resend
   if (!resendApiKey) {
     throw new Error("No email sending method available. Configure SMTP or provide Resend API key.");
   }
   
+  console.log("SMTP not configured or disabled. Using Resend directly.");
   return await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
 }
 

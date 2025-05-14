@@ -1,9 +1,11 @@
 
+import React, { useState } from 'react';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Calendar, Edit, Send, Trash2, Copy } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
 import { Template } from '@/types/template';
-import { Edit, Trash2, ExternalLink, Paperclip } from 'lucide-react';
-import {
+import { 
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -12,186 +14,176 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useTemplateEmail } from '@/hooks/useTemplates/useTemplateEmail';
 
 interface TemplateCardProps {
   template: Template;
   onEdit: (template: Template) => void;
   onDelete: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }
 
-export function TemplateCard({ template, onEdit, onDelete }: TemplateCardProps) {
-  const currentDate = new Date();
-  const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
-  const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
+export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: TemplateCardProps) => {
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isTestEmailDialogOpen, setIsTestEmailDialogOpen] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const { sendTestEmail } = useTemplateEmail();
+  
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+  };
 
-  const previewContent = template.conteudo
-    .replace(/{nome}/g, "João")
-    .replace(/{email}/g, "joao@exemplo.com")
-    .replace(/{telefone}/g, "(11) 99999-9999")
-    .replace(/{cliente}/g, "Cliente Exemplo")
-    .replace(/{razao_social}/g, "Empresa Exemplo Ltda.")
-    .replace(/{data}/g, formattedDate)
-    .replace(/{hora}/g, formattedTime);
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'ativo':
+        return <Badge variant="success">Ativo</Badge>;
+      case 'inativo':
+        return <Badge variant="secondary">Inativo</Badge>;
+      case 'rascunho':
+        return <Badge variant="outline">Rascunho</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
+    }
+  };
+  
+  // Get just a preview of the content
+  const contentPreview = template.conteudo
+    .replace(/\n/g, ' ')
+    .slice(0, 100) + (template.conteudo.length > 100 ? '...' : '');
 
-  const previewFull = template.assinatura 
-    ? previewContent + "\n\n" + template.assinatura
-    : previewContent;
+  const handleSendTest = async () => {
+    if (!testEmail) return;
     
-  // Parse attachments if they exist
-  const attachments = template.attachments
-    ? (typeof template.attachments === 'string'
-      ? JSON.parse(template.attachments)
-      : template.attachments)
-    : [];
-    
-  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-  const hasSignature = !!template.signature_image;
+    setSending(true);
+    try {
+      await sendTestEmail(template.id, testEmail);
+      setIsTestEmailDialogOpen(false);
+      setTestEmail('');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleDuplicate = () => {
+    if (onDuplicate) {
+      onDuplicate(template.id);
+    }
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="text-lg font-semibold">{template.nome}</h3>
-            {(hasAttachments || hasSignature) && (
-              <div className="flex gap-1 mt-1">
-                {hasAttachments && (
-                  <div className="flex items-center text-xs text-muted-foreground">
-                    <Paperclip className="h-3 w-3 mr-1" />
-                    {attachments.length} anexo(s)
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>Prévia do Template: {template.nome}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Template Original:</h4>
-                    <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
-                      {template.conteudo}
-                      {template.assinatura && (
-                        <>
-                          <hr className="my-2" />
-                          <div className="text-sm font-medium mt-2">Assinatura:</div>
-                          {template.assinatura}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Prévia com Variáveis Substituídas:</h4>
-                    <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
-                      {previewFull}
-                    </div>
-                    {template.signature_image && (
-                      <div className="mt-2">
-                        <p className="text-sm font-medium mb-1">Assinatura digital:</p>
-                        <img 
-                          src={template.signature_image} 
-                          alt="Assinatura" 
-                          className="max-h-16 border rounded p-1"
-                        />
-                      </div>
-                    )}
-                    {hasAttachments && (
-                      <div className="mt-2">
-                        <p className="text-sm font-medium mb-1">Anexos ({attachments.length}):</p>
-                        <ul className="text-sm text-muted-foreground list-disc pl-5">
-                          {attachments.map((attachment: any, i: number) => (
-                            <li key={i}>
-                              {attachment.name} ({(attachment.size / 1024).toFixed(1)} KB)
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    <p>Variáveis substituídas:</p>
-                    <ul className="list-disc list-inside mt-1 grid grid-cols-2">
-                      <li>{"{nome}"} → João</li>
-                      <li>{"{email}"} → joao@exemplo.com</li>
-                      <li>{"{telefone}"} → (11) 99999-9999</li>
-                      <li>{"{cliente}"} → Cliente Exemplo</li>
-                      <li>{"{razao_social}"} → Empresa Exemplo Ltda.</li>
-                      <li>{"{data}"} → {formattedDate}</li>
-                      <li>{"{hora}"} → {formattedTime}</li>
-                    </ul>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => onEdit(template)}
-            >
-              <Edit className="h-4 w-4" />
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Excluir template</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Tem certeza que deseja excluir este template? Esta ação não pode ser desfeita.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => onDelete(template.id)}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+    <Card className="overflow-hidden">
+      <CardContent className="p-6">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="font-bold text-lg line-clamp-2">{template.nome}</h3>
+          {template.status && getStatusLabel(template.status)}
+        </div>
+        
+        <div className="mt-2 flex items-center text-sm text-muted-foreground">
+          <Calendar className="h-4 w-4 mr-1" />
+          <span>Criado em: {formatDate(template.created_at)}</span>
+        </div>
+        
+        <div className="mt-4">
+          <p className="text-sm text-muted-foreground mb-1">Prévia:</p>
+          <div className="bg-muted p-4 rounded-md min-h-[80px] max-h-[120px] overflow-hidden">
+            <p className="text-sm break-words overflow-ellipsis line-clamp-3">{contentPreview}</p>
           </div>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-            {template.conteudo.length > 200
-              ? template.conteudo.substring(0, 200) + '...'
-              : template.conteudo}
-          </p>
-          <div className="mt-4 p-3 bg-muted rounded-md">
-            <p className="text-sm font-medium">Prévia:</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {previewContent.length > 200
-                ? previewContent.substring(0, 200) + '...'
-                : previewContent}
+        
+        {template.signature_image && (
+          <div className="mt-4">
+            <p className="text-xs text-muted-foreground">Assinatura incluída</p>
+          </div>
+        )}
+        
+        {template.attachments && (
+          <div className="mt-2">
+            <p className="text-xs text-muted-foreground">Tem anexos</p>
+          </div>
+        )}
+      </CardContent>
+      
+      <CardFooter className="bg-muted/40 px-6 py-4 flex justify-between">
+        <div className="flex space-x-1">
+          <Button variant="outline" size="sm" onClick={() => onEdit(template)}>
+            <Edit className="h-4 w-4 mr-2" />
+            Editar
+          </Button>
+          
+          <Button variant="outline" size="sm" onClick={() => setIsTestEmailDialogOpen(true)}>
+            <Send className="h-4 w-4 mr-2" />
+            Testar
+          </Button>
+        </div>
+        
+        <div className="flex space-x-1">
+          {onDuplicate && (
+            <Button variant="ghost" size="sm" onClick={handleDuplicate}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </CardFooter>
+      
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o template "{template.nome}"?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => onDelete(template.id)}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Test email dialog */}
+      <Dialog open={isTestEmailDialogOpen} onOpenChange={setIsTestEmailDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar Email de Teste</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="testEmail">Email para o teste</Label>
+            <Input 
+              id="testEmail" 
+              type="email" 
+              value={testEmail} 
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="Digite o email para enviar o teste"
+              autoComplete="email"
+            />
+            <p className="text-sm text-muted-foreground mt-2">
+              Um email de teste com este template será enviado para o endereço informado.
             </p>
           </div>
-        </div>
-      </CardContent>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTestEmailDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSendTest} disabled={!testEmail || sending}>
+              {sending ? 'Enviando...' : 'Enviar Teste'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
-}
+};

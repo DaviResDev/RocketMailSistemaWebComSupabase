@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const Templates = () => {
-  const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
+  const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate, sendTestEmail } = useTemplates();
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -21,12 +21,6 @@ const Templates = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
   const { user } = useAuth();
-
-  const [formData, setFormData] = useState<TemplateFormData>({
-    nome: '',
-    conteudo: '',
-    status: 'ativo',
-  });
 
   const loadTemplates = useCallback(async () => {
     if (user) {
@@ -43,17 +37,12 @@ const Templates = () => {
   }, [fetchTemplates, user]);
 
   useEffect(() => {
-    if (!isInitialized) {
+    if (!isInitialized && user) {
       loadTemplates();
     }
-  }, [loadTemplates, retryCount, isInitialized]);
+  }, [loadTemplates, retryCount, isInitialized, user]);
 
   const handleCreateClick = () => {
-    setFormData({
-      nome: '',
-      conteudo: '',
-      status: 'ativo'
-    });
     setIsCreating(true);
     setIsEditing(false);
     setSelectedTemplate(null);
@@ -61,12 +50,6 @@ const Templates = () => {
 
   const handleEditClick = (template: Template) => {
     setSelectedTemplate(template);
-    setFormData({
-      nome: template.nome,
-      conteudo: template.conteudo,
-      signature_image: template.signature_image || null,
-      status: template.status || 'ativo',
-    });
     setIsEditing(true);
     setIsCreating(true);
   };
@@ -74,6 +57,37 @@ const Templates = () => {
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
     setIsInitialized(false);
+  };
+
+  const handleSendTest = async (templateId: string) => {
+    if (!templateId) return false;
+    
+    // Get user email for test
+    const { data } = await useAuth().supabase.auth.getUser();
+    const testEmail = data?.user?.email;
+    
+    if (!testEmail) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível obter seu email para envio de teste"
+      });
+      return false;
+    }
+    
+    // Show toast to indicate test is starting
+    toast({
+      title: "Enviando teste",
+      description: `Enviando email de teste para ${testEmail}`
+    });
+    
+    try {
+      const result = await sendTestEmail(templateId, testEmail);
+      return result;
+    } catch (error) {
+      console.error("Error sending test:", error);
+      return false;
+    }
   };
 
   if (!user) {
@@ -144,6 +158,7 @@ const Templates = () => {
               loadTemplates();
               return true;
             } catch (error) {
+              console.error("Error saving template:", error);
               return false;
             }
           }}
@@ -152,6 +167,7 @@ const Templates = () => {
             setIsEditing(false);
             setSelectedTemplate(null);
           }}
+          onSendTest={handleSendTest}
         />
       ) : loading && !isInitialized ? (
         <TemplateSkeletons />
