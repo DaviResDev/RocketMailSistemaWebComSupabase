@@ -59,7 +59,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       const result = await sendEmail(envioData);
       
       if (!result) {
-        toast.error("Falha ao enviar o email. Verifique os logs para mais detalhes.");
+        toast.error("Falha ao enviar o email. Verifique sua conexão com a internet.");
         throw new Error("Falha ao enviar o email");
       }
       
@@ -76,7 +76,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       await onRefresh(); // Refresh schedules list
     } catch (err: any) {
       console.error('Erro ao enviar email agendado:', err);
-      toast.error(`Erro ao enviar email: ${err.message}`);
+      toast.error(`Erro ao enviar email: ${err.message || 'Erro de conexão com o servidor'}`);
       
       // Log detailed error for debugging
       console.error('Detalhes do erro:', {
