@@ -25,11 +25,12 @@ serve(async (req: Request) => {
 
   try {
     // Parse request body
-    const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id, cc, bcc } = await req.json();
+    const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id, cc, bcc, contato_nome, contato_email } = await req.json();
 
     // Log detailed request information
     console.log("Email request received:", JSON.stringify({
       to,
+      contato_nome,
       subject,
       contentLength: content?.length,
       isTest,
@@ -41,9 +42,18 @@ serve(async (req: Request) => {
     }));
 
     // Validate required inputs
-    if (!to || !subject || !content) {
+    if (!to && !contato_email) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: to, subject, or content" }),
+        JSON.stringify({ error: "Missing recipient email address" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const recipient = to || contato_email;
+    
+    if (!subject || !content) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields: subject or content" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -134,7 +144,7 @@ serve(async (req: Request) => {
     
     // Prepare email data
     const emailData = {
-      to,
+      to: recipient,
       subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px;">
@@ -238,7 +248,7 @@ serve(async (req: Request) => {
           attachments: emailAttachments.length > 0 ? emailAttachments : undefined
         });
         
-        console.log("SMTP Email sent:", smtpResult.id);
+        console.log("SMTP Email sent successfully:", smtpResult.id);
         smtpResponse = smtpResult.response;
         
         success = true;

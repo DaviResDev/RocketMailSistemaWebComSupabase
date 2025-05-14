@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Template, TemplateFormData } from '@/types/template';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const Templates = () => {
   const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
@@ -26,13 +27,19 @@ const Templates = () => {
     status: 'ativo',
   });
 
-  useEffect(() => {
+  const loadTemplates = useCallback(async () => {
     if (user) {
-      fetchTemplates().catch(err => {
+      try {
+        await fetchTemplates();
+      } catch (err: any) {
         setErrorMessage(err.message);
-      });
+      }
     }
   }, [fetchTemplates, user]);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
 
   const handleCreateClick = () => {
     setFormData({
@@ -69,6 +76,27 @@ const Templates = () => {
     );
   }
 
+  // Skeleton loader component for loading state
+  const TemplateSkeletons = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {[1, 2, 3].map((i) => (
+        <Card key={i} className="overflow-hidden">
+          <div className="p-6">
+            <Skeleton className="h-6 w-3/4 mb-4" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-2/3" />
+            <div className="mt-6 p-4 bg-muted rounded-md">
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+
   return (
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
@@ -101,6 +129,8 @@ const Templates = () => {
             setIsCreating(false);
             setIsEditing(false);
             setSelectedTemplate(null);
+            // Refresh templates after saving
+            loadTemplates();
             return true;
           }}
           onCancel={() => {
@@ -110,9 +140,7 @@ const Templates = () => {
           }}
         />
       ) : loading ? (
-        <div className="flex justify-center items-center h-64">
-          <p className="text-muted-foreground">Carregando templates...</p>
-        </div>
+        <TemplateSkeletons />
       ) : errorMessage ? (
         <div className="flex justify-center items-center h-64">
           <p className="text-red-500">Erro ao carregar templates: {errorMessage}</p>

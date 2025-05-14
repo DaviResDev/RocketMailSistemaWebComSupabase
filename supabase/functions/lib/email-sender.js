@@ -48,6 +48,9 @@ async function sendEmailViaSMTP(config, payload) {
     },
   });
   
+  // Extract domain from email for proper DKIM setup
+  const emailDomain = config.user.split('@')[1];
+  
   // Properly format the from field to ensure correct domain display
   const fromName = config.name || config.user.split('@')[0];
   const fromEmail = config.user; // Always use the configured email
@@ -58,10 +61,12 @@ async function sendEmailViaSMTP(config, payload) {
     from: from,
     to: payload.to,
     subject: payload.subject,
-    html: payload.html + `
-      <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px;">
-        <p>Email enviado com sucesso! Este é um email automático, por favor não responda diretamente.</p>
-      </div>`,
+    html: payload.html,
+    headers: {
+      // Set custom headers that might help with deliverability
+      'X-Mailer': 'RocketMail',
+      'X-Priority': '3',
+    }
   };
 
   // Add CC if provided
@@ -77,6 +82,7 @@ async function sendEmailViaSMTP(config, payload) {
   // Add attachments if provided
   if (payload.attachments && payload.attachments.length > 0) {
     mailOptions.attachments = payload.attachments;
+    console.log(`Adding ${payload.attachments.length} attachments to email`);
   }
 
   console.log(`Sending email via SMTP: ${config.host}:${config.port}`);
@@ -118,10 +124,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
     from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
     to: [payload.to],
     subject: payload.subject,
-    html: payload.html + `
-      <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px;">
-        <p>Email enviado com sucesso! Este é um email automático, por favor não responda diretamente.</p>
-      </div>`,
+    html: payload.html,
   };
   
   // Add reply-to if provided
