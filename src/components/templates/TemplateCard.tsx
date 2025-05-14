@@ -1,7 +1,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Template } from '@/hooks/useTemplates';
+import { Template } from '@/types/template';
 import { Edit, Trash2, ExternalLink, Paperclip } from 'lucide-react';
 import {
   AlertDialog,

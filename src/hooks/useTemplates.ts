@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -20,7 +21,14 @@ export function useTemplates() {
 
       if (error) throw error;
       console.log('Templates carregados:', data);
-      setTemplates(data || []);
+      
+      // Transform the fetched data to ensure it has all required properties for Template type
+      const templatesWithStatus = data?.map(template => ({
+        ...template,
+        status: template.status || 'ativo' // Default status if it doesn't exist
+      })) || [];
+      
+      setTemplates(templatesWithStatus);
     } catch (error: any) {
       console.error('Erro ao carregar templates:', error);
       toast.error('Erro ao carregar templates: ' + error.message);

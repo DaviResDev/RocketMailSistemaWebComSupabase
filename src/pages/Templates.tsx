@@ -1,5 +1,4 @@
-
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -58,12 +57,6 @@ const Templates = () => {
     });
     setIsEditing(true);
     setIsCreating(true);
-  };
-
-  const handleCancel = () => {
-    setIsCreating(false);
-    setIsEditing(false);
-    setSelectedTemplate(null);
   };
 
   if (!user) {
