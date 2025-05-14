@@ -35,7 +35,7 @@ const Templates = () => {
         await fetchTemplates();
       } catch (err: any) {
         console.error("Error loading templates:", err);
-        setErrorMessage(err.message);
+        setErrorMessage(err.message || "Falha na conexão com o servidor");
       }
     }
   }, [fetchTemplates, user]);
@@ -118,25 +118,29 @@ const Templates = () => {
           template={selectedTemplate || undefined}
           isEditing={isEditing}
           onSave={async (formData) => {
-            if (isEditing && selectedTemplate) {
-              await updateTemplate(selectedTemplate.id, formData);
-              toast({
-                title: "Sucesso",
-                description: "Template atualizado com sucesso!"
-              });
-            } else {
-              await createTemplate(formData);
-              toast({
-                title: "Sucesso",
-                description: "Template criado com sucesso!"
-              });
+            try {
+              if (isEditing && selectedTemplate) {
+                await updateTemplate(selectedTemplate.id, formData);
+                toast({
+                  title: "Sucesso",
+                  description: "Template atualizado com sucesso!"
+                });
+              } else {
+                await createTemplate(formData);
+                toast({
+                  title: "Sucesso",
+                  description: "Template criado com sucesso!"
+                });
+              }
+              setIsCreating(false);
+              setIsEditing(false);
+              setSelectedTemplate(null);
+              // Refresh templates after saving
+              loadTemplates();
+              return true;
+            } catch (error) {
+              return false;
             }
-            setIsCreating(false);
-            setIsEditing(false);
-            setSelectedTemplate(null);
-            // Refresh templates after saving
-            loadTemplates();
-            return true;
           }}
           onCancel={() => {
             setIsCreating(false);

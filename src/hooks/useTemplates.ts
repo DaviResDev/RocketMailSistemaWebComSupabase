@@ -35,9 +35,10 @@ export function useTemplates() {
       })) || [];
       
       setTemplates(formattedTemplates);
+      return formattedTemplates;
     } catch (error: any) {
       console.error('Erro ao carregar templates:', error);
-      toast.error('Erro ao carregar templates: ' + error.message);
+      toast.error('Erro ao carregar templates: ' + (error.message || 'Falha na conexão com o servidor'));
       throw error; // Re-throw to allow caller to handle
     } finally {
       setLoading(false);
