@@ -15,9 +15,9 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,26 +113,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signInWithGoogle = async () => {
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + '/dashboard'
-        }
-      });
-
-      if (error) throw error;
-    } catch (error: any) {
-      console.error('Google login error:', error);
-      toast.error('Falha ao fazer login com Google.');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const signUp = async (email: string, password: string, name: string) => {
     try {
       setLoading(true);
@@ -176,6 +156,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     }
   };
+  
+  const updatePassword = async (password: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.updateUser({ 
+        password 
+      });
+      
+      if (error) throw error;
+      toast.success('Senha atualizada com sucesso!');
+    } catch (error: any) {
+      console.error('Password update error:', error);
+      toast.error(`Erro ao atualizar senha: ${error.message}`);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <AuthContext.Provider
@@ -184,9 +182,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profile,
         loading,
         signIn,
-        signInWithGoogle,
         signUp,
-        signOut
+        signOut,
+        updatePassword
       }}
     >
       {children}
