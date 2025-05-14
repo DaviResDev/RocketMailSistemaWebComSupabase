@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
@@ -8,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
-import { Layout } from '@/components/layout/Layout';
 import { Template, TemplateFormData } from '@/types/template';
 
 const Templates = () => {
@@ -129,12 +129,11 @@ const Templates = () => {
           <div className="mb-4">
             <TabsList>
               <TabsTrigger value="email">Email</TabsTrigger>
-              <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
               <TabsTrigger value="sms">SMS</TabsTrigger>
             </TabsList>
           </div>
           
-          {['email', 'whatsapp', 'sms'].map(canal => (
+          {['email', 'sms'].map(canal => (
             <TabsContent key={canal} value={canal} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {templates
                 .filter(template => template.canal === canal)

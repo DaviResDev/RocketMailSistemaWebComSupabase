@@ -11,14 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Save, Send, File as FileIcon, Loader2, X, Upload, PaperclipIcon } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Template } from '@/types/template';
-
-export interface TemplateFormProps {
-  template?: Template;
-  isEditing?: boolean;
-  onSave: (formData: any) => Promise<boolean>;
-  onCancel?: () => void;
-  onSendTest?: (templateId: string) => Promise<boolean>;
-}
+import { TemplateFormProps } from './TemplateFormProps';
 
 export function TemplateForm({ template, isEditing = false, onSave, onCancel, onSendTest }: TemplateFormProps) {
   const [formData, setFormData] = useState({
@@ -248,7 +241,7 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="sms">SMS</SelectItem>
               </SelectContent>
             </Select>
           </div>

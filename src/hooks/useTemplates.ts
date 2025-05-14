@@ -26,7 +26,7 @@ export function useTemplates() {
       const templatesWithStatus = data?.map(template => ({
         ...template,
         // Safely add status if it doesn't exist in the database record
-        status: 'ativo' // Default status for all templates
+        status: template.status || 'ativo' // Default status for all templates
       })) || [];
       
       setTemplates(templatesWithStatus);
@@ -45,10 +45,10 @@ export function useTemplates() {
     }
 
     try {
-      // Always set canal to 'email' as we removed WhatsApp functionality
+      // Set canal to 'email' as default
       const templateData = {
         ...formData, 
-        canal: 'email',
+        canal: formData.canal || 'email',
         user_id: user.id
       };
       
@@ -87,10 +87,10 @@ export function useTemplates() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
-      // Always set canal to 'email' as we removed WhatsApp functionality
+      // Set canal to 'email' as default if not provided
       const templateData = {
         ...formData, 
-        canal: 'email'
+        canal: formData.canal || 'email'
       };
       
       // Ensure attachments is properly formatted and stored
@@ -142,10 +142,11 @@ export function useTemplates() {
       const newTemplate = {
         nome: `${template.nome} (Cópia)`,
         conteudo: template.conteudo,
-        canal: template.canal,
+        canal: template.canal || 'email',
         assinatura: template.assinatura,
         signature_image: template.signature_image,
         attachments: template.attachments,
+        status: template.status || 'ativo',
         user_id: user?.id
       };
       

@@ -23,6 +23,14 @@ async function sendEmailViaSMTP(config, payload) {
   // Import nodemailer using dynamic import for Deno compatibility
   const nodemailer = await import('npm:nodemailer@6.9.12');
   
+  console.log("SMTP Configuration:", {
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: { user: config.user, pass: "***" },
+    name: config.name || ''
+  });
+  
   // Create transporter with timeouts to prevent hanging connections
   const transporter = nodemailer.default.createTransport({
     host: config.host,

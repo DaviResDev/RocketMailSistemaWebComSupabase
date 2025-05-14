@@ -125,7 +125,8 @@ serve(async (req: Request) => {
     console.log("User settings:", settingsData ? JSON.stringify({
       use_smtp: settingsData.use_smtp,
       email_smtp: settingsData.email_smtp,
-      email_porta: settingsData.email_porta
+      email_porta: settingsData.email_porta,
+      smtp_nome: settingsData.smtp_nome
     }) : "none");
 
     // Convert content to HTML format
@@ -201,11 +202,12 @@ serve(async (req: Request) => {
       }
     }
 
-    // ALWAYS force SMTP usage if configured
+    // Check if SMTP is configured and should be used
     const useSmtp = settingsData?.email_smtp && 
                     settingsData?.email_porta && 
                     settingsData?.email_usuario && 
-                    settingsData?.email_senha;
+                    settingsData?.email_senha &&
+                    (settingsData?.use_smtp === undefined || settingsData?.use_smtp === true);
     
     let success = false;
     let error = null;
