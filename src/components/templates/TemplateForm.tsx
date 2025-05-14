@@ -329,6 +329,30 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      
+      // Create a file reader to read the file content
+      const reader = new FileReader();
+      reader.onload = () => {
+        const fileContent = reader.result;
+        if (typeof fileContent === 'string') {
+          const fileObj = {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            content: fileContent.split(',')[1], // Extract base64 content
+            url: fileContent // Full data URL
+          };
+          
+          setAttachments(prev => [...prev, fileObj]);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const removeAttachment = (index: number) => {
     // Remove from UI display
     setAttachments(prev => prev.filter((_, i) => i !== index));

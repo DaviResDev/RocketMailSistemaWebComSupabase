@@ -10,6 +10,7 @@
  * @param {string} config.user - SMTP username
  * @param {string} config.pass - SMTP password
  * @param {string} config.from - Sender email address
+ * @param {string} config.name - Sender name
  * @param {Object} payload - Email payload
  * @param {string} payload.to - Recipient email address
  * @param {Array<string>} [payload.cc] - CC recipients
@@ -35,11 +36,14 @@ async function sendEmailViaSMTP(config, payload) {
     connectionTimeout: 30000, // 30 seconds
     greetingTimeout: 30000, // 30 seconds
     socketTimeout: 60000, // 60 seconds
+    tls: {
+      rejectUnauthorized: false // Accept self-signed certificates
+    },
   });
   
   // Prepare email data
   const mailOptions = {
-    from: `${config.name || 'DisparoPro'} <${config.user}>`,
+    from: `${config.name || config.user.split('@')[0]} <${config.user}>`,
     to: payload.to,
     subject: payload.subject,
     html: payload.html,
@@ -70,9 +74,10 @@ async function sendEmailViaSMTP(config, payload) {
     return {
       success: true,
       id: info.messageId,
-      provider: "smtp_nodemailer",
+      provider: "smtp",
       from: config.user,
       reply_to: config.user,
+      response: info.response
     };
   } catch (error) {
     console.error("Failed to send email via SMTP:", error);
@@ -95,7 +100,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   
   // Create email data for Resend
   const emailData = {
-    from: `${fromName || 'DisparoPro'} <onboarding@resend.dev>`,
+    from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
     to: [payload.to],
     subject: payload.subject,
     html: payload.html,
@@ -165,6 +170,19 @@ async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
       return await sendEmailViaSMTP(smtpConfig, payload);
     } catch (smtpError) {
       console.error("SMTP send failed, trying Resend fallback:", smtpError.message);
+      
+      // For major providers like Gmail, we don't want to use Resend fallback
+      // as it would change the sender domain
+      const isMajorProvider = 
+        smtpConfig.host.includes("gmail.com") || 
+        smtpConfig.host.includes("outlook.com") || 
+        smtpConfig.host.includes("yahoo.com") ||
+        smtpConfig.host.includes("hotmail.com");
+        
+      if (isMajorProvider) {
+        // For major providers, throw the original error instead of trying fallback
+        throw new Error(`SMTP error with ${smtpConfig.host}: ${smtpError.message}. Check your credentials and settings.`);
+      }
       
       // If Resend API key is not provided, rethrow the error
       if (!resendApiKey) {

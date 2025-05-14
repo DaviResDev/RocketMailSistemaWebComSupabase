@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +17,22 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+
+// Adicione a propriedade canal ao tipo template
+interface EnvioItem {
+  id: string;
+  status: string;
+  data_envio: string;
+  contato?: {
+    nome: string;
+    email: string;
+  };
+  template?: {
+    nome: string;
+    canal?: string;
+  };
+  erro?: string;
+}
 
 export default function Envios() {
   const { envios, loading, sending, fetchEnvios, resendEnvio } = useEnvios();

@@ -24,7 +24,7 @@ serve(async (req: Request) => {
 
   try {
     // Parse request body
-    const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id } = await req.json();
+    const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id, cc, bcc } = await req.json();
 
     // Log detailed request information
     console.log("Email request received:", JSON.stringify({
@@ -138,6 +138,15 @@ serve(async (req: Request) => {
         ? `${settingsData.smtp_nome} <${settingsData.email_usuario || "noreply@rocketmail.com"}>`
         : settingsData?.email_usuario || "RocketMail <noreply@resend.dev>",
     };
+    
+    // Add CC and BCC if provided
+    if (Array.isArray(cc) && cc.length > 0) {
+      emailData["cc"] = cc;
+    }
+    
+    if (Array.isArray(bcc) && bcc.length > 0) {
+      emailData["bcc"] = bcc;
+    }
 
     // Process attachments
     const emailAttachments = [];
@@ -161,13 +170,25 @@ serve(async (req: Request) => {
                 
                 const buffer = await response.arrayBuffer();
                 emailAttachments.push({
-                  filename: attachment.name || 'attachment.file',
+                  filename: attachment.name || attachment.filename || 'attachment.file',
                   content: buffer
                 });
-                console.log(`Attachment processed: ${attachment.name}`);
+                console.log(`Attachment processed: ${attachment.name || attachment.filename}`);
               } catch (fetchErr) {
                 console.error("Error fetching attachment:", fetchErr);
               }
+            } else if (attachment.content) {
+              // If the content is already provided in base64 format
+              emailAttachments.push({
+                filename: attachment.name || attachment.filename || 'attachment.file',
+                content: typeof attachment.content === 'string' ? 
+                  (attachment.content.includes('base64,') ? 
+                    attachment.content.split('base64,')[1] : 
+                    attachment.content) : 
+                  attachment.content,
+                encoding: 'base64'
+              });
+              console.log(`Attachment included from content: ${attachment.name || attachment.filename}`);
             }
           }
         }
@@ -176,7 +197,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // Determine email sending method based on user settings and availability
+    // Determine email sending method based on user settings
     // Default to true if not explicitly set to false
     const useSmtp = settingsData?.use_smtp !== false && 
                     settingsData?.email_smtp && 
@@ -187,6 +208,7 @@ serve(async (req: Request) => {
     let success = false;
     let error = null;
     let details = null;
+    let smtpResponse = null;
 
     // Try to send via SMTP if configured
     if (useSmtp) {
@@ -219,6 +241,15 @@ serve(async (req: Request) => {
           attachments: emailAttachments.length > 0 ? emailAttachments : undefined
         };
         
+        // Add CC and BCC if provided
+        if (emailData.cc) {
+          mailOptions["cc"] = emailData.cc;
+        }
+        
+        if (emailData.bcc) {
+          mailOptions["bcc"] = emailData.bcc;
+        }
+        
         console.log("SMTP Options:", JSON.stringify({
           host: settingsData?.email_smtp,
           port: settingsData?.email_porta,
@@ -227,24 +258,41 @@ serve(async (req: Request) => {
           // senha omitida por segurança
           to: emailData.to,
           subject: emailData.subject,
-          hasAttachments: emailAttachments.length > 0
+          hasAttachments: emailAttachments.length > 0,
+          hasCC: !!emailData.cc,
+          hasBCC: !!emailData.bcc
         }));
         
         // Send email
         const info = await transport.sendMail(mailOptions);
         console.log("SMTP Email sent:", info.messageId);
+        smtpResponse = info.response;
         
         success = true;
         details = {
           transport: "smtp",
-          id: info.messageId
+          id: info.messageId,
+          response: info.response
         };
       } catch (smtpErr) {
         console.error("SMTP error:", smtpErr);
         error = smtpErr;
         
-        // If SMTP fails, try using Resend as fallback
-        console.log("SMTP failed, trying Resend fallback");
+        // If SMTP fails, try using Resend as fallback only if not Gmail or other major provider
+        // For Gmail we don't want a fallback as it's likely a credentials issue
+        const isMajorProvider = 
+          settingsData?.email_smtp?.includes("gmail.com") || 
+          settingsData?.email_smtp?.includes("outlook.com") || 
+          settingsData?.email_smtp?.includes("yahoo.com") ||
+          settingsData?.email_smtp?.includes("hotmail.com");
+          
+        if (isMajorProvider) {
+          // For major providers, don't try Resend fallback as that would change the from address
+          console.log("Not using Resend fallback for major email provider:", settingsData?.email_smtp);
+        } else {
+          // For other providers, we can try Resend as a fallback
+          console.log("SMTP failed, trying Resend fallback");
+        }
       }
     }
     
@@ -271,6 +319,8 @@ serve(async (req: Request) => {
           to: [emailData.to],
           subject: emailData.subject,
           html: emailData.html,
+          cc: emailData.cc,
+          bcc: emailData.bcc,
           attachments: emailAttachments.length > 0
             ? emailAttachments.map(att => ({
                 filename: att.filename,
@@ -310,6 +360,7 @@ serve(async (req: Request) => {
           .from("envios")
           .update({
             status: "entregue",
+            resposta_smtp: smtpResponse // Save SMTP response for debugging
           })
           .eq("id", envioId);
           

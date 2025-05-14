@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -34,7 +35,7 @@ export interface Envio {
   resposta_smtp?: string; // Adicionado para armazenar resposta do servidor SMTP
 }
 
-// Form data including email content and recipient
+// Update form data to include all needed properties
 export interface EnvioFormData {
   contato_id: string;
   template_id: string;
@@ -43,6 +44,16 @@ export interface EnvioFormData {
   cc?: string[];
   bcc?: string[];
 }
+
+// Define a type specifically for attachment handling
+type AttachmentType = {
+  name?: string;
+  filename?: string;
+  content?: string;
+  type?: string;
+  url?: string;
+  file?: File;
+};
 
 export function useEnvios() {
   const [envios, setEnvios] = useState<Envio[]>([]);
@@ -237,7 +248,8 @@ export function useEnvios() {
       }
 
       // Prepare attachments for the function call
-      let attachments = [];
+      let attachments: AttachmentType[] = [];
+      
       if (formData.attachments) {
         // Handle different types of attachments
         if (Array.isArray(formData.attachments) && formData.attachments.length > 0 && 'file' in formData.attachments[0]) {
@@ -254,7 +266,7 @@ export function useEnvios() {
             return {
               filename: item.name,
               content: base64Content,
-              contentType: item.file.type,
+              type: item.file.type,
             };
           }));
         } else if (typeof formData.attachments === 'string') {
@@ -267,9 +279,14 @@ export function useEnvios() {
           } catch (e) {
             console.error('Error parsing attachments string:', e);
           }
-        } else if (typeof formData.attachments === 'object' && !Array.isArray(formData.attachments)) {
+        } else if (typeof formData.attachments === 'object' && formData.attachments !== null && !Array.isArray(formData.attachments)) {
           // If it's a JSON object from Supabase
-          attachments = formData.attachments;
+          // Convert to array if needed
+          if (!Array.isArray(formData.attachments)) {
+            attachments = [formData.attachments as AttachmentType];
+          } else {
+            attachments = formData.attachments as AttachmentType[];
+          }
         }
       }
 
@@ -297,6 +314,7 @@ export function useEnvios() {
             user_id: user.id,
             agendamento_id: formData.agendamento_id,
             attachments: attachments,
+            signature_image: templateData.signature_image
           },
         });
 

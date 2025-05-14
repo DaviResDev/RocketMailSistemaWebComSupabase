@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -72,13 +71,12 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw templateError;
       }
       
-      // Convert schedule to EnvioFormData - Fix for TypeScript error
-      // We pass the attachments directly from the template without converting
-      const envioData = {
+      // Convert schedule to EnvioFormData with typed attachments
+      const envioData: EnvioFormData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
         agendamento_id: schedule.id,
-        // Pass the attachments without conversion since sendEmail will handle it
+        // Pass the attachments as is - will be handled by sendEmail
         attachments: template.attachments 
       };
       
