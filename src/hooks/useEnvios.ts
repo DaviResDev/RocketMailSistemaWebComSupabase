@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 
 // Define types
 interface EnvioFormData {
@@ -65,8 +65,6 @@ export function useEnvios() {
   const sendEmail = async (formData: EnvioFormData) => {
     setSending(true);
     
-    let toastId: string | undefined;
-    
     try {
       // Get contato data for better feedback
       const { data: contatoData, error: contatoError } = await supabase
@@ -76,21 +74,15 @@ export function useEnvios() {
         .single();
       
       if (contatoError) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: `Não foi possível encontrar o contato: ${contatoError.message}`
-        });
+        toast.error(`Não foi possível encontrar o contato: ${contatoError.message}`);
         setSending(false);
         return false;
       }
       
       // Show initial progress toast
-      toastId = toast({
-        title: "Iniciando envio",
-        description: `Enviando email para ${contatoData.nome} (${contatoData.email})...`,
+      toast.loading(`Enviando email para ${contatoData.nome} (${contatoData.email})...`, {
         duration: 60000 // Long duration, will be dismissed on completion
-      }).id;
+      });
       
       try {
         // Get template data to include attachments
@@ -118,14 +110,7 @@ export function useEnvios() {
         });
         
         // Update toast with processing status
-        if (toastId) {
-          toast({
-            id: toastId,
-            title: "Processando",
-            description: `Processando envio para ${contatoData.nome}...`,
-            duration: 60000
-          });
-        }
+        toast.loading(`Processando envio para ${contatoData.nome}...`);
         
         const response = await supabase.functions.invoke('send-email', {
           body: dataToSend
@@ -145,34 +130,16 @@ export function useEnvios() {
         // Success case
         console.log('Email enviado com sucesso:', responseData);
         
-        // Dismiss the sending toast
-        if (toastId) {
-          toast.dismiss(toastId);
-        }
-        
-        toast({
-          title: "Sucesso",
-          description: `Email enviado com sucesso para ${contatoData.nome}!`,
-          duration: 5000
-        });
+        toast.dismiss();
+        toast.success(`Email enviado com sucesso para ${contatoData.nome}!`);
         
         await fetchEnvios();
         return true;
         
       } catch (err: any) {
         console.error('Erro ao enviar email:', err);
-        
-        // Dismiss the sending toast
-        if (toastId) {
-          toast.dismiss(toastId);
-        }
-        
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: `Erro ao enviar email: ${err.message || 'Verifique suas configurações de email'}`
-        });
-        
+        toast.dismiss();
+        toast.error(`Erro ao enviar email: ${err.message || 'Verifique suas configurações de email'}`);
         return false;
       }
     } finally {
@@ -182,7 +149,6 @@ export function useEnvios() {
 
   const resendEnvio = async (id: string) => {
     setSending(true);
-    let toastId: string | undefined;
     
     try {
       const { data: envio, error: envioError } = await supabase
@@ -197,11 +163,7 @@ export function useEnvios() {
       if (envioError) throw envioError;
       
       // Show resending toast
-      toastId = toast({
-        title: "Reenviando email",
-        description: `Reenviando email para ${envio.contato.nome}...`,
-        duration: 60000
-      }).id;
+      toast.loading(`Reenviando email para ${envio.contato.nome}...`);
       
       // Get template data to include attachments
       const { data: templateData, error: templateError } = await supabase
@@ -213,14 +175,7 @@ export function useEnvios() {
       if (templateError) throw templateError;
       
       // Update toast with processing status
-      if (toastId) {
-        toast({
-          id: toastId,
-          title: "Processando reenvio",
-          description: `Processando reenvio para ${envio.contato.nome}...`,
-          duration: 60000
-        });
-      }
+      toast.loading(`Processando reenvio para ${envio.contato.nome}...`);
       
       const result = await sendEmail({
         contato_id: envio.contato_id,
@@ -229,10 +184,7 @@ export function useEnvios() {
         attachments: templateData.attachments || null
       });
       
-      // Dismiss the resending toast
-      if (toastId) {
-        toast.dismiss(toastId);
-      }
+      toast.dismiss();
       
       // Atualizar status do envio original
       if (result) {
@@ -241,28 +193,14 @@ export function useEnvios() {
           .update({ status: 'reenviado' })
           .eq('id', id);
           
-        toast({
-          title: "Reenvio concluído",
-          description: `Email reenviado com sucesso para ${envio.contato.nome}!`,
-          duration: 5000
-        });
+        toast.success(`Email reenviado com sucesso para ${envio.contato.nome}!`);
       }
       
       return result;
     } catch (err: any) {
       console.error('Erro ao reenviar email:', err);
-      
-      // Dismiss toast if it exists
-      if (toastId) {
-        toast.dismiss(toastId);
-      }
-      
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: `Erro ao reenviar email: ${err.message}`
-      });
-      
+      toast.dismiss();
+      toast.error(`Erro ao reenviar email: ${err.message}`);
       return false;
     } finally {
       setSending(false);

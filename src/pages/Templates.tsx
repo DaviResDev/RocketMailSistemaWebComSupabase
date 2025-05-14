@@ -5,15 +5,16 @@ import { TemplateCard } from '@/components/templates/TemplateCard';
 import { useTemplates } from '@/hooks/useTemplates';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, AlertCircle } from 'lucide-react';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
-import { Template, TemplateFormData } from '@/types/template';
+import { Template } from '@/types/template';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const Templates = () => {
-  const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate, sendTestEmail } = useTemplates();
+  const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate, sendTestEmail, duplicateTemplate } = useTemplates();
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -63,23 +64,16 @@ const Templates = () => {
     if (!templateId) return false;
     
     // Get user email for test
-    const { data } = await useAuth().supabase.auth.getUser();
+    const { data } = await supabase.auth.getUser();
     const testEmail = data?.user?.email;
     
     if (!testEmail) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Não foi possível obter seu email para envio de teste"
-      });
+      toast.error("Não foi possível obter seu email para envio de teste");
       return false;
     }
     
     // Show toast to indicate test is starting
-    toast({
-      title: "Enviando teste",
-      description: `Enviando email de teste para ${testEmail}`
-    });
+    toast.loading(`Enviando email de teste para ${testEmail}`);
     
     try {
       const result = await sendTestEmail(templateId, testEmail);
@@ -140,16 +134,10 @@ const Templates = () => {
             try {
               if (isEditing && selectedTemplate) {
                 await updateTemplate(selectedTemplate.id, formData);
-                toast({
-                  title: "Sucesso",
-                  description: "Template atualizado com sucesso!"
-                });
+                toast.success("Template atualizado com sucesso!");
               } else {
                 await createTemplate(formData);
-                toast({
-                  title: "Sucesso",
-                  description: "Template criado com sucesso!"
-                });
+                toast.success("Template criado com sucesso!");
               }
               setIsCreating(false);
               setIsEditing(false);
@@ -197,6 +185,7 @@ const Templates = () => {
               template={template}
               onEdit={() => handleEditClick(template)}
               onDelete={() => deleteTemplate(template.id)}
+              onDuplicate={() => duplicateTemplate(template.id)}
             />
           ))}
         </div>

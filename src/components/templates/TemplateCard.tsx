@@ -43,7 +43,7 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'ativo':
-        return <Badge variant="success">Ativo</Badge>;
+        return <Badge variant="default" className="bg-green-500 hover:bg-green-600">Ativo</Badge>;
       case 'inativo':
         return <Badge variant="secondary">Inativo</Badge>;
       case 'rascunho':
