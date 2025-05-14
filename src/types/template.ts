@@ -8,7 +8,7 @@ export interface Template {
   created_at?: string;
   user_id?: string;
   signature_image?: string | null;
-  status: string; 
+  status?: string; // Make status optional since it might not exist in the database
   attachments?: any;
 }
 
@@ -17,6 +17,6 @@ export interface TemplateFormData {
   conteudo: string;
   assinatura?: string;
   signature_image?: string | null;
-  status: string;
+  status?: string; // Make status optional to match the database structure
   attachments?: any;
 }

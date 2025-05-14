@@ -31,7 +31,7 @@ export function useTemplates() {
       // Transform the fetched data to ensure it has all required properties for Template type
       const formattedTemplates = data?.map(template => ({
         ...template,
-        status: template.status || 'ativo' // Default status for all templates
+        status: template.status || 'ativo' // Provide a default status if it doesn't exist
       })) || [];
       
       setTemplates(formattedTemplates);
