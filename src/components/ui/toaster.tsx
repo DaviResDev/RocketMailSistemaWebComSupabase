@@ -21,9 +21,10 @@ export function Toaster() {
         // Set a default value for the Toast
         let validType: "foreground" | "background" = "foreground";
         
-        // Only try to use the provided type if it's one of the allowed values
-        if (type === "foreground" || type === "background") {
-          validType = type;
+        // Cast the type to any to check if it's one of the allowed values
+        const typeValue = type as any;
+        if (typeValue === "foreground" || typeValue === "background") {
+          validType = typeValue;
         }
         
         return (
