@@ -18,17 +18,15 @@ export function Toaster() {
         // Extract type from props and provide default
         const { type, ...restProps } = props;
         
-        // Certificar que temos uma string para comparação
-        // e definir um tipo seguro para o componente Toast
-        let toastType: "foreground" | "background" = "foreground";
+        // Define a default toast type that's compatible with Toast component
+        let toastType: "default" | "destructive" = "default";
         
-        // Verificar se o tipo é "background" e atualizar apenas nesse caso
-        if (typeof type === 'string' && type === "background") {
-          toastType = "background";
-        }
+        // We no longer compare with "background" since it's not a valid type
+        // Instead we map any type values to the appropriate variant options
+        // that our Toast component actually accepts
         
         return (
-          <Toast key={id} {...restProps} type={toastType}>
+          <Toast key={id} {...restProps} variant={toastType}>
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
