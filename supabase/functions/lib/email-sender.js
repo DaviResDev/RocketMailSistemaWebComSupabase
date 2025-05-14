@@ -41,9 +41,14 @@ async function sendEmailViaSMTP(config, payload) {
     },
   });
   
+  // Properly format the from field to ensure correct domain display
+  const fromName = config.name || config.user.split('@')[0];
+  const fromEmail = config.user; // Always use the configured email
+  const from = `${fromName} <${fromEmail}>`;
+  
   // Prepare email data
   const mailOptions = {
-    from: `${config.name || config.user.split('@')[0]} <${config.user}>`,
+    from: from,
     to: payload.to,
     subject: payload.subject,
     html: payload.html,
@@ -75,8 +80,8 @@ async function sendEmailViaSMTP(config, payload) {
       success: true,
       id: info.messageId,
       provider: "smtp",
-      from: config.user,
-      reply_to: config.user,
+      from: from,
+      reply_to: fromEmail,
       response: info.response
     };
   } catch (error) {
@@ -169,37 +174,12 @@ async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
     try {
       return await sendEmailViaSMTP(smtpConfig, payload);
     } catch (smtpError) {
-      console.error("SMTP send failed, trying Resend fallback:", smtpError.message);
+      console.error("SMTP send failed:", smtpError.message);
       
-      // For major providers like Gmail, we don't want to use Resend fallback
-      // as it would change the sender domain
-      const isMajorProvider = 
-        smtpConfig.host.includes("gmail.com") || 
-        smtpConfig.host.includes("outlook.com") || 
-        smtpConfig.host.includes("yahoo.com") ||
-        smtpConfig.host.includes("hotmail.com");
-        
-      if (isMajorProvider) {
-        // For major providers, throw the original error instead of trying fallback
-        throw new Error(`SMTP error with ${smtpConfig.host}: ${smtpError.message}. Check your credentials and settings.`);
-      }
-      
-      // If Resend API key is not provided, rethrow the error
-      if (!resendApiKey) {
-        throw new Error(`SMTP error: ${smtpError.message}`);
-      }
-      
-      // Try fallback with Resend
-      try {
-        const result = await sendEmailViaResend(resendApiKey, fromName, smtpConfig.user, payload);
-        return {
-          ...result,
-          provider: "resend_fallback",
-          error_original: smtpError.message
-        };
-      } catch (resendError) {
-        throw new Error(`SMTP error: ${smtpError.message}. Resend fallback error: ${resendError.message}`);
-      }
+      // For any email provider, we don't want to use Resend fallback
+      // This ensures emails always come from the configured domain
+      // This is especially important for major providers like Gmail
+      throw new Error(`SMTP error with ${smtpConfig.host}: ${smtpError.message}. Check your SMTP credentials and settings.`);
     }
   }
   
