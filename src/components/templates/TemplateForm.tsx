@@ -8,16 +8,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Save, Send, File as FileIcon, Loader2, X, Upload, PaperclipIcon } from 'lucide-react';
+import { Save, Send, File as FileIcon, Loader2, X, Upload, PaperclipIcon, Image } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Template } from '@/types/template';
 import { TemplateFormProps } from './TemplateFormProps';
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 export function TemplateForm({ template, isEditing = false, onSave, onCancel, onSendTest }: TemplateFormProps) {
   const [formData, setFormData] = useState({
     nome: '',
     conteudo: '',
-    canal: 'email',
     assinatura: 'sim',
     status: 'ativo'
   });
@@ -25,6 +25,8 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [signaturePreviewUrl, setSignaturePreviewUrl] = useState<string | null>(null);
   const [savedAttachments, setSavedAttachments] = useState<Array<{name: string, type: string, size: number, content?: string, url: string}>>([]);
   
   useEffect(() => {
@@ -32,10 +34,14 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
       setFormData({
         nome: template.nome || '',
         conteudo: template.conteudo || '',
-        canal: template.canal || 'email',
         assinatura: template.assinatura || 'sim',
         status: template.status || 'ativo'
       });
+      
+      // Set signature preview if it exists
+      if (template.signature_image) {
+        setSignaturePreviewUrl(template.signature_image);
+      }
       
       // Handle attachments if they exist
       if (template.attachments) {
@@ -111,9 +117,21 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
         ...processedAttachments
       ];
       
+      // Process signature file if uploaded
+      let signature_image = template?.signature_image;
+      if (signatureFile) {
+        const reader = new FileReader();
+        const fileContent = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(signatureFile);
+        });
+        signature_image = fileContent;
+      }
+      
       // Submit all data including attachments
       const submitData = {
         ...formData,
+        signature_image,
         attachments: allAttachments.length > 0 ? allAttachments : null
       };
       
@@ -135,11 +153,12 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
           setFormData({
             nome: '',
             conteudo: '',
-            canal: 'email',
             assinatura: 'sim',
             status: 'ativo'
           });
           setFiles([]);
+          setSignatureFile(null);
+          setSignaturePreviewUrl(null);
           setSavedAttachments([]);
         }
       }
@@ -194,6 +213,20 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
       setFiles(prev => [...prev, ...newFiles]);
     }
   };
+
+  const handleSignatureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setSignatureFile(file);
+      
+      // Create preview URL for the image
+      const objectUrl = URL.createObjectURL(file);
+      setSignaturePreviewUrl(objectUrl);
+      
+      // Clean up the object URL when component unmounts
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+  };
   
   const handleRemoveFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
@@ -201,6 +234,11 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
   
   const handleRemoveSavedAttachment = (index: number) => {
     setSavedAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveSignature = () => {
+    setSignatureFile(null);
+    setSignaturePreviewUrl(null);
   };
   
   const formatFileSize = (bytes: number) => {
@@ -228,22 +266,6 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
               placeholder="Ex: Newsletter Mensal"
               required
             />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="canal">Canal</Label>
-            <Select
-              value={formData.canal}
-              onValueChange={(value) => handleSelectChange('canal', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o canal" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="sms">SMS</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <Tabs defaultValue="editor" className="w-full">
@@ -278,124 +300,194 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
                     .replace(/\{nome\}/g, '<span class="bg-yellow-100 px-1">Nome do Contato</span>')
                 }}
               />
+              {signaturePreviewUrl && (
+                <div className="mt-6 border-t pt-4">
+                  <p className="text-sm text-muted-foreground mb-2">Assinatura:</p>
+                  <img 
+                    src={signaturePreviewUrl} 
+                    alt="Assinatura digital"
+                    className="max-h-24" 
+                  />
+                </div>
+              )}
             </TabsContent>
           </Tabs>
           
-          {formData.canal === 'email' && (
-            <div className="space-y-2">
-              <Label htmlFor="assinatura">Incluir assinatura?</Label>
-              <Select
-                value={formData.assinatura}
-                onValueChange={(value) => handleSelectChange('assinatura', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Incluir assinatura?" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sim">Sim</SelectItem>
-                  <SelectItem value="não">Não</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
-          {formData.canal === 'email' && (
-            <div className="space-y-2">
-              <Label>Anexos</Label>
-              <div className="border rounded-md p-4">
-                {/* Input for file uploads */}
-                <div className="flex items-center space-x-2">
+          <div className="space-y-2">
+            <Label htmlFor="assinatura">Incluir assinatura?</Label>
+            <Select
+              value={formData.assinatura}
+              onValueChange={(value) => handleSelectChange('assinatura', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Incluir assinatura?" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sim">Sim</SelectItem>
+                <SelectItem value="não">Não</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Assinatura Digital</Label>
+            <div className="border rounded-md p-4">
+              {signaturePreviewUrl ? (
+                <div className="space-y-4">
+                  <div className="aspect-w-4 aspect-h-1 max-w-xs">
+                    <img 
+                      src={signaturePreviewUrl} 
+                      alt="Assinatura digital" 
+                      className="object-contain rounded-md border border-border p-2"
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => document.getElementById('signature-upload')?.click()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Alterar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleRemoveSignature}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Remover
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Image className="h-8 w-8 mb-2 text-muted-foreground/60" />
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma assinatura digital
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => document.getElementById('file-upload')?.click()}
+                    onClick={() => document.getElementById('signature-upload')?.click()}
+                    className="mt-4"
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Anexar Arquivo
+                    Adicionar Assinatura
                   </Button>
-                  <Input
-                    id="file-upload"
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileChange}
-                    multiple
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Anexe arquivos que serão enviados com este template
+                </div>
+              )}
+              <Input
+                id="signature-upload"
+                type="file"
+                className="hidden"
+                onChange={handleSignatureFileChange}
+                accept="image/*"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Formatos aceitos: JPG, PNG, GIF. Tamanho máximo: 1MB
+              </p>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Anexos</Label>
+            <div className="border rounded-md p-4">
+              {/* Input for file uploads */}
+              <div className="flex items-center space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Anexar Arquivo
+                </Button>
+                <Input
+                  id="file-upload"
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  multiple
+                />
+                <p className="text-xs text-muted-foreground">
+                  Anexe arquivos que serão enviados com este template
+                </p>
+              </div>
+              
+              {/* List of files to upload */}
+              {files.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm font-medium">Novos Arquivos:</p>
+                  <ul className="space-y-2">
+                    {files.map((file, index) => (
+                      <li key={index} className="flex items-center justify-between bg-muted p-2 rounded">
+                        <div className="flex items-center">
+                          <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
+                          <span className="text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            {formatFileSize(file.size)}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveFile(index)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {/* List of previously saved attachments */}
+              {savedAttachments.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm font-medium">Arquivos Salvos:</p>
+                  <ul className="space-y-2">
+                    {savedAttachments.map((attachment, index) => (
+                      <li key={index} className="flex items-center justify-between bg-muted p-2 rounded">
+                        <div className="flex items-center">
+                          <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
+                          <span className="text-sm">{attachment.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            {formatFileSize(attachment.size)}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveSavedAttachment(index)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {files.length === 0 && savedAttachments.length === 0 && (
+                <div className="py-8 flex flex-col items-center justify-center text-center">
+                  <PaperclipIcon className="h-8 w-8 mb-2 text-muted-foreground/60" />
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum arquivo anexado
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Arquivos anexados aqui serão enviados automaticamente com este template
                   </p>
                 </div>
-                
-                {/* List of files to upload */}
-                {files.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm font-medium">Novos Arquivos:</p>
-                    <ul className="space-y-2">
-                      {files.map((file, index) => (
-                        <li key={index} className="flex items-center justify-between bg-muted p-2 rounded">
-                          <div className="flex items-center">
-                            <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
-                            <span className="text-sm">{file.name}</span>
-                            <span className="text-xs text-muted-foreground ml-2">
-                              {formatFileSize(file.size)}
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveFile(index)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                {/* List of previously saved attachments */}
-                {savedAttachments.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm font-medium">Arquivos Salvos:</p>
-                    <ul className="space-y-2">
-                      {savedAttachments.map((attachment, index) => (
-                        <li key={index} className="flex items-center justify-between bg-muted p-2 rounded">
-                          <div className="flex items-center">
-                            <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
-                            <span className="text-sm">{attachment.name}</span>
-                            <span className="text-xs text-muted-foreground ml-2">
-                              {formatFileSize(attachment.size)}
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveSavedAttachment(index)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                {files.length === 0 && savedAttachments.length === 0 && (
-                  <div className="py-8 flex flex-col items-center justify-center text-center">
-                    <PaperclipIcon className="h-8 w-8 mb-2 text-muted-foreground/60" />
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum arquivo anexado
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Arquivos anexados aqui serão enviados automaticamente com este template
-                    </p>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          )}
+          </div>
           
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>

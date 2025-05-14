@@ -43,6 +43,8 @@ async function sendEmailViaSMTP(config, payload) {
     connectionTimeout: 30000, // 30 seconds
     greetingTimeout: 30000, // 30 seconds
     socketTimeout: 60000, // 60 seconds
+    logger: true, // Enable logging
+    debug: true, // Include SMTP traffic in the logs
     tls: {
       rejectUnauthorized: false // Accept self-signed certificates
     },
@@ -88,10 +90,20 @@ async function sendEmailViaSMTP(config, payload) {
   console.log(`Sending email via SMTP: ${config.host}:${config.port}`);
   console.log(`From: ${mailOptions.from} To: ${payload.to}`);
   
+  // Verify SMTP configuration before sending
+  try {
+    const verifyResult = await transporter.verify();
+    console.log("SMTP verification result:", verifyResult);
+  } catch (verifyError) {
+    console.error("SMTP verification failed:", verifyError);
+    throw new Error(`SMTP verification failed: ${verifyError.message}`);
+  }
+  
   // Send mail with defined transport object
   try {
     const info = await transporter.sendMail(mailOptions);
     console.log("Email sent successfully via SMTP:", info.messageId);
+    console.log("SMTP Response:", info.response);
     return {
       success: true,
       id: info.messageId,
@@ -192,8 +204,19 @@ async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
     } catch (smtpError) {
       console.error("SMTP send failed:", smtpError.message);
       
-      // We don't want to use Resend as fallback - as requested by the user
-      throw new Error(`SMTP error with ${smtpConfig.host}: ${smtpError.message}. Check your SMTP credentials and settings.`);
+      if (resendApiKey) {
+        console.log("Trying Resend as fallback...");
+        try {
+          const result = await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
+          result.note = "Fallback from SMTP failure";
+          return result;
+        } catch (resendError) {
+          console.error("Resend fallback failed:", resendError.message);
+          throw new Error(`SMTP error: ${smtpError.message}. Resend fallback also failed: ${resendError.message}`);
+        }
+      } else {
+        throw new Error(`SMTP error with ${smtpConfig.host}: ${smtpError.message}. Check your SMTP credentials and settings.`);
+      }
     }
   }
   

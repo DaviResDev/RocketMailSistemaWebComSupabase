@@ -4,7 +4,6 @@
 // This enables autocomplete, go to definition, etc.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
-import { Resend } from "https://esm.sh/resend@1.1.0";
 import * as nodemailer from "https://esm.sh/nodemailer@6.9.12";
 import { sendEmail, sendEmailViaSMTP, sendEmailViaResend } from "../lib/email-sender.js";
 
@@ -35,6 +34,7 @@ serve(async (req: Request) => {
       contentLength: content?.length,
       isTest,
       hasAttachments: !!attachments,
+      hasSignature: !!signature_image,
       attachmentsCount: Array.isArray(attachments) ? attachments.length : (attachments ? 'object' : 'none'),
       contato_id,
       template_id,
@@ -149,7 +149,7 @@ serve(async (req: Request) => {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px;">
           <div>${htmlContent}</div>
-          ${signature_image ? `<div style="margin-top: 20px;"><img src="${signature_image}" alt="Signature" style="max-height: 60px;" /></div>` : ''}
+          ${signature_image ? `<div style="margin-top: 20px;"><img src="${signature_image}" alt="Assinatura" style="max-height: 60px;" /></div>` : ''}
         </div>
       `,
     };
@@ -238,15 +238,26 @@ serve(async (req: Request) => {
           name: settingsData?.smtp_nome || ''
         };
         
-        // Use the sendEmailViaSMTP function from the email-sender module
-        const smtpResult = await sendEmailViaSMTP(smtpConfig, {
+        // Prepare complete email data for sending
+        const emailToSend = {
           to: emailData.to,
           subject: emailData.subject,
           html: emailData.html,
           cc: emailData.cc,
           bcc: emailData.bcc,
           attachments: emailAttachments.length > 0 ? emailAttachments : undefined
+        };
+        
+        console.log("Sending email with SMTP using:", {
+          host: smtpConfig.host,
+          port: smtpConfig.port,
+          secure: smtpConfig.secure,
+          hasUser: !!smtpConfig.user,
+          hasAttachments: emailAttachments.length > 0
         });
+        
+        // Use the sendEmailViaSMTP function from the email-sender module
+        const smtpResult = await sendEmailViaSMTP(smtpConfig, emailToSend);
         
         console.log("SMTP Email sent successfully:", smtpResult.id);
         smtpResponse = smtpResult.response;
@@ -262,8 +273,45 @@ serve(async (req: Request) => {
         console.error("SMTP error:", smtpErr);
         error = smtpErr;
         
-        // We will not use Resend as fallback - as requested by the user
-        throw new Error(`SMTP error: ${smtpErr.message}. Verifique suas configurações SMTP.`);
+        console.log("SMTP failed, trying Resend as fallback...");
+        
+        // Use Resend as fallback if SMTP fails
+        const resendApiKey = Deno.env.get("RESEND_API_KEY");
+        
+        if (resendApiKey) {
+          try {
+            // Use the sendEmailViaResend function from the email-sender module
+            const resendResult = await sendEmailViaResend(
+              resendApiKey,
+              settingsData?.smtp_nome || "RocketMail",
+              settingsData?.email_usuario,
+              {
+                to: emailData.to,
+                subject: emailData.subject,
+                html: emailData.html,
+                cc: emailData.cc,
+                bcc: emailData.bcc,
+                attachments: emailAttachments.length > 0 ? emailAttachments : undefined
+              }
+            );
+            
+            console.log("Resend Email sent successfully as fallback:", resendResult.id);
+            
+            success = true;
+            details = {
+              transport: "resend",
+              id: resendResult.id,
+              from: resendResult.from,
+              reply_to: resendResult.reply_to,
+              note: "Fallback from SMTP failure"
+            };
+          } catch (resendErr) {
+            console.error("Resend fallback error:", resendErr);
+            throw new Error(`SMTP error: ${smtpErr.message}. Resend fallback also failed: ${resendErr.message}`);
+          }
+        } else {
+          throw new Error(`SMTP error: ${smtpErr.message}. Verifique suas configurações SMTP. Nenhuma chave Resend disponível para fallback.`);
+        }
       }
     } else {
       // If SMTP is not configured, use Resend

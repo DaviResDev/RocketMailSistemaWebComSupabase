@@ -4,13 +4,14 @@ import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { useTemplates } from '@/hooks/useTemplates';
 import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, AlertCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Template, TemplateFormData } from '@/types/template';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const Templates = () => {
   const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
@@ -18,20 +19,22 @@ const Templates = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { user } = useAuth();
 
   const [formData, setFormData] = useState<TemplateFormData>({
     nome: '',
     conteudo: '',
-    canal: 'email',
     status: 'ativo',
   });
 
   const loadTemplates = useCallback(async () => {
     if (user) {
       try {
+        setErrorMessage(null);
         await fetchTemplates();
       } catch (err: any) {
+        console.error("Error loading templates:", err);
         setErrorMessage(err.message);
       }
     }
@@ -39,14 +42,13 @@ const Templates = () => {
 
   useEffect(() => {
     loadTemplates();
-  }, [loadTemplates]);
+  }, [loadTemplates, retryCount]);
 
   const handleCreateClick = () => {
     setFormData({
       nome: '',
       conteudo: '',
-      canal: 'email',
-      status: 'ativo',
+      status: 'ativo'
     });
     setIsCreating(true);
     setIsEditing(false);
@@ -58,12 +60,15 @@ const Templates = () => {
     setFormData({
       nome: template.nome,
       conteudo: template.conteudo,
-      canal: template.canal || 'email',
       signature_image: template.signature_image || null,
       status: template.status,
     });
     setIsEditing(true);
     setIsCreating(true);
+  };
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
   };
 
   if (!user) {
@@ -142,9 +147,16 @@ const Templates = () => {
       ) : loading ? (
         <TemplateSkeletons />
       ) : errorMessage ? (
-        <div className="flex justify-center items-center h-64">
-          <p className="text-red-500">Erro ao carregar templates: {errorMessage}</p>
-        </div>
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Erro</AlertTitle>
+          <AlertDescription className="flex flex-col gap-2">
+            <p>Erro ao carregar templates: {errorMessage}</p>
+            <Button variant="outline" size="sm" onClick={handleRetry} className="w-fit">
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
       ) : templates.length === 0 ? (
         <Card className="p-6 text-center">
           <p className="text-muted-foreground mb-4">Você ainda não criou nenhum template.</p>
@@ -153,39 +165,16 @@ const Templates = () => {
           </Button>
         </Card>
       ) : (
-        <Tabs defaultValue="email">
-          <div className="mb-4">
-            <TabsList>
-              <TabsTrigger value="email">Email</TabsTrigger>
-              <TabsTrigger value="sms">SMS</TabsTrigger>
-            </TabsList>
-          </div>
-          
-          {['email', 'sms'].map(canal => (
-            <TabsContent key={canal} value={canal} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {templates
-                .filter(template => template.canal === canal)
-                .map(template => (
-                  <TemplateCard
-                    key={template.id}
-                    template={template}
-                    onEdit={() => handleEditClick(template)}
-                    onDelete={() => deleteTemplate(template.id)}
-                  />
-                ))}
-              {templates.filter(template => template.canal === canal).length === 0 && (
-                <div className="col-span-full">
-                  <Card className="p-6 text-center">
-                    <p className="text-muted-foreground mb-4">Nenhum template de {canal} encontrado.</p>
-                    <Button onClick={handleCreateClick} className="flex items-center mx-auto">
-                      <PlusCircle className="mr-2 h-4 w-4" /> Criar template de {canal}
-                    </Button>
-                  </Card>
-                </div>
-              )}
-            </TabsContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {templates.map(template => (
+            <TemplateCard
+              key={template.id}
+              template={template}
+              onEdit={() => handleEditClick(template)}
+              onDelete={() => deleteTemplate(template.id)}
+            />
           ))}
-        </Tabs>
+        </div>
       )}
     </div>
   );

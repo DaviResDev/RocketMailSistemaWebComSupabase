@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -13,25 +14,31 @@ export function useTemplates() {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
+      
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+      
       const { data, error } = await supabase
         .from('templates')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       console.log('Templates carregados:', data);
       
       // Transform the fetched data to ensure it has all required properties for Template type
-      const templatesWithStatus = data?.map(template => ({
+      const formattedTemplates = data?.map(template => ({
         ...template,
-        // Ensure each template has a status property
-        status: 'ativo' // Default status for all templates
+        status: template.status || 'ativo' // Default status for all templates
       })) || [];
       
-      setTemplates(templatesWithStatus);
+      setTemplates(formattedTemplates);
     } catch (error: any) {
       console.error('Erro ao carregar templates:', error);
       toast.error('Erro ao carregar templates: ' + error.message);
+      throw error; // Re-throw to allow caller to handle
     } finally {
       setLoading(false);
     }
@@ -44,10 +51,10 @@ export function useTemplates() {
     }
 
     try {
-      // Set canal to 'email' as default
+      // Set default value for email
       const templateData = {
-        ...formData, 
-        canal: formData.canal || 'email',
+        ...formData,
+        canal: 'email', // Always set to email since it's the only option now
         user_id: user.id
       };
       
@@ -66,7 +73,8 @@ export function useTemplates() {
       
       console.log('Criando template com dados:', {
         ...templateData,
-        attachments: templateData.attachments ? 'presente' : 'ausente'
+        attachments: templateData.attachments ? 'presente' : 'ausente',
+        signature_image: templateData.signature_image ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -86,10 +94,10 @@ export function useTemplates() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
-      // Set canal to 'email' as default if not provided
+      // Always set to 'email' for backwards compatibility
       const templateData = {
         ...formData, 
-        canal: formData.canal || 'email'
+        canal: 'email'
       };
       
       // Ensure attachments is properly formatted and stored
@@ -107,7 +115,8 @@ export function useTemplates() {
       
       console.log('Atualizando template com dados:', {
         ...templateData,
-        attachments: templateData.attachments ? 'presente' : 'ausente'
+        attachments: templateData.attachments ? 'presente' : 'ausente',
+        signature_image: templateData.signature_image ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -214,8 +223,9 @@ export function useTemplates() {
         .replace(/{dia}/g, formattedDate);
         
       // Add signature if it exists
-      if (template.assinatura) {
-        processedContent += `\n\n${template.assinatura}`;
+      if (template.assinatura && template.assinatura !== 'não') {
+        // The signature content will be added in the edge function
+        // based on signature_image parameter
       }
       
       // Call our send-email edge function
