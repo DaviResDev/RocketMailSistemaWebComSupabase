@@ -55,12 +55,40 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw new Error("Dados incompletos para envio: contato ou template faltando");
       }
       
+      // Get the full template details to include attachments
+      const { data: template, error: templateError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', schedule.template_id)
+        .single();
+        
+      if (templateError) {
+        console.error("Erro ao buscar detalhes do template:", templateError);
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Não foi possível buscar os detalhes do template"
+        });
+        throw templateError;
+      }
+      
       // Convert schedule to EnvioFormData
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
-        agendamento_id: schedule.id
+        agendamento_id: schedule.id,
+        attachments: template.attachments // Garantir que os anexos são incluídos
       };
+      
+      // Adicionar logs para verificar os dados de envio
+      console.log("Enviando email com os seguintes dados:", {
+        contato: schedule.contato,
+        template: schedule.template?.nome,
+        agendamento: schedule.id,
+        temAnexos: template.attachments && 
+                   ((typeof template.attachments === 'string' && template.attachments !== '[]') || 
+                    (Array.isArray(template.attachments) && template.attachments.length > 0))
+      });
       
       // Send email immediately using sendEmail
       const result = await sendEmail(envioData);
@@ -74,7 +102,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw new Error("Falha ao enviar o email");
       }
       
-      // Update schedule status to sent
+      // Atualizar agendamento para status enviado
       await supabase
         .from('agendamentos')
         .update({ status: 'enviado' })
@@ -113,6 +141,12 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         title: "Erro ao enviar email",
         description: errorMessage
       });
+      
+      // Se houver erro, também atualizar status do agendamento
+      await supabase
+        .from('agendamentos')
+        .update({ status: 'falha' })
+        .eq('id', schedule.id);
     } finally {
       // Always unmark the item as loading
       setLoadingItems(prev => ({ ...prev, [schedule.id]: false }));

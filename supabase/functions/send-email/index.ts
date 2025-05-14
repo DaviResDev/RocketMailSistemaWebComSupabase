@@ -26,6 +26,19 @@ serve(async (req: Request) => {
     // Parse request body
     const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id } = await req.json();
 
+    // Log detailed request information
+    console.log("Email request received:", JSON.stringify({
+      to,
+      subject,
+      contentLength: content?.length,
+      isTest,
+      hasAttachments: !!attachments,
+      attachmentsCount: Array.isArray(attachments) ? attachments.length : (attachments ? 'object' : 'none'),
+      contato_id,
+      template_id,
+      agendamento_id
+    }));
+
     // Validate required inputs
     if (!to || !subject || !content) {
       return new Response(
@@ -64,6 +77,7 @@ serve(async (req: Request) => {
     let envioId = null;
     if (userId) {
       try {
+        // Create an envio record
         const { data: envioData, error: envioError } = await supabaseAdmin
           .from("envios")
           .insert({
@@ -71,6 +85,7 @@ serve(async (req: Request) => {
             contato_id: contato_id || null,
             template_id: template_id || null,
             status: "processando",
+            data_envio: new Date().toISOString(),
             agendamento_id: agendamento_id || null
           })
           .select("id")
@@ -80,6 +95,7 @@ serve(async (req: Request) => {
           console.error("Error creating envio record:", envioError);
         } else {
           envioId = envioData.id;
+          console.log("Created envio record with ID:", envioId);
         }
       } catch (err) {
         console.error("Exception creating envio record:", err);
@@ -99,6 +115,12 @@ serve(async (req: Request) => {
       console.error("Error fetching email settings:", settingsError);
     }
 
+    console.log("User settings:", settingsData ? JSON.stringify({
+      use_smtp: settingsData.use_smtp,
+      email_smtp: settingsData.email_smtp,
+      email_porta: settingsData.email_porta
+    }) : "none");
+
     // Convert content to HTML format
     const htmlContent = content.replace(/\n/g, "<br>");
     
@@ -114,7 +136,7 @@ serve(async (req: Request) => {
       `,
       from: settingsData?.smtp_nome
         ? `${settingsData.smtp_nome} <${settingsData.email_usuario || "noreply@rocketmail.com"}>`
-        : settingsData?.email_usuario || "RocketMail <noreply@rocketmail.com>",
+        : settingsData?.email_usuario || "RocketMail <noreply@resend.dev>",
     };
 
     // Process attachments
@@ -128,9 +150,12 @@ serve(async (req: Request) => {
           : attachments;
           
         if (Array.isArray(parsedAttachments)) {
+          console.log(`Processing ${parsedAttachments.length} attachments`);
+          
           for (const attachment of parsedAttachments) {
             if (attachment.url) {
               try {
+                console.log(`Fetching attachment: ${attachment.url}`);
                 const response = await fetch(attachment.url);
                 if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
                 
@@ -139,6 +164,7 @@ serve(async (req: Request) => {
                   filename: attachment.name || 'attachment.file',
                   content: buffer
                 });
+                console.log(`Attachment processed: ${attachment.name}`);
               } catch (fetchErr) {
                 console.error("Error fetching attachment:", fetchErr);
               }
@@ -151,6 +177,7 @@ serve(async (req: Request) => {
     }
 
     // Determine email sending method based on user settings and availability
+    // Default to true if not explicitly set to false
     const useSmtp = settingsData?.use_smtp !== false && 
                     settingsData?.email_smtp && 
                     settingsData?.email_porta && 
@@ -166,7 +193,7 @@ serve(async (req: Request) => {
       try {
         console.log("Sending via SMTP:", settingsData?.email_smtp);
         
-        // Create SMTP transport
+        // Create SMTP transport with extended timeouts
         const transport = nodemailer.default.createTransport({
           host: settingsData?.email_smtp,
           port: settingsData?.email_porta || 587,
@@ -177,7 +204,10 @@ serve(async (req: Request) => {
           },
           tls: {
             rejectUnauthorized: false // Accept self-signed certificates
-          }
+          },
+          connectionTimeout: 30000, // 30 seconds
+          greetingTimeout: 30000,   // 30 seconds
+          socketTimeout: 60000      // 60 seconds
         });
         
         // Prepare email options
@@ -188,6 +218,17 @@ serve(async (req: Request) => {
           html: emailData.html,
           attachments: emailAttachments.length > 0 ? emailAttachments : undefined
         };
+        
+        console.log("SMTP Options:", JSON.stringify({
+          host: settingsData?.email_smtp,
+          port: settingsData?.email_porta,
+          secure: settingsData?.smtp_seguranca === "ssl" || settingsData?.email_porta === 465,
+          user: settingsData?.email_usuario, 
+          // senha omitida por segurança
+          to: emailData.to,
+          subject: emailData.subject,
+          hasAttachments: emailAttachments.length > 0
+        }));
         
         // Send email
         const info = await transport.sendMail(mailOptions);
@@ -271,6 +312,17 @@ serve(async (req: Request) => {
             status: "entregue",
           })
           .eq("id", envioId);
+          
+        // If this was an agendamento, update its status too
+        if (agendamento_id) {
+          await supabaseAdmin
+            .from("agendamentos")
+            .update({
+              status: "enviado",
+            })
+            .eq("id", agendamento_id);
+          console.log("Updated agendamento status to 'enviado'");
+        }
       } else {
         console.log("Updated sending status to 'erro'");
         await supabaseAdmin
@@ -280,6 +332,17 @@ serve(async (req: Request) => {
             erro: error ? error.message : "Unknown error",
           })
           .eq("id", envioId);
+          
+        // If this was an agendamento, update its status too
+        if (agendamento_id) {
+          await supabaseAdmin
+            .from("agendamentos")
+            .update({
+              status: "falha",
+            })
+            .eq("id", agendamento_id);
+          console.log("Updated agendamento status to 'falha'");
+        }
       }
     }
 

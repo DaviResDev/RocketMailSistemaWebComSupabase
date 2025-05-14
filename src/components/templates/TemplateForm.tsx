@@ -1,4 +1,3 @@
-
 import { useState, useEffect, KeyboardEventHandler, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,18 +44,46 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
 
   // Load existing attachments and signature when editing
   useEffect(() => {
-    if (isEditing && formData.attachments) {
+    if (isEditing) {
       try {
-        const attachmentsList = typeof formData.attachments === 'string' 
-          ? JSON.parse(formData.attachments) 
-          : formData.attachments;
+        // Processar os anexos existentes quando estiver editando
+        if (formData.attachments) {
+          let attachmentsList = [];
           
-        // If we have signature image URL, set the preview
+          if (typeof formData.attachments === 'string') {
+            try {
+              attachmentsList = JSON.parse(formData.attachments);
+            } catch (e) {
+              console.error('Erro ao analisar anexos como string JSON:', e);
+            }
+          } else if (Array.isArray(formData.attachments)) {
+            attachmentsList = formData.attachments;
+          }
+          
+          // Atualizar a interface com os anexos existentes
+          if (Array.isArray(attachmentsList) && attachmentsList.length > 0) {
+            // Criar "arquivos" para exibição na interface
+            const displayFiles = attachmentsList.map((attachment, index) => {
+              // Criar um objeto File-like para exibição
+              return new File(
+                [new Blob(['placeholder'])], 
+                attachment.name || `anexo-${index + 1}.pdf`,
+                { type: 'application/octet-stream' }
+              );
+            });
+            
+            setAttachments(displayFiles);
+            console.log('Anexos carregados do template:', attachmentsList.length);
+          }
+        }
+          
+        // Se temos uma assinatura, definir a visualização
         if (formData.signature_image) {
           setSignaturePreview(formData.signature_image);
+          console.log('Assinatura carregada do template');
         }
       } catch (error) {
-        console.error("Error parsing attachments:", error);
+        console.error("Erro ao processar dados existentes do template:", error);
       }
     }
   }, [isEditing, formData.attachments, formData.signature_image]);
@@ -217,6 +244,7 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
       }
       
       const files = Array.from(e.target.files);
+      console.log(`Processando ${files.length} anexos para upload`);
       
       // Max 10MB per file
       for (const file of files) {
@@ -248,6 +276,8 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
       // Upload files to Supabase Storage
       for (const file of files) {
         const fileName = `attachment_${Date.now()}_${file.name}`;
+        console.log(`Fazendo upload do arquivo: ${fileName}`);
+        
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('attachments')
           .upload(`${user.id}/${fileName}`, file);
@@ -271,6 +301,8 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
             type: file.type,
             url: publicUrlData.publicUrl
           });
+          
+          console.log(`Anexo ${file.name} salvo com sucesso`);
         }
       }
       
@@ -278,13 +310,19 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
       setAttachments(prev => [...prev, ...files]);
       
       // Update form data with attachment metadata
+      const currentAttachments = typeof formData.attachments === 'string'
+        ? JSON.parse(formData.attachments || '[]')
+        : (formData.attachments || []);
+      
+      const updatedAttachments = [...currentAttachments, ...attachmentsList];
+      
+      // Sempre guardar attachments como string JSON para consistência
       setFormData(prev => ({
         ...prev,
-        attachments: [...(typeof prev.attachments === 'string' 
-          ? JSON.parse(prev.attachments || '[]') 
-          : (prev.attachments || [])), ...attachmentsList]
+        attachments: JSON.stringify(updatedAttachments)
       }));
       
+      console.log(`${attachmentsList.length} arquivos anexados e salvos no formData`);
       toast.success(`${files.length} arquivo(s) anexado(s)`);
       
     } catch (error: any) {
@@ -305,11 +343,14 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         
       const updatedAttachments = currentAttachments.filter((_: any, i: number) => i !== index);
       
+      // Sempre guardar attachments como string JSON para consistência
       return {
         ...prev,
-        attachments: updatedAttachments
+        attachments: JSON.stringify(updatedAttachments)
       };
     });
+    
+    console.log(`Anexo removido no índice ${index}`);
   };
 
   const removeSignature = () => {

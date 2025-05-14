@@ -40,6 +40,7 @@ export function useTemplates() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      console.log('Templates carregados:', data);
       setTemplates(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar templates:', error);
@@ -63,10 +64,23 @@ export function useTemplates() {
         user_id: user.id
       };
       
-      // Ensure attachments is stored as JSON
-      if (templateData.attachments && !Array.isArray(templateData.attachments) && typeof templateData.attachments !== 'string') {
-        templateData.attachments = JSON.stringify(templateData.attachments);
+      // Ensure attachments is properly formatted and stored
+      if (templateData.attachments) {
+        // Se for um array, converter para string JSON
+        if (Array.isArray(templateData.attachments)) {
+          templateData.attachments = JSON.stringify(templateData.attachments);
+        } 
+        // Se for um objeto mas não um array, também converter para string
+        else if (typeof templateData.attachments === 'object') {
+          templateData.attachments = JSON.stringify(templateData.attachments);
+        }
+        // Se já for uma string, manter como está
       }
+      
+      console.log('Criando template com dados:', {
+        ...templateData,
+        attachments: templateData.attachments ? 'presente' : 'ausente'
+      });
       
       const { error } = await supabase
         .from('templates')
@@ -91,10 +105,23 @@ export function useTemplates() {
         canal: 'email'
       };
       
-      // Ensure attachments is stored as JSON
-      if (templateData.attachments && !Array.isArray(templateData.attachments) && typeof templateData.attachments !== 'string') {
-        templateData.attachments = JSON.stringify(templateData.attachments);
+      // Ensure attachments is properly formatted and stored
+      if (templateData.attachments) {
+        // Se for um array, converter para string JSON
+        if (Array.isArray(templateData.attachments)) {
+          templateData.attachments = JSON.stringify(templateData.attachments);
+        } 
+        // Se for um objeto mas não um array, também converter para string
+        else if (typeof templateData.attachments === 'object') {
+          templateData.attachments = JSON.stringify(templateData.attachments);
+        }
+        // Se já for uma string, manter como está
       }
+      
+      console.log('Atualizando template com dados:', {
+        ...templateData,
+        attachments: templateData.attachments ? 'presente' : 'ausente'
+      });
       
       const { error } = await supabase
         .from('templates')
