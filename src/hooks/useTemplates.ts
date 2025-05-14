@@ -29,10 +29,10 @@ export function useTemplates() {
       console.log('Templates carregados:', data);
       
       // Transform the fetched data to ensure it has all required properties for Template type
-      const formattedTemplates = data?.map(template => ({
+      const formattedTemplates: Template[] = data?.map(template => ({
         ...template,
-        status: template.status || 'ativo' // Provide a default status if it doesn't exist
-      })) as Template[] || [];
+        status: 'ativo' // Always provide a default status since it's required now
+      })) || [];
       
       setTemplates(formattedTemplates);
     } catch (error: any) {
