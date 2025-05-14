@@ -43,6 +43,7 @@ async function sendEmailViaSMTP(config, payload) {
     connectionTimeout: 15000, // 15 seconds
     greetingTimeout: 15000, // 15 seconds
     socketTimeout: 30000, // 30 seconds
+    logger: true, // Enable logging for better debugging
     debug: true, // Include SMTP traffic in the logs
     tls: {
       rejectUnauthorized: false // Accept self-signed certificates for better compatibility
@@ -67,6 +68,7 @@ async function sendEmailViaSMTP(config, payload) {
       // Set custom headers that might help with deliverability
       'X-Mailer': 'RocketMail',
       'X-Priority': '3',
+      'Content-Type': 'text/html; charset=utf-8',
     }
   };
 
@@ -129,6 +131,10 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   // Import Resend using dynamic import for Deno compatibility
   const { Resend } = await import('npm:resend@1.1.0');
   const resend = new Resend(resendApiKey);
+  
+  if (!resendApiKey) {
+    throw new Error("Missing Resend API key. Please configure it in your Supabase secrets.");
+  }
   
   // Create email data for Resend
   const emailData = {

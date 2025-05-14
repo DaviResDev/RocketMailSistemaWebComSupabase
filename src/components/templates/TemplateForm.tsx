@@ -8,11 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Save, Send, File as FileIcon, Loader2, X, Upload, PaperclipIcon, Image } from 'lucide-react';
+import { Save, Send, File as FileIcon, Loader2, X, Upload, PaperclipIcon, Image, Variable } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Template } from '@/types/template';
 import { TemplateFormProps } from './TemplateFormProps';
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 export function TemplateForm({ template, isEditing = false, onSave, onCancel, onSendTest }: TemplateFormProps) {
   const [formData, setFormData] = useState({
@@ -247,6 +253,28 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
     else return (bytes / 1048576).toFixed(1) + ' MB';
   };
 
+  // Add variable to content at cursor position
+  const insertVariable = (variable: string) => {
+    const textArea = document.getElementById('conteudo') as HTMLTextAreaElement;
+    if (!textArea) return;
+    
+    const startPos = textArea.selectionStart;
+    const endPos = textArea.selectionEnd;
+    
+    const newContent = 
+      formData.conteudo.substring(0, startPos) + 
+      `{${variable}}` + 
+      formData.conteudo.substring(endPos);
+    
+    setFormData({ ...formData, conteudo: newContent });
+    
+    // Set focus back to textarea
+    setTimeout(() => {
+      textArea.focus();
+      textArea.setSelectionRange(startPos + variable.length + 2, startPos + variable.length + 2);
+    }, 0);
+  };
+
   return (
     <form onSubmit={handleSubmit}>
       <Card className="w-full">
@@ -276,7 +304,25 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
             
             <TabsContent value="editor" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="conteudo">Conteúdo</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="conteudo">Conteúdo</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Variable className="h-4 w-4 mr-2" />
+                        Inserir Variável
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => insertVariable('nome')}>Nome</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => insertVariable('email')}>Email</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => insertVariable('telefone')}>Telefone</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => insertVariable('razao_social')}>Razão Social</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => insertVariable('cliente')}>Cliente</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => insertVariable('dia')}>Data</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 <Textarea
                   id="conteudo"
                   name="conteudo"
@@ -298,6 +344,11 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
                   __html: formData.conteudo
                     .replace(/\n/g, '<br>')
                     .replace(/\{nome\}/g, '<span class="bg-yellow-100 px-1">Nome do Contato</span>')
+                    .replace(/\{email\}/g, '<span class="bg-yellow-100 px-1">Email do Contato</span>')
+                    .replace(/\{telefone\}/g, '<span class="bg-yellow-100 px-1">Telefone do Contato</span>')
+                    .replace(/\{razao_social\}/g, '<span class="bg-yellow-100 px-1">Razão Social</span>')
+                    .replace(/\{cliente\}/g, '<span class="bg-yellow-100 px-1">Nome do Cliente</span>')
+                    .replace(/\{dia\}/g, '<span class="bg-yellow-100 px-1">Data Atual</span>')
                 }}
               />
               {signaturePreviewUrl && (

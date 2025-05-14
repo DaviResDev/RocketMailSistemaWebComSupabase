@@ -20,7 +20,20 @@ serve(async (req: Request) => {
 
   try {
     // Parse request body
-    const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id, cc, bcc, contato_nome, contato_email } = await req.json();
+    const requestBody = await req.text();
+    let requestData;
+    
+    try {
+      requestData = JSON.parse(requestBody);
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError, "Raw body:", requestBody);
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const { to, subject, content, isTest, signature_image, attachments, contato_id, template_id, user_id, agendamento_id, cc, bcc, contato_nome, contato_email } = requestData;
 
     // Log detailed request information
     console.log("Email request received:", JSON.stringify({
@@ -165,9 +178,15 @@ serve(async (req: Request) => {
     if (attachments) {
       try {
         // Parse attachments if it's a string
-        const parsedAttachments = typeof attachments === 'string' 
-          ? JSON.parse(attachments) 
-          : attachments;
+        let parsedAttachments = attachments;
+        if (typeof attachments === 'string') {
+          try {
+            parsedAttachments = JSON.parse(attachments);
+          } catch (parseErr) {
+            console.error("Error parsing attachments JSON:", parseErr);
+            // Continue with original value if parsing fails
+          }
+        }
           
         if (Array.isArray(parsedAttachments)) {
           console.log(`Processing ${parsedAttachments.length} attachments`);
@@ -202,6 +221,33 @@ serve(async (req: Request) => {
               console.log(`Attachment included from content: ${attachment.name || attachment.filename}`);
             }
           }
+        } else if (parsedAttachments && typeof parsedAttachments === 'object') {
+          // If it's a single object
+          if (parsedAttachments.url) {
+            try {
+              console.log(`Fetching attachment: ${parsedAttachments.url}`);
+              const response = await fetch(parsedAttachments.url);
+              if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
+              
+              const buffer = await response.arrayBuffer();
+              emailAttachments.push({
+                filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
+                content: buffer
+              });
+            } catch (fetchErr) {
+              console.error("Error fetching single attachment:", fetchErr);
+            }
+          } else if (parsedAttachments.content) {
+            emailAttachments.push({
+              filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
+              content: typeof parsedAttachments.content === 'string' ? 
+                (parsedAttachments.content.includes('base64,') ? 
+                  parsedAttachments.content.split('base64,')[1] : 
+                  parsedAttachments.content) : 
+                parsedAttachments.content,
+              encoding: 'base64'
+            });
+          }
         }
       } catch (err) {
         console.error("Error processing attachments:", err);
@@ -210,6 +256,7 @@ serve(async (req: Request) => {
 
     if (emailAttachments.length > 0) {
       emailData.attachments = emailAttachments;
+      console.log(`Added ${emailAttachments.length} attachments to the email`);
     }
 
     // Check if SMTP is configured and should be used
