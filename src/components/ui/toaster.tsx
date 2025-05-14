@@ -18,13 +18,9 @@ export function Toaster() {
         // Extract type from props and provide default
         const { type, ...restProps } = props;
         
-        // Ensure we're working with a string type that matches the expected values
-        let toastType: "foreground" | "background" = "foreground";
-        
-        // Only set to background if the type is explicitly "background"
-        if (type === "background") {
-          toastType = "background";
-        }
+        // Cast the type to a string if it exists, otherwise use 'foreground' as default
+        // This handles any potential type mismatch between ToastTypes and string literals
+        const toastType = type === "background" ? "background" : "foreground";
         
         return (
           <Toast key={id} {...restProps} type={toastType}>
