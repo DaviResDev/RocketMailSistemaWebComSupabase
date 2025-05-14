@@ -49,7 +49,7 @@ export default function Signup() {
         
         <Card>
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Criar Conta</CardTitle>
+            <CardTitle className="text-2xl font-bold text-center">Criar Conta RocketMail</CardTitle>
             <CardDescription className="text-center">
               Preencha os dados abaixo para criar sua conta
             </CardDescription>

@@ -15,20 +15,17 @@ export function Toaster() {
   return (
     <ToastProvider>
       {toasts && toasts.map(function ({ id, title, description, action, ...props }) {
-        // Extract type from props
+        // Extract type from props and provide default
         const { type, ...restProps } = props;
         
-        // Set a default value for the Toast
-        let validType: "foreground" | "background" = "foreground";
+        // Check if type is a string and matches expected values
+        const typeString = typeof type === 'string' ? type : 'foreground';
         
-        // Cast the type to any to check if it's one of the allowed values
-        const typeValue = type as any;
-        if (typeValue === "foreground" || typeValue === "background") {
-          validType = typeValue;
-        }
+        // Use a properly typed variable
+        const toastType = typeString === 'background' ? 'background' : 'foreground';
         
         return (
-          <Toast key={id} {...restProps} type={validType}>
+          <Toast key={id} {...restProps} type={toastType}>
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (

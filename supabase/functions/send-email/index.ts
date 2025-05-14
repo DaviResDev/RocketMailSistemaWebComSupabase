@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { sendEmail } from "../lib/email-sender.js";
@@ -226,7 +227,9 @@ serve(async (req) => {
     // Replace date placeholders
     const currentDate = new Date();
     processedContent = processedContent
-      .replace(/{dia}/g, currentDate.toLocaleDateString('pt-BR'));
+      .replace(/{dia}/g, currentDate.toLocaleDateString('pt-BR'))
+      .replace(/{data}/g, currentDate.toLocaleDateString('pt-BR'))
+      .replace(/{hora}/g, currentDate.toLocaleTimeString('pt-BR'));
 
     // Create final HTML content
     const htmlContent = `
@@ -247,16 +250,6 @@ serve(async (req) => {
       
       if (attachments && attachments.length > 0) {
         console.log(`Processing ${attachments.length} attachments`);
-        
-        // Create a storage client for attachments
-        // First, check if the attachments bucket exists, if not create it
-        const { data: buckets } = await supabaseClient.storage.listBuckets();
-        const attachmentsBucketExists = buckets?.some(bucket => bucket.name === 'attachments');
-        
-        if (!attachmentsBucketExists) {
-          await supabaseClient.storage.createBucket('attachments', { public: true });
-          console.log('Created attachments bucket');
-        }
         
         for (const attachment of attachments) {
           try {
