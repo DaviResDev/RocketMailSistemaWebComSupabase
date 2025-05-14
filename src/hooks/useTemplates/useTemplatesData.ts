@@ -28,11 +28,16 @@ export function useTemplatesData() {
       console.log('Templates carregados:', data);
       
       // Transform the fetched data to ensure it has all required properties for Template type
-      const formattedTemplates: Template[] = data?.map(template => ({
-        ...template,
-        // Ensure status property exists, default to 'ativo' if it doesn't
-        status: template.status || 'ativo'
-      })) || [];
+      const formattedTemplates: Template[] = data?.map(template => {
+        // Create a typed template object with all required properties
+        const typedTemplate: Template = {
+          // Spread existing properties
+          ...template,
+          // Add required status property with default value
+          status: 'ativo' // Default value if status doesn't exist
+        };
+        return typedTemplate;
+      }) || [];
       
       setTemplates(formattedTemplates);
       return formattedTemplates;
