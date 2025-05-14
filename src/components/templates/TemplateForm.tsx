@@ -42,6 +42,24 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
     cliente: 'Cliente Corporativo Teste',
     dia: new Date().toLocaleDateString('pt-BR'),
   };
+
+  // Load existing attachments and signature when editing
+  useEffect(() => {
+    if (isEditing && formData.attachments) {
+      try {
+        const attachmentsList = typeof formData.attachments === 'string' 
+          ? JSON.parse(formData.attachments) 
+          : formData.attachments;
+          
+        // If we have signature image URL, set the preview
+        if (formData.signature_image) {
+          setSignaturePreview(formData.signature_image);
+        }
+      } catch (error) {
+        console.error("Error parsing attachments:", error);
+      }
+    }
+  }, [isEditing, formData.attachments, formData.signature_image]);
   
   // Update preview when template content changes
   useEffect(() => {
@@ -178,9 +196,10 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         .getPublicUrl(`${user.id}/${fileName}`);
         
       if (publicUrlData && publicUrlData.publicUrl) {
+        // Set the signature image URL in form data
         setFormData(prev => ({
           ...prev,
-          assinatura: `${prev.assinatura || ''}\n\n<img src="${publicUrlData.publicUrl}" alt="Assinatura Digital" />`
+          signature_image: publicUrlData.publicUrl
         }));
         
         toast.success('Assinatura digital adicionada com sucesso!');
@@ -223,10 +242,13 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         console.log('Created attachments bucket');
       }
       
+      // Array to store attachment metadata
+      const attachmentsList = [];
+      
       // Upload files to Supabase Storage
       for (const file of files) {
         const fileName = `attachment_${Date.now()}_${file.name}`;
-        const { error: uploadError } = await supabase.storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('attachments')
           .upload(`${user.id}/${fileName}`, file);
           
@@ -235,10 +257,34 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
           toast.error(`Erro ao fazer upload do anexo ${file.name}: ${uploadError.message}`);
           continue;
         }
+        
+        // Get public URL
+        const { data: publicUrlData } = supabase.storage
+          .from('attachments')
+          .getPublicUrl(`${user.id}/${fileName}`);
+          
+        if (publicUrlData && publicUrlData.publicUrl) {
+          // Add file metadata to attachments list
+          attachmentsList.push({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            url: publicUrlData.publicUrl
+          });
+        }
       }
       
-      // Add files to attachments list
+      // Add files to attachments list in UI
       setAttachments(prev => [...prev, ...files]);
+      
+      // Update form data with attachment metadata
+      setFormData(prev => ({
+        ...prev,
+        attachments: [...(typeof prev.attachments === 'string' 
+          ? JSON.parse(prev.attachments || '[]') 
+          : (prev.attachments || [])), ...attachmentsList]
+      }));
+      
       toast.success(`${files.length} arquivo(s) anexado(s)`);
       
     } catch (error: any) {
@@ -248,19 +294,33 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
   };
 
   const removeAttachment = (index: number) => {
+    // Remove from UI display
     setAttachments(prev => prev.filter((_, i) => i !== index));
+    
+    // Remove from form data
+    setFormData(prev => {
+      const currentAttachments = typeof prev.attachments === 'string'
+        ? JSON.parse(prev.attachments || '[]')
+        : (prev.attachments || []);
+        
+      const updatedAttachments = currentAttachments.filter((_: any, i: number) => i !== index);
+      
+      return {
+        ...prev,
+        attachments: updatedAttachments
+      };
+    });
   };
 
   const removeSignature = () => {
     setSignature(null);
     setSignaturePreview(null);
-    // Remove image tag from assinatura if present
-    if (formData.assinatura?.includes('<img src=')) {
-      setFormData(prev => ({
-        ...prev,
-        assinatura: prev.assinatura?.replace(/<img src=.*?\/>/, '')
-      }));
-    }
+    
+    // Remove signature from form data
+    setFormData(prev => ({
+      ...prev,
+      signature_image: null
+    }));
   };
 
   return (

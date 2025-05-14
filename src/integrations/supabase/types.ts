@@ -207,29 +207,35 @@ export type Database = {
       templates: {
         Row: {
           assinatura: string | null
+          attachments: Json | null
           canal: string
           conteudo: string
           created_at: string
           id: string
           nome: string
+          signature_image: string | null
           user_id: string
         }
         Insert: {
           assinatura?: string | null
+          attachments?: Json | null
           canal: string
           conteudo: string
           created_at?: string
           id?: string
           nome: string
+          signature_image?: string | null
           user_id: string
         }
         Update: {
           assinatura?: string | null
+          attachments?: Json | null
           canal?: string
           conteudo?: string
           created_at?: string
           id?: string
           nome?: string
+          signature_image?: string | null
           user_id?: string
         }
         Relationships: []

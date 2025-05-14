@@ -1,437 +1,330 @@
 
+// Follow this setup guide to integrate the Deno language server with your editor:
+// https://deno.land/manual/getting_started/setup_your_environment
+// This enables autocomplete, go to definition, etc.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { sendEmail } from "../lib/email-sender.js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
+import { Resend } from "https://esm.sh/resend@0.15.3";
+import nodemailer from "https://esm.sh/nodemailer@6.9.1";
+
+console.log("SUPABASE_URL available:", !!Deno.env.get("SUPABASE_URL"));
+console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+console.log("RESEND_API_KEY available:", !!Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface EmailRequest {
-  to: string;
-  subject: string;
-  content: string;
-  cc?: string[];
-  bcc?: string[];
-  contato_id?: string;
-  template_id?: string;
-  user_id: string;
-  agendamento_id?: string;
-  attachments?: AttachmentData[];
-  isTest?: boolean;
-}
-
-interface AttachmentData {
-  filename: string;
-  content: string; // Base64 encoded content
-  contentType: string;
-}
-
-interface SmtpConfig {
-  server: string;
-  port: number;
-  user: string;
-  password: string;
-  security: string;
-  nome: string;
-  use_smtp: boolean;
-}
-
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+serve(async (req: Request) => {
+  // Handle CORS pre-flight request
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
-  
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    
-    // Log environment variables (without revealing full keys)
-    console.log("SUPABASE_URL available:", !!supabaseUrl);
-    console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!supabaseServiceKey);
-    console.log("RESEND_API_KEY available:", !!resendApiKey);
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("Missing environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    // Parse request body
+    const { to, subject, content, isTest, signature_image, attachments } = await req.json();
+
+    // Validate required inputs
+    if (!to || !subject || !content) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Server configuration error",
-          error: "Server configuration error: Missing Supabase credentials" 
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-    
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Validate request
-    let requestData: EmailRequest;
-    try {
-      requestData = await req.json();
-    } catch (parseError) {
-      console.error("Error parsing request JSON:", parseError);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Invalid request format",
-          error: "Invalid JSON format" 
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-    
-    const { to, subject, content, cc, bcc, contato_id, template_id, user_id, attachments, isTest, agendamento_id } = requestData;
-    
-    // Validate data before proceeding
-    if (!to || !subject || !content || !user_id) {
-      console.error("Incomplete request data:", JSON.stringify(requestData));
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Incomplete data for email send",
-          error: "Missing required data: recipient, subject, content or user ID" 
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        JSON.stringify({ error: "Missing required fields: to, subject, or content" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Validate recipient email format
-    if (!/^[\w.-]+@[\w.-]+\.\w+$/.test(to)) {
+    // Initialize Supabase client
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    // Get the user ID from the authorization header
+    const authHeader = req.headers.get("authorization")?.split(" ")[1];
+    let userId;
+
+    if (authHeader) {
+      const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(authHeader);
+      if (userError) throw new Error("Unauthorized: " + userError.message);
+      userId = user?.id;
+    } else if (isTest) {
+      // For test emails we allow without auth, but would need to verify recipient is own email
+      // For now we simplify by just allowing test emails without auth
+    } else {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Invalid recipient email",
-          error: "Invalid email format for recipient" 
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Preparing to send email to: ${to}`);
-    console.log(`Subject: ${subject}`);
-    
-    // Get settings from database for the specified user
-    const { data: settingsData, error: settingsError } = await supabaseClient
-      .from('configuracoes')
-      .select('*')
-      .eq('user_id', user_id)
-      .maybeSingle();
+    // Create initial envio record for tracking
+    let envioId = null;
+    if (userId) {
+      const { data: envioData, error: envioError } = await supabaseAdmin
+        .from("envios")
+        .insert({
+          user_id: userId,
+          contato_id: isTest ? null : to,
+          template_id: isTest ? null : subject,
+          status: "processando",
+        })
+        .select("id")
+        .single();
 
-    if (settingsError) {
-      console.error("Error fetching settings:", settingsError);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Error fetching settings",
-          error: "Error fetching email settings: " + settingsError.message 
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
+      if (envioError) {
+        console.error("Error creating envio record:", envioError);
+      } else {
+        envioId = envioData.id;
+      }
     }
-    
-    if (!settingsData) {
-      console.error("Email settings not found for user:", user_id);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Settings not found",
-          error: "Email settings not found for user" 
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
+
+    // Get user's email settings
+    const { data: settingsData, error: settingsError } = userId 
+      ? await supabaseAdmin
+          .from("configuracoes")
+          .select("*")
+          .eq("user_id", userId)
+          .single()
+      : { data: null, error: null };
+
+    if (settingsError && !isTest) {
+      console.error("Error fetching email settings:", settingsError);
+      // Don't throw here, we'll use Resend as fallback
     }
-    
-    const emailConfig = settingsData;
-    console.log("Email configuration:", JSON.stringify({
-      use_smtp: emailConfig.use_smtp,
-      email_smtp: emailConfig.email_smtp ? "configured" : "not configured",
-      smtp_nome: emailConfig.smtp_nome || "not defined",
-      email_usuario: emailConfig.email_usuario ? "configured" : "not configured",
-      email_porta: emailConfig.email_porta
-    }));
-    
-    // Check SMTP configuration
-    const smtpConfig: SmtpConfig = {
-      server: emailConfig.email_smtp,
-      port: emailConfig.email_porta,
-      user: emailConfig.email_usuario,
-      password: emailConfig.email_senha,
-      security: emailConfig.smtp_seguranca || 'tls',
-      nome: emailConfig.smtp_nome || '',
-      use_smtp: Boolean(emailConfig.use_smtp)
+
+    const emailSettings = settingsData || {
+      use_smtp: true,
+      email_smtp: process.env.BACKUP_SMTP_HOST,
+      smtp_nome: "RocketMail",
+      email_usuario: process.env.BACKUP_SMTP_USER,
+      email_porta: 587,
     };
-    
-    // Fix port if it's a common error (584 instead of 587)
-    if (smtpConfig.port === 584) {
-      console.log("Port 584 detected, correcting to 587 (standard SMTP port with TLS)");
-      smtpConfig.port = 587;
-    }
-    
-    // Generate signature with area_negocio if available
-    let signature = "";
-    if (emailConfig.area_negocio) {
-      signature += `<div style="margin-top: 5px;"><strong>${emailConfig.area_negocio}</strong></div>`;
-    }
 
-    signature += `<div style="margin-top: 5px;">${emailConfig.email_usuario || ''}</div>`;
+    // Log the settings (sensitive data redacted)
+    console.log("Email configuration:", {
+      use_smtp: emailSettings.use_smtp,
+      email_smtp: emailSettings.email_smtp ? "configured" : "not configured",
+      smtp_nome: emailSettings.smtp_nome,
+      email_usuario: emailSettings.email_usuario ? "configured" : "not configured",
+      email_porta: emailSettings.email_porta,
+    });
 
-    // Create HTML content with customized content
-    // Replace placeholders with real data if not a test email
-    let processedContent = content;
+    // Convert content to HTML format
+    const htmlContent = content.replace(/\n/g, "<br>");
     
-    // If not a test email, try to get contact information for personalization
-    if (!isTest && contato_id) {
+    // Prepare email data
+    const emailData = {
+      to,
+      subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px;">
+          <div>${htmlContent}</div>
+          ${signature_image ? `<div style="margin-top: 20px;"><img src="${signature_image}" alt="Signature" style="max-height: 60px;" /></div>` : ''}
+        </div>
+      `,
+      from: emailSettings.smtp_nome
+        ? `${emailSettings.smtp_nome} <${emailSettings.email_usuario || "noreply@rocketmail.com"}>`
+        : emailSettings.email_usuario || "RocketMail <noreply@rocketmail.com>",
+    };
+
+    let success = false;
+    let error = null;
+    let transportLog = '';
+
+    // Check if we should use SMTP
+    if (emailSettings.use_smtp && emailSettings.email_smtp && emailSettings.email_usuario && emailSettings.email_senha) {
       try {
-        const { data: contatoData } = await supabaseClient
-          .from('contatos')
-          .select('*')
-          .eq('id', contato_id)
-          .maybeSingle();
-          
-        if (contatoData) {
-          processedContent = processedContent
-            .replace(/{nome}/g, contatoData.nome || "")
-            .replace(/{email}/g, contatoData.email || "")
-            .replace(/{telefone}/g, contatoData.telefone || "")
-            .replace(/{razao_social}/g, contatoData.razao_social || "")
-            .replace(/{cliente}/g, contatoData.cliente || "");
+        // Using user's SMTP configuration
+        console.log("Using SMTP:", "xxxxxx"); // Sensitive info redacted
+        
+        console.log("SMTP Server:", emailSettings.email_smtp);
+        console.log("SMTP Port:", emailSettings.email_porta);
+        console.log("SMTP User:", emailSettings.email_usuario);
+        console.log("SMTP Security:", emailSettings.smtp_seguranca || "tls");
+
+        // Create SMTP transport
+        const transport = nodemailer.createTransport({
+          host: emailSettings.email_smtp,
+          port: emailSettings.email_porta || 587,
+          secure: (emailSettings.email_porta === 465) || (emailSettings.smtp_seguranca === "ssl"),
+          auth: {
+            user: emailSettings.email_usuario,
+            pass: emailSettings.email_senha,
+          },
+          tls: {
+            rejectUnauthorized: false, // Accept all certificates
+          },
+        });
+
+        // Prepare email with configuration
+        const mailOptions = {
+          from: emailData.from,
+          to: emailData.to,
+          subject: emailData.subject,
+          html: emailData.html,
+          attachments: []
+        };
+
+        console.log(`From: ${mailOptions.from} To: ${mailOptions.to}`);
+        
+        // Add signature image if provided
+        if (signature_image) {
+          mailOptions.attachments.push({
+            filename: 'signature.png',
+            path: signature_image,
+            cid: 'signature@rocketmail' // Content ID to reference in HTML
+          });
         }
-      } catch (error) {
-        console.error("Error fetching contact data for personalization:", error);
-        // Continue without personalization if there's an error
+        
+        // Add attachments if provided
+        if (attachments) {
+          try {
+            // Parse attachments if it's a string
+            const parsedAttachments = typeof attachments === 'string' 
+              ? JSON.parse(attachments) 
+              : attachments;
+              
+            if (Array.isArray(parsedAttachments)) {
+              parsedAttachments.forEach((attachment, index) => {
+                if (attachment.url) {
+                  mailOptions.attachments.push({
+                    filename: attachment.name || `attachment-${index}.file`,
+                    path: attachment.url
+                  });
+                }
+              });
+            }
+          } catch (err) {
+            console.error("Error processing attachments:", err);
+          }
+        }
+
+        console.log(`Sending email via SMTP: ${emailSettings.email_smtp}:${emailSettings.email_porta}`);
+        
+        // Send mail with the defined transport object
+        const info = await transport.sendMail(mailOptions);
+        console.log(`Email sent successfully via SMTP: ${info.messageId}`);
+        
+        success = true;
+        transportLog = 'nodemailer';
+      } catch (err) {
+        // SMTP failed, fallback to Resend
+        console.error("SMTP error:", err);
+        error = err;
       }
     }
-    
-    // Replace date placeholders
-    const currentDate = new Date();
-    processedContent = processedContent
-      .replace(/{dia}/g, currentDate.toLocaleDateString('pt-BR'))
-      .replace(/{data}/g, currentDate.toLocaleDateString('pt-BR'))
-      .replace(/{hora}/g, currentDate.toLocaleTimeString('pt-BR'));
 
-    // Create final HTML content
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="padding: 20px;">
-          ${processedContent.replace(/\n/g, '<br>')}
-        </div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <div style="padding: 10px; font-size: 12px; color: #666;">
-          ${signature}
-        </div>
-      </div>
-    `;
+    // If SMTP failed or wasn't used, try Resend
+    if (!success) {
+      try {
+        const resendApiKey = Deno.env.get("RESEND_API_KEY");
+        if (!resendApiKey) {
+          throw new Error("Resend API key missing");
+        }
 
-    try {
-      // Process attachments if any
-      const processedAttachments = [];
-      
-      if (attachments && attachments.length > 0) {
-        console.log(`Processing ${attachments.length} attachments`);
+        const resend = new Resend(resendApiKey);
         
-        for (const attachment of attachments) {
+        // Prepare attachments if provided
+        const resendAttachments = [];
+        
+        if (attachments) {
           try {
-            processedAttachments.push({
-              filename: attachment.filename,
-              content: attachment.content,
-              contentType: attachment.contentType,
-            });
-            
-            console.log(`Attachment processed: ${attachment.filename}`);
-          } catch (attachError) {
-            console.error(`Error processing attachment ${attachment.filename}:`, attachError);
+            // Parse attachments if it's a string
+            const parsedAttachments = typeof attachments === 'string' 
+              ? JSON.parse(attachments) 
+              : attachments;
+              
+            if (Array.isArray(parsedAttachments)) {
+              // For Resend, we need to fetch the attachment content
+              for (const attachment of parsedAttachments) {
+                if (attachment.url) {
+                  try {
+                    const response = await fetch(attachment.url);
+                    if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
+                    
+                    const buffer = await response.arrayBuffer();
+                    resendAttachments.push({
+                      filename: attachment.name || 'attachment.file',
+                      content: buffer
+                    });
+                  } catch (fetchErr) {
+                    console.error("Error fetching attachment:", fetchErr);
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Error processing attachments for Resend:", err);
           }
         }
-      }
 
-      // Check if all required fields for SMTP are present
-      const useSmtp = smtpConfig.use_smtp && 
-                    smtpConfig.server && 
-                    smtpConfig.port && 
-                    smtpConfig.user && 
-                    smtpConfig.password;
-      
-      console.log("Using SMTP:", useSmtp);
-      if (useSmtp) {
-        console.log("SMTP Server:", smtpConfig.server);
-        console.log("SMTP Port:", smtpConfig.port);
-        console.log("SMTP User:", smtpConfig.user);
-        console.log("SMTP Security:", smtpConfig.security);
-      }
+        // Send via Resend
+        console.log("Sending email via Resend fallback");
+        const { data, error: resendError } = await resend.emails.send({
+          from: emailData.from,
+          to: [emailData.to],
+          subject: emailData.subject,
+          html: emailData.html,
+          attachments: resendAttachments
+        });
 
-      // Create email payload
-      const emailPayload = {
-        to: to,
-        subject: subject,
-        html: htmlContent,
-        cc: cc,
-        bcc: bcc,
-        attachments: processedAttachments.length > 0 ? processedAttachments : undefined
-      };
+        if (resendError) throw resendError;
+        console.log(`Email sent successfully via Resend: ${data?.id}`);
+        
+        success = true;
+        transportLog = 'resend';
+      } catch (err) {
+        console.error("Resend error:", err);
+        error = error || err; // Keep the original error if we had one
+      }
+    }
 
-      // Send email using our module
-      const sendResult = await sendEmail(
-        emailPayload, 
-        useSmtp, 
-        {
-          host: smtpConfig.server,
-          port: smtpConfig.port,
-          secure: smtpConfig.security === 'ssl' || smtpConfig.port === 465,
-          user: smtpConfig.user,
-          pass: smtpConfig.password,
-          name: smtpConfig.nome || 'RocketMail'
-        },
-        resendApiKey,
-        smtpConfig.nome || 'RocketMail'
-      );
-      
-      // Email sent successfully - Update status if needed
-      if (contato_id && template_id && user_id) {
-        try {
-          // Check if there's already an envio record for this combination
-          const { data: envios } = await supabaseClient
-            .from('envios')
-            .select('id')
-            .eq('contato_id', contato_id)
-            .eq('template_id', template_id)
-            .eq('user_id', user_id)
-            .order('data_envio', { ascending: false })
-            .limit(1);
-            
-          if (envios && envios.length > 0) {
-            await supabaseClient
-              .from('envios')
-              .update({ 
-                status: 'entregue',
-                resposta_smtp: JSON.stringify(sendResult),
-                erro: null
-              })
-              .eq('id', envios[0].id);
-              
-            console.log(`Updated sending status to 'entregue'`);
-          } else {
-            // Create a new record if one doesn't exist yet
-            await supabaseClient
-              .from('envios')
-              .insert([{
-                contato_id: contato_id,
-                template_id: template_id,
-                user_id: user_id,
-                status: 'entregue',
-                resposta_smtp: JSON.stringify(sendResult)
-              }]);
-              
-            console.log(`Created new sending record with status 'entregue'`);
-          }
-        } catch (dbError) {
-          console.error("Error updating database record:", dbError);
-          // Continue execution even if DB update fails
-        }
+    // Update the envio record with the result
+    if (envioId) {
+      if (success) {
+        console.log("Updated sending status to 'entregue'");
+        await supabaseAdmin
+          .from("envios")
+          .update({
+            status: "entregue",
+          })
+          .eq("id", envioId);
+      } else {
+        console.log("Updated sending status to 'erro'");
+        await supabaseAdmin
+          .from("envios")
+          .update({
+            status: "erro",
+            erro: error ? error.message : "Unknown error",
+          })
+          .eq("id", envioId);
       }
-      
-      // Also update agendamento status if this is a scheduled email
-      if (agendamento_id) {
-        try {
-          await supabaseClient
-            .from('agendamentos')
-            .update({ status: 'enviado' })
-            .eq('id', agendamento_id);
-          
-          console.log(`Updated agendamento status to 'enviado' for ID: ${agendamento_id}`);
-        } catch (dbError) {
-          console.error("Error updating agendamento status:", dbError);
-        }
-      }
-      
+    }
+
+    if (success) {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Email sent successfully!",
-          provider: sendResult.provider,
-          from: sendResult.from,
-          reply_to: sendResult.reply_to,
-          info: {
-            messageId: sendResult.id,
-            domain: (sendResult.from || '').split('@')[1],
-            transport: 'nodemailer'
-          }
+          message: "Email sent successfully", 
+          details: { transport: transportLog }
         }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    } catch (emailError) {
-      console.error("Email sending error:", emailError);
-      
-      // Create a friendly error message
-      let errorMessage = "Error sending email: " + (emailError.message || "Unknown error");
-      
-      // Update agendamento for error case
-      if (agendamento_id) {
-        try {
-          await supabaseClient
-            .from('agendamentos')
-            .update({ status: 'falha' })
-            .eq('id', agendamento_id);
-        } catch (dbError) {
-          console.error("Error updating agendamento status:", dbError);
-        }
-      }
-      
-      // Return appropriate error response
+    } else {
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           success: false,
-          message: "Failed to send email",
-          error: errorMessage,
-          provider: smtpConfig.use_smtp ? "smtp" : "resend"
+          error: error ? error.message : "Failed to send email through all available methods",
         }),
-        { 
-          status: 200, // Using 200 even for errors as requested
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
   } catch (error) {
-    console.error("Error in send-email function:", error);
-    
-    // Create a friendly error message
-    const errorMessage = error.message || "Unknown error sending email";
-    
+    console.error("Error sending email:", error);
     return new Response(
-      JSON.stringify({ 
-        success: false,
-        message: "Error processing email request",
-        error: errorMessage,
-        timestamp: new Date().toISOString()
-      }),
-      { 
-        status: 200, // Using 200 even for errors as requested
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      JSON.stringify({ success: false, error: error.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

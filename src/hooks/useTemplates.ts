@@ -10,6 +10,8 @@ export type Template = {
   conteudo: string;
   canal: string;
   assinatura?: string;
+  signature_image?: string | null;
+  attachments?: any[] | string;
   created_at: string;
 };
 
@@ -19,6 +21,8 @@ export type TemplateFormData = {
   conteudo: string;
   canal: string;
   assinatura?: string;
+  signature_image?: string | null;
+  attachments?: any[] | string;
 };
 
 export function useTemplates() {
@@ -58,6 +62,11 @@ export function useTemplates() {
         user_id: user.id
       };
       
+      // Ensure attachments is stored as JSON
+      if (templateData.attachments && !Array.isArray(templateData.attachments) && typeof templateData.attachments !== 'string') {
+        templateData.attachments = JSON.stringify(templateData.attachments);
+      }
+      
       const { error } = await supabase
         .from('templates')
         .insert([templateData]);
@@ -80,6 +89,11 @@ export function useTemplates() {
         ...formData, 
         canal: 'email'
       };
+      
+      // Ensure attachments is stored as JSON
+      if (templateData.attachments && !Array.isArray(templateData.attachments) && typeof templateData.attachments !== 'string') {
+        templateData.attachments = JSON.stringify(templateData.attachments);
+      }
       
       const { error } = await supabase
         .from('templates')
@@ -114,6 +128,8 @@ export function useTemplates() {
         conteudo: template.conteudo,
         canal: template.canal,
         assinatura: template.assinatura,
+        signature_image: template.signature_image,
+        attachments: template.attachments,
         user_id: user?.id
       };
       
@@ -192,7 +208,9 @@ export function useTemplates() {
           to: email,
           subject: `[TESTE] ${template.nome}`,
           content: processedContent,
-          isTest: true
+          isTest: true,
+          signature_image: template.signature_image,
+          attachments: template.attachments
         },
       });
       

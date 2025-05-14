@@ -154,7 +154,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                 <Label htmlFor="smtp_nome">Nome do Remetente</Label>
                 <Input
                   id="smtp_nome"
-                  placeholder="Ex: Marketing DisparoPro"
+                  placeholder="Ex: Marketing RocketMail"
                   value={formData.smtp_nome || ''}
                   onChange={(e) => setFormData({ ...formData, smtp_nome: e.target.value })}
                 />
