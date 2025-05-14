@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -288,7 +289,7 @@ export function useEnvios() {
       }
 
       // Prepare attachments for the function call
-      let attachments: AttachmentType[] = [];
+      let attachments = [];
       
       if (formData.attachments) {
         // Handle different types of attachments
@@ -435,7 +436,7 @@ export function useEnvios() {
         
         toast({
           title: "Sucesso",
-          description: `Email enviado com sucesso para ${contatoData.nome}! Se o destinatário não receber, peça para verificar a pasta de spam.`,
+          description: `Email enviado com sucesso para ${contatoData.nome}! Um recebimento automático será enviado ao destinatário.`,
           duration: 5000
         });
         

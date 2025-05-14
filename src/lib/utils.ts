@@ -8,3 +8,8 @@ export function cn(...inputs: ClassValue[]) {
 
 // Add scrollbar hiding utility class
 export const scrollbarHideClass = "scrollbar-hide";
+
+// Helper to format from addresses correctly for email headers
+export const formatFromAddress = (name: string | null | undefined, email: string): string => {
+  return name ? `"${name}" <${email}>` : email;
+};

@@ -141,9 +141,6 @@ serve(async (req: Request) => {
           ${signature_image ? `<div style="margin-top: 20px;"><img src="${signature_image}" alt="Signature" style="max-height: 60px;" /></div>` : ''}
         </div>
       `,
-      from: settingsData?.smtp_nome
-        ? `${settingsData.smtp_nome} <${settingsData.email_usuario || "noreply@rocketmail.com"}>`
-        : settingsData?.email_usuario || "RocketMail <noreply@resend.dev>",
     };
     
     // Add CC and BCC if provided
@@ -204,10 +201,8 @@ serve(async (req: Request) => {
       }
     }
 
-    // IMPORTANT: Always default to use SMTP if configured
-    // Instead of checking if use_smtp is false, we check if it's explicitly set to false
-    const useSmtp = settingsData?.use_smtp !== false && 
-                    settingsData?.email_smtp && 
+    // ALWAYS force SMTP usage if configured
+    const useSmtp = settingsData?.email_smtp && 
                     settingsData?.email_porta && 
                     settingsData?.email_usuario && 
                     settingsData?.email_senha;
@@ -349,7 +344,7 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "Email sent successfully", 
+          message: "Email enviado com sucesso", 
           details: details
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

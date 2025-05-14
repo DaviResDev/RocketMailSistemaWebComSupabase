@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -14,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar, Clock, Mail, MoreHorizontal, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useEnvios, EnvioFormData } from '@/hooks/useEnvios';
+import { useEnvios } from '@/hooks/useEnvios';
 import { Schedule } from '@/hooks/useSchedules';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -73,7 +72,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       }
       
       // Convert schedule to EnvioFormData with typed attachments
-      const envioData: EnvioFormData = {
+      const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
         agendamento_id: schedule.id,
@@ -111,7 +110,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       
       toast({
         title: "Sucesso",
-        description: 'Email enviado com sucesso!'
+        description: `Email enviado com sucesso para ${schedule.contato?.nome}! Um recebimento automático será enviado ao destinatário.`
       });
       
       // Refresh both schedules list and email history

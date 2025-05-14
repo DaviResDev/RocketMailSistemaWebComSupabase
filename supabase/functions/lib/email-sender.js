@@ -43,14 +43,17 @@ async function sendEmailViaSMTP(config, payload) {
   // Properly format the from field to ensure correct domain display
   const fromName = config.name || config.user.split('@')[0];
   const fromEmail = config.user; // Always use the configured email
-  const from = `${fromName} <${fromEmail}>`;
+  const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
   
   // Prepare email data
   const mailOptions = {
     from: from,
     to: payload.to,
     subject: payload.subject,
-    html: payload.html,
+    html: payload.html + `
+      <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px;">
+        <p>Email enviado com sucesso! Este é um email automático, por favor não responda diretamente.</p>
+      </div>`,
   };
 
   // Add CC if provided
@@ -107,7 +110,10 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
     from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
     to: [payload.to],
     subject: payload.subject,
-    html: payload.html,
+    html: payload.html + `
+      <div style="margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px;">
+        <p>Email enviado com sucesso! Este é um email automático, por favor não responda diretamente.</p>
+      </div>`,
   };
   
   // Add reply-to if provided
@@ -167,8 +173,8 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
  * @returns {Promise<Object>} - Send result
  */
 async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
-  // First try with SMTP if configured and requested
-  if (useSmtp && smtpConfig && smtpConfig.host && smtpConfig.port && 
+  // Always try with SMTP if configured, regardless of the useSmtp flag
+  if (smtpConfig && smtpConfig.host && smtpConfig.port && 
       smtpConfig.user && smtpConfig.pass) {
     try {
       return await sendEmailViaSMTP(smtpConfig, payload);
