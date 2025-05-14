@@ -150,6 +150,17 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         return;
       }
       
+      // First check if signatures bucket exists, if not create it
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const signaturesBucketExists = buckets?.some(bucket => bucket.name === 'signatures');
+      
+      if (!signaturesBucketExists) {
+        await supabase.storage.createBucket('signatures', {
+          public: true
+        });
+        console.log('Created signatures bucket');
+      }
+      
       // Upload file to Supabase Storage
       const fileName = `signature_${Date.now()}_${file.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -157,6 +168,7 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         .upload(`${user.id}/${fileName}`, file);
         
       if (uploadError) {
+        console.error('Error uploading signature:', uploadError);
         throw uploadError;
       }
       
@@ -192,6 +204,36 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
         if (file.size > 10 * 1024 * 1024) {
           toast.error(`O arquivo ${file.name} excede o limite de 10MB.`);
           return;
+        }
+      }
+      
+      if (!user) {
+        toast.error('Você precisa estar logado para fazer upload de arquivos.');
+        return;
+      }
+      
+      // First check if attachments bucket exists, if not create it
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const attachmentsBucketExists = buckets?.some(bucket => bucket.name === 'attachments');
+      
+      if (!attachmentsBucketExists) {
+        await supabase.storage.createBucket('attachments', {
+          public: true
+        });
+        console.log('Created attachments bucket');
+      }
+      
+      // Upload files to Supabase Storage
+      for (const file of files) {
+        const fileName = `attachment_${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('attachments')
+          .upload(`${user.id}/${fileName}`, file);
+          
+        if (uploadError) {
+          console.error(`Error uploading attachment ${file.name}:`, uploadError);
+          toast.error(`Erro ao fazer upload do anexo ${file.name}: ${uploadError.message}`);
+          continue;
         }
       }
       
@@ -376,7 +418,7 @@ export function TemplateForm({ formData, setFormData, onSubmit, onCancel, isEdit
                 
                 <Textarea
                   id="assinatura"
-                  placeholder="Ex: Atenciosamente, Equipe de Marketing"
+                  placeholder="Ex: Atenciosamente, Equipe RocketMail"
                   rows={3}
                   value={formData.assinatura || ''}
                   onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}

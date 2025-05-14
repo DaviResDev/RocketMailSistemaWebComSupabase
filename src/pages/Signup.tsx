@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { Logo } from '@/components/layout/Logo';
 
 export default function Signup() {
   const [name, setName] = useState('');
@@ -44,12 +44,7 @@ export default function Signup() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary text-primary-foreground p-1.5 rounded">
-              <Mail size={24} />
-            </div>
-            <h1 className="text-2xl font-bold">DisparoPro</h1>
-          </div>
+          <Logo size="medium" />
         </div>
         
         <Card>

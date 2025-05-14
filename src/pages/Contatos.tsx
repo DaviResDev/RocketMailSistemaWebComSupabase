@@ -8,12 +8,15 @@ import { toast } from 'sonner';
 import { ContactsList } from '@/components/contacts/ContactsList';
 import { ContactForm } from '@/components/contacts/ContactForm';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import Papa from 'papaparse';
 
 export default function Contatos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const { contacts, loading, fetchContacts, getTags } = useContacts();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
     fetchContacts();
@@ -27,12 +30,96 @@ export default function Contatos() {
     (contact.razao_social && contact.razao_social.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      toast.info(`Em breve: Importação de contatos via arquivo "${file.name}"`);
+    if (!file) return;
+    
+    try {
+      setIsImporting(true);
+      toast.info(`Importando contatos do arquivo "${file.name}"...`);
+      
       // Reset the input so the same file can be selected again
       e.target.value = '';
+      
+      // Parse the CSV file
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          if (results.data && results.data.length > 0) {
+            const { data: userData } = await supabase.auth.getUser();
+            if (!userData || !userData.user) {
+              toast.error('Você precisa estar logado para importar contatos');
+              setIsImporting(false);
+              return;
+            }
+            
+            // Map CSV data to contacts format
+            const contactsToImport = results.data.map((row: any) => ({
+              nome: row.nome || row.name || row.Nome || '',
+              email: row.email || row.Email || row['e-mail'] || row['E-mail'] || '',
+              telefone: row.telefone || row.phone || row.Telefone || row.tel || row.Tel || '',
+              cliente: row.cliente || row.client || row.Cliente || row.Client || '',
+              razao_social: row.razao_social || row['razão social'] || row.empresa || row.Empresa || row.company || row.Company || '',
+              user_id: userData.user.id,
+              tags: ['importado']
+            }));
+            
+            // Filter out contacts with missing required fields
+            const validContacts = contactsToImport.filter(contact => contact.nome && contact.email);
+            
+            if (validContacts.length === 0) {
+              toast.error('Nenhum contato válido encontrado no arquivo. Certifique-se de que o arquivo contenha colunas "nome" e "email".');
+              setIsImporting(false);
+              return;
+            }
+            
+            // Insert contacts in batches to avoid request size limitations
+            const batchSize = 20;
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 0; i < validContacts.length; i += batchSize) {
+              const batch = validContacts.slice(i, i + batchSize);
+              const { error } = await supabase
+                .from('contatos')
+                .insert(batch);
+              
+              if (error) {
+                console.error('Erro ao importar lote de contatos:', error);
+                errorCount += batch.length;
+              } else {
+                successCount += batch.length;
+              }
+            }
+            
+            // Refresh contacts list
+            fetchContacts();
+            
+            if (successCount > 0) {
+              toast.success(`${successCount} contatos importados com sucesso!`);
+            }
+            
+            if (errorCount > 0) {
+              toast.error(`${errorCount} contatos não puderam ser importados. Verifique os logs para mais detalhes.`);
+            }
+          } else {
+            toast.error('O arquivo não contém dados válidos');
+          }
+          
+          setIsImporting(false);
+        },
+        error: (error) => {
+          console.error('Erro ao analisar arquivo CSV:', error);
+          toast.error(`Erro ao analisar o arquivo: ${error.message}`);
+          setIsImporting(false);
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('Erro na importação:', error);
+      toast.error(`Erro na importação: ${error.message}`);
+      setIsImporting(false);
     }
   };
   
@@ -59,13 +146,19 @@ export default function Contatos() {
           <div className="relative">
             <Input 
               type="file" 
-              accept=".csv, .xlsx, .xls, .ods, .docx, .doc, .cs, .pdf, .txt, .gif, .jpg, .jpeg, .png, .tif, .tiff, .rtf, .msg, .pub, .mobi, .ppt, .pptx, .eps" 
+              accept=".csv, .xlsx, .xls" 
               id="file-upload" 
               className="hidden" 
               onChange={handleImportCSV} 
+              disabled={isImporting}
             />
-            <Button variant="outline" onClick={() => document.getElementById('file-upload')?.click()}>
-              <Import className="mr-2 h-4 w-4" /> Importar Arquivo
+            <Button 
+              variant="outline" 
+              onClick={() => document.getElementById('file-upload')?.click()}
+              disabled={isImporting}
+            >
+              <Import className="mr-2 h-4 w-4" /> 
+              {isImporting ? 'Importando...' : 'Importar Arquivo'}
             </Button>
           </div>
         </div>
@@ -128,7 +221,7 @@ export default function Contatos() {
             Comece adicionando seu primeiro contato ou importe seus contatos via arquivo.
           </p>
           <p className="text-xs text-muted-foreground mt-4">
-            Tipos de arquivos aceitos: ics, xlsx, xls, ods, docx, doc, cs, pdf, txt, gif, jpg, jpeg, png, tif, tiff, rtf, msg, pub, mobi, ppt, pptx, eps
+            Tipos de arquivos aceitos: CSV (.csv), Excel (.xlsx, .xls)
           </p>
         </div>
       ) : (
@@ -138,7 +231,7 @@ export default function Contatos() {
             selectedTags={selectedTags}
           />
           <p className="text-xs text-muted-foreground mt-2">
-            Tipos de arquivos aceitos: ics, xlsx, xls, ods, docx, doc, cs, pdf, txt, gif, jpg, jpeg, png, tif, tiff, rtf, msg, pub, mobi, ppt, pptx, eps
+            Tipos de arquivos aceitos: CSV (.csv), Excel (.xlsx, .xls)
           </p>
         </>
       )}

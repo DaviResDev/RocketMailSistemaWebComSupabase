@@ -9,6 +9,7 @@ import { Mail, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Logo } from '@/components/layout/Logo';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -91,12 +92,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary text-primary-foreground p-1.5 rounded">
-              <Mail size={24} />
-            </div>
-            <h1 className="text-2xl font-bold">DisparoPro</h1>
-          </div>
+          <Logo size="medium" />
         </div>
         
         <Card>

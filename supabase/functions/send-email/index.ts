@@ -248,6 +248,16 @@ serve(async (req) => {
       if (attachments && attachments.length > 0) {
         console.log(`Processing ${attachments.length} attachments`);
         
+        // Create a storage client for attachments
+        // First, check if the attachments bucket exists, if not create it
+        const { data: buckets } = await supabaseClient.storage.listBuckets();
+        const attachmentsBucketExists = buckets?.some(bucket => bucket.name === 'attachments');
+        
+        if (!attachmentsBucketExists) {
+          await supabaseClient.storage.createBucket('attachments', { public: true });
+          console.log('Created attachments bucket');
+        }
+        
         for (const attachment of attachments) {
           try {
             processedAttachments.push({
@@ -298,10 +308,10 @@ serve(async (req) => {
           secure: smtpConfig.security === 'ssl' || smtpConfig.port === 465,
           user: smtpConfig.user,
           pass: smtpConfig.password,
-          name: smtpConfig.nome || 'DisparoPro'
+          name: smtpConfig.nome || 'RocketMail'
         },
         resendApiKey,
-        smtpConfig.nome || 'DisparoPro'
+        smtpConfig.nome || 'RocketMail'
       );
       
       // Email sent successfully - Update status if needed
