@@ -25,7 +25,8 @@ export function useTemplates() {
       // Transform the fetched data to ensure it has all required properties for Template type
       const templatesWithStatus = data?.map(template => ({
         ...template,
-        status: template.status || 'ativo' // Default status if it doesn't exist
+        // Safely add status if it doesn't exist in the database record
+        status: 'ativo' // Default status for all templates
       })) || [];
       
       setTemplates(templatesWithStatus);
