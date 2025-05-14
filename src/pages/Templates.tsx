@@ -1,4 +1,3 @@
-
 import { useState, useEffect, FormEvent } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
@@ -9,24 +8,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
-import Layout from '@/components/layout/Layout';
+import { Layout } from '@/components/layout/Layout';
 
 const Templates = () => {
   const { templates, loading, error, fetchTemplates, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   const [formData, setFormData] = useState<TemplateFormData>({
     nome: '',
     conteudo: '',
     canal: 'email',
+    status: 'ativo',
   });
 
   useEffect(() => {
     if (user) {
-      fetchTemplates();
+      fetchTemplates().catch(err => {
+        setError(err.message);
+      });
     }
   }, [fetchTemplates, user]);
 
@@ -35,6 +38,7 @@ const Templates = () => {
       nome: '',
       conteudo: '',
       canal: 'email',
+      status: 'ativo',
     });
     setIsCreating(true);
     setIsEditing(false);
@@ -86,6 +90,7 @@ const Templates = () => {
       conteudo: template.conteudo,
       canal: template.canal || 'email',
       signature_image: template.signature_image || null,
+      status: template.status,
     });
     setIsEditing(true);
     setIsCreating(true);
@@ -121,11 +126,32 @@ const Templates = () => {
 
         {isCreating ? (
           <TemplateForm
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
+            template={selectedTemplate || undefined}
             isEditing={isEditing}
-            formData={formData}
-            setFormData={setFormData}
+            onSave={async (formData) => {
+              if (isEditing && selectedTemplate) {
+                await updateTemplate(selectedTemplate.id, formData);
+                toast({
+                  title: "Sucesso",
+                  description: "Template atualizado com sucesso!"
+                });
+              } else {
+                await createTemplate(formData);
+                toast({
+                  title: "Sucesso",
+                  description: "Template criado com sucesso!"
+                });
+              }
+              setIsCreating(false);
+              setIsEditing(false);
+              setSelectedTemplate(null);
+              return true;
+            }}
+            onCancel={() => {
+              setIsCreating(false);
+              setIsEditing(false);
+              setSelectedTemplate(null);
+            }}
           />
         ) : loading ? (
           <div className="flex justify-center items-center h-64">
