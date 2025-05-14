@@ -158,12 +158,9 @@ export default function Envios() {
                     <TableCell>{envio.template?.nome}</TableCell>
                     <TableCell>
                       <div className="flex items-center">
-                        {envio.template?.canal === 'email' ? (
-                          <Mail className="w-4 h-4 mr-2" />
-                        ) : (
-                          <MessageSquare className="w-4 h-4 mr-2" />
-                        )}
-                        {envio.template?.canal === 'email' ? 'Email' : 'WhatsApp'}
+                        {/* Default to 'email' if template.canal is not defined */}
+                        <Mail className="w-4 h-4 mr-2" />
+                        Email
                       </div>
                     </TableCell>
                     <TableCell>

@@ -26,6 +26,7 @@ export interface Envio {
   };
   template?: {
     nome: string;
+    canal?: string;
   };
   cc?: string[];
   bcc?: string[];
@@ -39,6 +40,8 @@ export interface EnvioFormData {
   template_id: string;
   agendamento_id?: string;
   attachments?: Json | { file: File; name: string; }[] | null;
+  cc?: string[];
+  bcc?: string[];
 }
 
 export function useEnvios() {
@@ -234,21 +237,41 @@ export function useEnvios() {
       }
 
       // Prepare attachments for the function call
-      const attachments = formData.attachments ? await Promise.all(formData.attachments.map(async (item) => {
-        const fileContent = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(item.file);
-        });
-
-        const base64Content = fileContent.split(',')[1]; // Extract base64 part
-        return {
-          filename: item.name,
-          content: base64Content,
-          contentType: item.file.type,
-        };
-      })) : [];
+      let attachments = [];
+      if (formData.attachments) {
+        // Handle different types of attachments
+        if (Array.isArray(formData.attachments) && formData.attachments.length > 0 && 'file' in formData.attachments[0]) {
+          // Handle File objects if they exist
+          attachments = await Promise.all((formData.attachments as { file: File; name: string }[]).map(async (item) => {
+            const fileContent = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(item.file);
+            });
+    
+            const base64Content = fileContent.split(',')[1]; // Extract base64 part
+            return {
+              filename: item.name,
+              content: base64Content,
+              contentType: item.file.type,
+            };
+          }));
+        } else if (typeof formData.attachments === 'string') {
+          // If it's a string, try to parse it as JSON
+          try {
+            const parsedAttachments = JSON.parse(formData.attachments);
+            if (Array.isArray(parsedAttachments)) {
+              attachments = parsedAttachments;
+            }
+          } catch (e) {
+            console.error('Error parsing attachments string:', e);
+          }
+        } else if (typeof formData.attachments === 'object' && !Array.isArray(formData.attachments)) {
+          // If it's a JSON object from Supabase
+          attachments = formData.attachments;
+        }
+      }
 
       // Call the Supabase function to send the email with improved error handling
       console.log("Calling send-email function with data:", {
@@ -267,8 +290,8 @@ export function useEnvios() {
             to: contatoData.email,
             subject: templateData.nome,
             content: templateData.conteudo,
-            cc: formData.cc,
-            bcc: formData.bcc,
+            cc: formData.cc || [],
+            bcc: formData.bcc || [],
             contato_id: formData.contato_id,
             template_id: formData.template_id,
             user_id: user.id,
