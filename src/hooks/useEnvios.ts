@@ -83,7 +83,7 @@ export function useEnvios() {
     }
     
     // Show initial progress toast
-    const sendingToastId = toast({
+    const sendingToast = toast({
       title: "Enviando email",
       description: `Enviando email para ${contatoData.nome} (${contatoData.email})...`,
       duration: 60000 // Long duration, will be dismissed on completion
@@ -124,8 +124,10 @@ export function useEnvios() {
       // Success case
       console.log('Email enviado com sucesso:', functionData);
       
-      // Dismiss the sending toast
-      toast.dismiss(sendingToastId);
+      // Dismiss the sending toast - FIX: Pass just the ID
+      if (sendingToast && sendingToast.id) {
+        toast.dismiss(sendingToast.id);
+      }
       
       toast({
         title: "Sucesso",
@@ -140,8 +142,10 @@ export function useEnvios() {
     } catch (err: any) {
       console.error('Erro ao enviar email:', err);
       
-      // Dismiss the sending toast
-      toast.dismiss(sendingToastId);
+      // Dismiss the sending toast - FIX: Pass just the ID
+      if (sendingToast && sendingToast.id) {
+        toast.dismiss(sendingToast.id);
+      }
       
       toast({
         variant: "destructive",
@@ -170,7 +174,7 @@ export function useEnvios() {
       if (envioError) throw envioError;
       
       // Show resending toast
-      const resendingToastId = toast({
+      const resendingToast = toast({
         title: "Reenviando email",
         description: `Reenviando email para ${envio.contato.nome}...`,
         duration: 60000
@@ -192,8 +196,10 @@ export function useEnvios() {
         attachments: templateData.attachments || null
       });
       
-      // Dismiss the resending toast
-      toast.dismiss(resendingToastId);
+      // Dismiss the resending toast - FIX: Pass just the ID
+      if (resendingToast && resendingToast.id) {
+        toast.dismiss(resendingToast.id);
+      }
       
       // Atualizar status do envio original
       if (result) {
