@@ -59,7 +59,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
-        agendamento_id: schedule.id // Garantir que o ID do agendamento é passado corretamente
+        agendamento_id: schedule.id
       };
       
       // Send email immediately using sendEmail
@@ -94,23 +94,24 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       // More detailed error message
       let errorMessage = "Erro desconhecido";
       
-      if (err.message?.includes('non-2xx status code')) {
-        errorMessage = "Erro no servidor de email. Verifique suas configurações SMTP ou tente novamente mais tarde.";
-      } else if (err.message) {
-        errorMessage = err.message;
+      if (typeof err === 'object' && err !== null) {
+        if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        // Log detailed error information for debugging
+        console.log('Detalhes do erro:', {
+          message: err.message,
+          name: err.name,
+          stack: err.stack,
+          data: err.data,
+        });
       }
       
       toast({
         variant: "destructive",
         title: "Erro ao enviar email",
         description: errorMessage
-      });
-      
-      // Log detailed error for debugging
-      console.error('Detalhes do erro:', {
-        schedule,
-        error: err,
-        stack: err.stack
       });
     } finally {
       // Always unmark the item as loading

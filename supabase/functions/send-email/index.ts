@@ -4,9 +4,8 @@
 // This enables autocomplete, go to definition, etc.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0";
-
-// Since there are Buffer issues with nodemailer in Deno environment, we'll use only Resend
-import { Resend } from "https://esm.sh/resend@1.0.0";
+import { Resend } from "https://esm.sh/resend@1.1.0";
+import * as nodemailer from "https://esm.sh/nodemailer@6.9.12";
 
 console.log("SUPABASE_URL available:", !!Deno.env.get("SUPABASE_URL"));
 console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
@@ -69,8 +68,8 @@ serve(async (req: Request) => {
           .from("envios")
           .insert({
             user_id: userId,
-            contato_id: contato_id || null, // Make sure we use null instead of a non-UUID value
-            template_id: template_id || null, // Make sure we use null instead of a non-UUID value
+            contato_id: contato_id || null,
+            template_id: template_id || null,
             status: "processando",
             agendamento_id: agendamento_id || null
           })
@@ -119,7 +118,7 @@ serve(async (req: Request) => {
     };
 
     // Process attachments
-    const resendAttachments = [];
+    const emailAttachments = [];
     
     if (attachments) {
       try {
@@ -129,7 +128,6 @@ serve(async (req: Request) => {
           : attachments;
           
         if (Array.isArray(parsedAttachments)) {
-          // For Resend, we need to fetch the attachment content
           for (const attachment of parsedAttachments) {
             if (attachment.url) {
               try {
@@ -137,7 +135,7 @@ serve(async (req: Request) => {
                 if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
                 
                 const buffer = await response.arrayBuffer();
-                resendAttachments.push({
+                emailAttachments.push({
                   filename: attachment.name || 'attachment.file',
                   content: buffer
                 });
@@ -152,34 +150,115 @@ serve(async (req: Request) => {
       }
     }
 
-    // Determine email sending method based on user settings
+    // Determine email sending method based on user settings and availability
+    const useSmtp = settingsData?.use_smtp !== false && 
+                    settingsData?.email_smtp && 
+                    settingsData?.email_porta && 
+                    settingsData?.email_usuario && 
+                    settingsData?.email_senha;
+    
     let success = false;
     let error = null;
-    
-    try {
-      const resendApiKey = Deno.env.get("RESEND_API_KEY");
-      if (!resendApiKey) {
-        throw new Error("Resend API key missing");
+    let details = null;
+
+    // Try to send via SMTP if configured
+    if (useSmtp) {
+      try {
+        console.log("Sending via SMTP:", settingsData?.email_smtp);
+        
+        // Create SMTP transport
+        const transport = nodemailer.default.createTransport({
+          host: settingsData?.email_smtp,
+          port: settingsData?.email_porta || 587,
+          secure: settingsData?.smtp_seguranca === "ssl" || settingsData?.email_porta === 465,
+          auth: {
+            user: settingsData?.email_usuario,
+            pass: settingsData?.email_senha
+          },
+          tls: {
+            rejectUnauthorized: false // Accept self-signed certificates
+          }
+        });
+        
+        // Prepare email options
+        const mailOptions = {
+          from: emailData.from,
+          to: emailData.to,
+          subject: emailData.subject,
+          html: emailData.html,
+          attachments: emailAttachments.length > 0 ? emailAttachments : undefined
+        };
+        
+        // Send email
+        const info = await transport.sendMail(mailOptions);
+        console.log("SMTP Email sent:", info.messageId);
+        
+        success = true;
+        details = {
+          transport: "smtp",
+          id: info.messageId
+        };
+      } catch (smtpErr) {
+        console.error("SMTP error:", smtpErr);
+        error = smtpErr;
+        
+        // If SMTP fails, try using Resend as fallback
+        console.log("SMTP failed, trying Resend fallback");
       }
-
-      const resend = new Resend(resendApiKey);
+    }
+    
+    // If SMTP failed or wasn't configured, try Resend
+    if (!success) {
+      const resendApiKey = Deno.env.get("RESEND_API_KEY");
       
-      console.log("Sending email via Resend");
-      const { data, error: resendError } = await resend.emails.send({
-        from: emailData.from,
-        to: [emailData.to],
-        subject: emailData.subject,
-        html: emailData.html,
-        attachments: resendAttachments.length > 0 ? resendAttachments : undefined
-      });
-
-      if (resendError) throw resendError;
-      console.log(`Email sent successfully via Resend: ${data?.id}`);
+      if (!resendApiKey) {
+        console.error("No Resend API key available");
+        if (error) {
+          // If we already tried SMTP and it failed
+          throw new Error(`SMTP error: ${error.message}. No Resend API key available for fallback.`);
+        } else {
+          throw new Error("No email sending method available. Configure SMTP or provide Resend API key.");
+        }
+      }
       
-      success = true;
-    } catch (err) {
-      console.error("Resend error:", err);
-      error = err;
+      try {
+        console.log("Sending via Resend");
+        const resend = new Resend(resendApiKey);
+        
+        const resendResponse = await resend.emails.send({
+          from: emailData.from,
+          to: [emailData.to],
+          subject: emailData.subject,
+          html: emailData.html,
+          attachments: emailAttachments.length > 0
+            ? emailAttachments.map(att => ({
+                filename: att.filename,
+                content: att.content
+              }))
+            : undefined
+        });
+        
+        if (resendResponse.error) {
+          throw new Error(resendResponse.error.message || "Unknown Resend error");
+        }
+        
+        console.log("Resend Email sent:", resendResponse.data?.id);
+        
+        success = true;
+        details = {
+          transport: "resend",
+          id: resendResponse.data?.id
+        };
+      } catch (resendErr) {
+        console.error("Resend error:", resendErr);
+        
+        if (error) {
+          // If we already tried SMTP and it failed
+          throw new Error(`SMTP error: ${error.message}. Resend fallback error: ${resendErr.message}`);
+        } else {
+          throw resendErr;
+        }
+      }
     }
 
     // Update the envio record with the result
@@ -209,7 +288,7 @@ serve(async (req: Request) => {
         JSON.stringify({ 
           success: true, 
           message: "Email sent successfully", 
-          details: { transport: "resend" }
+          details: details
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
