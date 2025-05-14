@@ -32,7 +32,7 @@ export function useTemplates() {
       const formattedTemplates = data?.map(template => ({
         ...template,
         status: template.status || 'ativo' // Provide a default status if it doesn't exist
-      })) || [];
+      })) as Template[] || [];
       
       setTemplates(formattedTemplates);
     } catch (error: any) {
