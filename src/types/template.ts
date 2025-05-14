@@ -8,8 +8,8 @@ export interface Template {
   created_at?: string;
   user_id?: string;
   signature_image?: string | null;
-  status: string; // Adding the missing status property
-  attachments?: any; // Adding attachments property to fix issues
+  status: string; // Required status property
+  attachments?: any; // Attachments property
 }
 
 export interface TemplateFormData {
@@ -18,6 +18,6 @@ export interface TemplateFormData {
   canal?: string;
   assinatura?: string;
   signature_image?: string | null;
-  status: string; // Changed from optional to required to match usage
-  attachments?: any; // Adding attachments property to match Template interface
+  status: string; // Required status property
+  attachments?: any; // Attachments property
 }

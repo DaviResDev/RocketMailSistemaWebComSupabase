@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -25,8 +24,8 @@ export function useTemplates() {
       // Transform the fetched data to ensure it has all required properties for Template type
       const templatesWithStatus = data?.map(template => ({
         ...template,
-        // Safely add status if it doesn't exist in the database record
-        status: template.status || 'ativo' // Default status for all templates
+        // Ensure each template has a status property
+        status: 'ativo' // Default status for all templates
       })) || [];
       
       setTemplates(templatesWithStatus);
@@ -146,7 +145,7 @@ export function useTemplates() {
         assinatura: template.assinatura,
         signature_image: template.signature_image,
         attachments: template.attachments,
-        status: template.status || 'ativo',
+        status: 'ativo', // Ensure the duplicated template has a status
         user_id: user?.id
       };
       
