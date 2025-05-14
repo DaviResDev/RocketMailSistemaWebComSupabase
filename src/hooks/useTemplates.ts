@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { Json } from '@/integrations/supabase/types';
 
 export type Template = {
   id: string;
@@ -11,7 +12,7 @@ export type Template = {
   canal: string;
   assinatura?: string;
   signature_image?: string | null;
-  attachments?: any[] | string;
+  attachments?: Json | any[] | string;
   created_at: string;
 };
 
@@ -22,7 +23,7 @@ export type TemplateFormData = {
   canal: string;
   assinatura?: string;
   signature_image?: string | null;
-  attachments?: any[] | string;
+  attachments?: Json | any[] | string;
 };
 
 export function useTemplates() {
