@@ -64,6 +64,7 @@ export type Database = {
           email_usuario: string | null
           foto_perfil: string | null
           id: string
+          signature_image: string | null
           smtp_nome: string | null
           smtp_seguranca: string | null
           two_factor_enabled: boolean | null
@@ -80,6 +81,7 @@ export type Database = {
           email_usuario?: string | null
           foto_perfil?: string | null
           id?: string
+          signature_image?: string | null
           smtp_nome?: string | null
           smtp_seguranca?: string | null
           two_factor_enabled?: boolean | null
@@ -96,6 +98,7 @@ export type Database = {
           email_usuario?: string | null
           foto_perfil?: string | null
           id?: string
+          signature_image?: string | null
           smtp_nome?: string | null
           smtp_seguranca?: string | null
           two_factor_enabled?: boolean | null
