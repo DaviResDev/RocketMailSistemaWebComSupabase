@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/label';
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
+  placeholder?: string; // Added placeholder as an optional prop
 }
 
 const fontSizes = [
@@ -61,7 +62,7 @@ const bgColors = [
   '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
 ];
 
-const RichTextEditor = ({ value, onChange }: RichTextEditorProps) => {
+const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) => {
   const [editorContent, setEditorContent] = useState(value || '');
   const [linkUrl, setLinkUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
@@ -308,6 +309,10 @@ const RichTextEditor = ({ value, onChange }: RichTextEditorProps) => {
         contentEditable="true"
         dangerouslySetInnerHTML={{ __html: editorContent }}
         onInput={handleEditorChange}
+        data-placeholder={placeholder} // Add data-placeholder attribute
+        style={{ 
+          position: 'relative'
+        }}
       />
     </div>
   );
