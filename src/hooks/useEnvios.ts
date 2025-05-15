@@ -121,19 +121,10 @@ export function useEnvios() {
             value: templateData.attachments
           });
           
-          if (typeof templateData.attachments === 'string' && templateData.attachments !== '[]') {
-            try {
-              attachmentsToSend = JSON.parse(templateData.attachments);
-              console.log("Parsed attachments from string:", attachmentsToSend);
-            } catch (err) {
-              console.error("Error parsing attachments JSON string:", err);
-              // Keep the original value if parsing fails
-              attachmentsToSend = templateData.attachments;
-            }
-          } else {
-            // Use as is if already an object or array
-            attachmentsToSend = templateData.attachments;
-          }
+          attachmentsToSend = templateData.attachments;
+          
+          // If the attachments is a string, preserve it as is (don't try to parse)
+          // The edge function will handle parsing on the server
         }
         
         // Include attachments from the template if they exist

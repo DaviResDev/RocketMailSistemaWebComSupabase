@@ -1,4 +1,3 @@
-
 // email-sender.js - Module for sending emails via SMTP or Resend API
 
 /**
@@ -90,7 +89,7 @@ async function sendEmailViaSMTP(config, payload) {
         return {
           filename: attachment.filename || attachment.name || 'attachment.file',
           content: attachment.content,
-          encoding: 'binary'
+          encoding: 'base64'
         };
       }
       

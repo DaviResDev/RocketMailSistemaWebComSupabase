@@ -49,6 +49,20 @@ serve(async (req: Request) => {
       template_id,
       agendamento_id
     }));
+    console.log("Content preview:", content?.substring(0, 200));
+    if (attachments) {
+      console.log("Attachments type:", typeof attachments);
+      if (typeof attachments === 'string') {
+        try {
+          const parsedAttachments = JSON.parse(attachments);
+          console.log("Parsed attachments:", JSON.stringify(parsedAttachments).substring(0, 200));
+        } catch (e) {
+          console.log("Failed to parse attachments string");
+        }
+      } else {
+        console.log("Attachments structure:", JSON.stringify(attachments).substring(0, 200));
+      }
+    }
 
     // Validate required inputs
     if (!to && !contato_email) {
@@ -157,22 +171,12 @@ serve(async (req: Request) => {
       email_senha: settingsData.email_senha ? "configurado" : "não configurado"
     }) : "none");
 
-    // Ensure HTML content is properly formatted with improved structure
+    // Ensure HTML content is properly formatted
     let htmlContent = content;
     
-    // If content doesn't look like HTML, wrap it in proper HTML structure
-    if (!content.includes('<html') && !content.includes('<body')) {
-      // Convert line breaks to <br> for plain text
-      if (!content.includes('<div') && !content.includes('<p>')) {
-        htmlContent = content.replace(/\n/g, "<br>");
-      }
-    }
-    
-    // Prepare email data with improved HTML wrapper for better MIME handling
-    const emailData = {
-      to: recipient,
-      subject,
-      html: `
+    // Make sure the content is proper HTML
+    if (!content.trim().startsWith('<!DOCTYPE html>') && !content.trim().startsWith('<html')) {
+      htmlContent = `
         <!DOCTYPE html>
         <html>
           <head>
@@ -188,12 +192,19 @@ serve(async (req: Request) => {
           </head>
           <body>
             <div class="email-content">
-              ${htmlContent}
+              ${content}
               ${signature_image ? `<div class="signature"><img src="${signature_image}" alt="Assinatura" style="max-height: 80px;" /></div>` : ''}
             </div>
           </body>
         </html>
-      `,
+      `;
+    }
+    
+    // Prepare email data
+    const emailData = {
+      to: recipient,
+      subject,
+      html: htmlContent,
     } as any;
     
     // Add CC and BCC if provided
@@ -240,7 +251,6 @@ serve(async (req: Request) => {
                 emailAttachments.push({
                   filename: attachment.name || attachment.filename || 'attachment.file',
                   content: new Uint8Array(buffer),
-                  encoding: 'binary',
                   contentType: response.headers.get('content-type') || undefined
                 });
                 console.log(`Attachment processed: ${attachment.name || attachment.filename}`);
@@ -260,7 +270,6 @@ serve(async (req: Request) => {
               emailAttachments.push({
                 filename: attachment.name || attachment.filename || 'attachment.file',
                 content: content,
-                encoding: 'base64',
                 contentType: attachment.contentType || attachment.type || undefined
               });
             }
@@ -280,7 +289,6 @@ serve(async (req: Request) => {
                 emailAttachments.push({
                   filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
                   content: new Uint8Array(buffer),
-                  encoding: 'binary',
                   contentType: response.headers.get('content-type') || undefined
                 });
               }
@@ -299,7 +307,6 @@ serve(async (req: Request) => {
             emailAttachments.push({
               filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
               content: content,
-              encoding: 'base64',
               contentType: parsedAttachments.contentType || parsedAttachments.type || undefined
             });
           }
