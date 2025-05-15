@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { toast } from 'sonner';
