@@ -76,9 +76,13 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
       onDuplicate(template.id);
     }
   };
+  
+  const handleDelete = () => {
+    setIsDeleteDialogOpen(true);
+  };
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-all">
       <CardContent className="p-6">
         <div className="flex justify-between items-start mb-2">
           <h3 className="font-bold text-lg line-clamp-2">{template.nome}</h3>
@@ -97,17 +101,19 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
           </div>
         </div>
         
-        {template.signature_image && (
-          <div className="mt-4">
-            <p className="text-xs text-muted-foreground">Assinatura incluída</p>
-          </div>
-        )}
-        
-        {template.attachments && (
-          <div className="mt-2">
-            <p className="text-xs text-muted-foreground">Tem anexos</p>
-          </div>
-        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {template.signature_image && (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700">
+              Assinatura
+            </Badge>
+          )}
+          
+          {template.attachments && template.attachments !== '[]' && (
+            <Badge variant="outline" className="bg-purple-50 text-purple-700">
+              Anexos
+            </Badge>
+          )}
+        </div>
       </CardContent>
       
       <CardFooter className="bg-muted/40 px-6 py-4 flex justify-between">
@@ -125,12 +131,12 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
         
         <div className="flex space-x-1">
           {onDuplicate && (
-            <Button variant="ghost" size="sm" onClick={handleDuplicate}>
+            <Button variant="ghost" size="sm" onClick={handleDuplicate} title="Duplicar template">
               <Copy className="h-4 w-4" />
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
-            <Trash2 className="h-4 w-4 text-destructive" />
+          <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Excluir template">
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </CardFooter>
@@ -147,7 +153,7 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => onDelete(template.id)}>
+            <AlertDialogAction onClick={() => onDelete(template.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

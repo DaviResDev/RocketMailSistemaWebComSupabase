@@ -184,10 +184,11 @@ serve(async (req: Request) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>${subject}</title>
             <style>
-              body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; }
+              body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; line-height: 1.6; }
               .email-content { padding: 20px; }
               .signature { margin-top: 30px; }
               img { max-width: 100%; height: auto; }
+              pre, code { font-family: monospace; white-space: pre-wrap; }
             </style>
           </head>
           <body>
@@ -248,12 +249,14 @@ serve(async (req: Request) => {
                 }
                 
                 const buffer = await response.arrayBuffer();
+                const contentType = response.headers.get('content-type') || attachment.type || `application/${attachment.name?.split('.').pop() || 'octet-stream'}`;
+                
                 emailAttachments.push({
                   filename: attachment.name || attachment.filename || 'attachment.file',
                   content: new Uint8Array(buffer),
-                  contentType: response.headers.get('content-type') || attachment.type || undefined
+                  contentType: contentType
                 });
-                console.log(`Attachment processed: ${attachment.name || attachment.filename}`);
+                console.log(`Attachment processed: ${attachment.name || attachment.filename} with type ${contentType}`);
               } catch (fetchErr) {
                 console.error("Error fetching attachment:", fetchErr);
               }
@@ -266,11 +269,13 @@ serve(async (req: Request) => {
                   attachment.content.split('base64,')[1] : 
                   attachment.content) : 
                 attachment.content;
-                
+              
+              const contentType = attachment.contentType || attachment.type || `application/${attachment.name?.split('.').pop() || 'octet-stream'}`;
+              
               emailAttachments.push({
                 filename: attachment.name || attachment.filename || 'attachment.file',
                 content: content,
-                contentType: attachment.contentType || attachment.type || undefined
+                contentType: contentType
               });
             }
           }
@@ -286,10 +291,12 @@ serve(async (req: Request) => {
                 console.error(`Failed to fetch attachment: ${response.status}`);
               } else {
                 const buffer = await response.arrayBuffer();
+                const contentType = response.headers.get('content-type') || parsedAttachments.type || `application/${parsedAttachments.name?.split('.').pop() || 'octet-stream'}`;
+                
                 emailAttachments.push({
                   filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
                   content: new Uint8Array(buffer),
-                  contentType: response.headers.get('content-type') || parsedAttachments.type || undefined
+                  contentType: contentType
                 });
               }
             } catch (fetchErr) {
@@ -303,11 +310,13 @@ serve(async (req: Request) => {
                 parsedAttachments.content.split('base64,')[1] : 
                 parsedAttachments.content) : 
               parsedAttachments.content;
-              
+            
+            const contentType = parsedAttachments.contentType || parsedAttachments.type || `application/${parsedAttachments.name?.split('.').pop() || 'octet-stream'}`;
+            
             emailAttachments.push({
               filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
               content: content,
-              contentType: parsedAttachments.contentType || parsedAttachments.type || undefined
+              contentType: contentType
             });
           }
         }
@@ -321,7 +330,7 @@ serve(async (req: Request) => {
       console.log(`Added ${emailAttachments.length} attachments to the email`);
       // Log some details about the first attachment for debugging
       if (emailAttachments.length > 0) {
-        console.log(`First attachment: ${emailAttachments[0].filename}, content type: ${typeof emailAttachments[0].content}`);
+        console.log(`First attachment: ${emailAttachments[0].filename}, content type: ${emailAttachments[0].contentType}, content encoding: ${typeof emailAttachments[0].content}`);
       }
     }
 

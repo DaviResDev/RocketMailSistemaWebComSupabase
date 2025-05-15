@@ -35,6 +35,9 @@ export function useTemplateOperations() {
           templateData.attachments = JSON.stringify(templateData.attachments);
         }
         // Se já for uma string, manter como está
+      } else {
+        // Ensure attachments is always at least an empty array
+        templateData.attachments = JSON.stringify([]);
       }
       
       console.log('Criando template com dados:', {
@@ -78,6 +81,9 @@ export function useTemplateOperations() {
           templateData.attachments = JSON.stringify(templateData.attachments);
         }
         // Se já for uma string, manter como está
+      } else {
+        // Ensure attachments is always at least an empty array
+        templateData.attachments = JSON.stringify([]);
       }
       
       console.log('Atualizando template com dados:', {
@@ -120,8 +126,8 @@ export function useTemplateOperations() {
         canal: template.canal || 'email',
         assinatura: template.assinatura,
         signature_image: template.signature_image,
-        attachments: template.attachments,
-        status: 'ativo', // Ensure the duplicated template has a status
+        attachments: template.attachments || JSON.stringify([]),
+        status: template.status || 'ativo', // Ensure the duplicated template has a status
         user_id: user?.id
       };
       

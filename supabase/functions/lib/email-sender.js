@@ -90,6 +90,7 @@ async function sendEmailViaSMTP(config, payload) {
         return {
           filename: attachment.filename || attachment.name || 'attachment.file',
           content: attachment.content,
+          contentType: attachment.contentType || attachment.type || undefined,
           encoding: 'base64'
         };
       }
@@ -104,8 +105,8 @@ async function sendEmailViaSMTP(config, payload) {
         return {
           filename: attachment.filename || attachment.name || 'attachment.file',
           content: base64Content,
-          encoding: 'base64',
-          contentType: attachment.contentType || attachment.type || undefined
+          contentType: attachment.contentType || attachment.type || undefined,
+          encoding: 'base64'
         };
       }
       
@@ -192,15 +193,21 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   if (payload.attachments && payload.attachments.length > 0) {
     emailData.attachments = payload.attachments.map(attachment => {
       // Return an object in the format Resend expects
+      let content = '';
+      
+      if (attachment.content instanceof Uint8Array) {
+        content = Buffer.from(attachment.content).toString('base64');
+      } else if (typeof attachment.content === 'string') {
+        content = attachment.content.includes('base64,') 
+          ? attachment.content.split('base64,')[1] 
+          : attachment.content;
+      } else {
+        content = attachment.content;
+      }
+      
       return {
         filename: attachment.filename || attachment.name || 'attachment.file',
-        content: attachment.content instanceof Uint8Array 
-          ? Buffer.from(attachment.content).toString('base64')
-          : typeof attachment.content === 'string'
-            ? (attachment.content.includes('base64,') 
-                ? attachment.content.split('base64,')[1] 
-                : attachment.content)
-            : attachment.content,
+        content: content,
         contentType: attachment.contentType || attachment.type || undefined
       };
     });
