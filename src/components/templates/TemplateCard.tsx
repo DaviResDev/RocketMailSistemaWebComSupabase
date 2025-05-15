@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import { toast } from 'sonner';
 interface TemplateCardProps {
   template: Template;
   onEdit: (template: Template) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<boolean>;
   onDuplicate?: (id: string) => void;
 }
 
@@ -32,6 +33,7 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
   const [isTestEmailDialogOpen, setIsTestEmailDialogOpen] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [sending, setSending] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { sendTestEmail } = useTemplateEmail();
   
   const formatDate = (dateString?: string) => {
@@ -83,9 +85,15 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
   };
 
   const confirmDelete = async () => {
-    setIsDeleteDialogOpen(false);
-    const success = await onDelete(template.id);
-    // O feedback de sucesso/erro já é mostrado pelo hook useTemplateOperations
+    setIsDeleting(true);
+    try {
+      const success = await onDelete(template.id);
+      if (success) {
+        setIsDeleteDialogOpen(false);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
   
   return (
@@ -163,6 +171,7 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
             onClick={handleDelete} 
             className="rounded-full h-10 w-10"
             title="Excluir template"
+            disabled={isDeleting}
           >
             <Trash2 className="h-5 w-5 text-red-600" />
           </Button>
@@ -179,12 +188,17 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
               Esta ação não pode ser desfeita.
               <br /><br />
               <strong>Nota:</strong> Templates usados em agendamentos não podem ser excluídos.
+              Você precisará cancelar os agendamentos primeiro.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
+            <AlertDialogAction 
+              onClick={confirmDelete} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Excluindo...' : 'Excluir'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

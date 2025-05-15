@@ -4,10 +4,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { TemplateFormData } from '@/types/template';
 import { useTemplatesData } from './useTemplatesData';
 import { v4 as uuidv4 } from 'uuid';
+import { useSettings } from '@/hooks/useSettings';
 
 export function useTemplateOperations() {
   const { user } = useAuth();
   const { fetchTemplates } = useTemplatesData();
+  const { settings } = useSettings();
 
   // Helper function to upload file to Supabase storage
   const uploadFileToStorage = async (file: File) => {
@@ -56,7 +58,9 @@ export function useTemplateOperations() {
         ...formData,
         canal: 'email', // Always set to email since it's the only option now
         user_id: user.id,
-        status: formData.status || 'ativo' // Ensure status is set
+        status: formData.status || 'ativo', // Ensure status is set
+        // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
+        signature_image: formData.signature_image || (settings?.signature_image || null)
       };
       
       // Ensure attachments is properly formatted and stored
@@ -129,7 +133,9 @@ export function useTemplateOperations() {
       const templateData = {
         ...formData, 
         canal: 'email',
-        status: formData.status || 'ativo' // Ensure status is set
+        status: formData.status || 'ativo', // Ensure status is set
+        // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
+        signature_image: formData.signature_image || (settings?.signature_image || null)
       };
       
       // Ensure attachments is properly formatted and stored
@@ -247,14 +253,31 @@ export function useTemplateOperations() {
       // First, check if the template is referenced in agendamentos
       const { data: agendamentos, error: checkError } = await supabase
         .from('agendamentos')
-        .select('id')
+        .select('id, data_envio, contato:contatos(nome)')
         .eq('template_id', id);
         
       if (checkError) throw checkError;
       
       // If there are linked agendamentos, inform the user instead of throwing an error
       if (agendamentos && agendamentos.length > 0) {
-        toast.error('Não é possível excluir este template pois ele está sendo usado em agendamentos. Remova os agendamentos relacionados primeiro.');
+        // Formatar a mensagem para mostrar quais agendamentos estão usando o template
+        const agendamentosInfo = agendamentos.map(ag => {
+          const data = new Date(ag.data_envio).toLocaleDateString('pt-BR');
+          const contatoNome = ag.contato?.nome || 'Contato desconhecido';
+          return `- ${contatoNome} (agendado para ${data})`;
+        }).join('\n');
+        
+        toast.error(
+          <div className="space-y-2">
+            <p>Não é possível excluir este template pois ele está sendo usado nos seguintes agendamentos:</p>
+            <div className="text-sm mt-2 max-h-40 overflow-y-auto">
+              {agendamentosInfo.split('\n').map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+            <p className="text-sm mt-2">Cancele os agendamentos primeiro antes de excluir o template.</p>
+          </div>
+        );
         return false;
       }
       

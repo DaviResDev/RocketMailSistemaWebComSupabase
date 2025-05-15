@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { toast } from 'sonner';
@@ -39,7 +38,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       user_id: data.user_id,
       two_factor_enabled: Boolean(data.two_factor_enabled),
       use_smtp: Boolean(data.use_smtp),
-      signature_image: null // Set default value for this property
+      signature_image: data.signature_image || null
     };
   } else {
     // No settings found, create empty settings object with default true for use_smtp
