@@ -1,4 +1,5 @@
 
+
 export type Settings = {
   id: string;
   email_smtp: string | null;
@@ -18,3 +19,4 @@ export type Settings = {
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;
+
