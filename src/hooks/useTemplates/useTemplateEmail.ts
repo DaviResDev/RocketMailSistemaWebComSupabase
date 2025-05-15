@@ -42,6 +42,21 @@ export function useTemplateEmail() {
         // based on signature_image parameter
       }
       
+      // Parse attachments if they exist
+      let attachmentsData = null;
+      if (template.attachments) {
+        if (typeof template.attachments === 'string' && template.attachments !== '[]') {
+          try {
+            attachmentsData = JSON.parse(template.attachments);
+          } catch (err) {
+            console.error('Erro ao analisar anexos:', err);
+            // Continue without attachments
+          }
+        } else if (Array.isArray(template.attachments) && template.attachments.length > 0) {
+          attachmentsData = template.attachments;
+        }
+      }
+      
       // Call our send-email edge function
       const response = await supabase.functions.invoke('send-email', {
         body: {
@@ -50,7 +65,7 @@ export function useTemplateEmail() {
           content: processedContent,
           isTest: true,
           signature_image: template.signature_image,
-          attachments: template.attachments
+          attachments: attachmentsData
         },
       });
       

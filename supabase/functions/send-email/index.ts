@@ -37,7 +37,7 @@ serve(async (req: Request) => {
 
     // Log detailed request information
     console.log("Email request received:", JSON.stringify({
-      to,
+      to: to || contato_email,
       contato_nome,
       subject,
       contentLength: content?.length,
@@ -145,7 +145,9 @@ serve(async (req: Request) => {
       use_smtp: settingsData.use_smtp,
       email_smtp: settingsData.email_smtp,
       email_porta: settingsData.email_porta,
-      smtp_nome: settingsData.smtp_nome
+      smtp_nome: settingsData.smtp_nome,
+      email_usuario: settingsData.email_usuario ? "configurado" : "não configurado",
+      email_senha: settingsData.email_senha ? "configurado" : "não configurado"
     }) : "none");
 
     // Convert content to HTML format
@@ -201,7 +203,7 @@ serve(async (req: Request) => {
                 const buffer = await response.arrayBuffer();
                 emailAttachments.push({
                   filename: attachment.name || attachment.filename || 'attachment.file',
-                  content: buffer
+                  content: new Uint8Array(buffer)
                 });
                 console.log(`Attachment processed: ${attachment.name || attachment.filename}`);
               } catch (fetchErr) {
@@ -232,7 +234,7 @@ serve(async (req: Request) => {
               const buffer = await response.arrayBuffer();
               emailAttachments.push({
                 filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
-                content: buffer
+                content: new Uint8Array(buffer)
               });
             } catch (fetchErr) {
               console.error("Error fetching single attachment:", fetchErr);

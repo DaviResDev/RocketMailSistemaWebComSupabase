@@ -72,13 +72,28 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw templateError;
       }
       
+      // Parse template attachments if they exist
+      let attachmentsData = null;
+      if (template.attachments) {
+        if (typeof template.attachments === 'string' && template.attachments !== '[]') {
+          try {
+            attachmentsData = JSON.parse(template.attachments);
+          } catch (err) {
+            console.error('Erro ao analisar anexos:', err);
+            // Continue without attachments
+          }
+        } else if (Array.isArray(template.attachments) && template.attachments.length > 0) {
+          attachmentsData = template.attachments;
+        }
+      }
+      
       // Convert schedule to EnvioFormData with typed attachments
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
         agendamento_id: schedule.id,
-        // Pass the attachments as is - will be handled by sendEmail
-        attachments: template.attachments 
+        // Pass the processed attachments
+        attachments: attachmentsData
       };
       
       // Adicionar logs para verificar os dados de envio
@@ -86,9 +101,8 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         contato: schedule.contato,
         template: schedule.template?.nome,
         agendamento: schedule.id,
-        temAnexos: template.attachments && 
-                   ((typeof template.attachments === 'string' && template.attachments !== '[]') || 
-                    (Array.isArray(template.attachments) && template.attachments.length > 0))
+        temAnexos: !!attachmentsData && 
+                  (Array.isArray(attachmentsData) ? attachmentsData.length > 0 : true)
       });
       
       // Send email immediately using sendEmail
@@ -111,7 +125,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       
       toast({
         title: "Sucesso",
-        description: `Email enviado com sucesso para ${schedule.contato?.nome}! Um recebimento automático será enviado ao destinatário.`
+        description: `Email enviado com sucesso para ${schedule.contato?.nome}!`
       });
       
       // Refresh both schedules list and email history
