@@ -38,7 +38,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       user_id: data.user_id,
       two_factor_enabled: Boolean(data.two_factor_enabled),
       use_smtp: Boolean(data.use_smtp),
-      signature_image: data.signature_image || null // Ensure this property is included and handle null cases
+      signature_image: data.signature_image || null // Handle the case where signature_image might not exist
     };
   } else {
     // No settings found, create empty settings object with default true for use_smtp
