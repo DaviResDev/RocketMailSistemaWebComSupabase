@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import RichTextEditor from '@/components/templates/RichTextEditor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,30 +11,38 @@ import { Template } from '@/types/template';
 import { useSettings } from '@/hooks/useSettings';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SignaturePreview } from '@/components/settings/SignaturePreview';
-import { Send } from 'lucide-react';
+import { Send, FileText, Paperclip } from 'lucide-react';
+import { TemplateFileUpload } from './TemplateFileUpload';
 
 export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) {
   const { settings } = useSettings();
   const [formData, setFormData] = useState({
     nome: '',
-    descricao: '', // Added description field
+    descricao: '',
     conteudo: '',
     status: 'ativo',
     signature_image: '',
+    template_file_url: '', // Added for file upload
+    template_file_name: '', // Added to store filename
   });
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasTemplateFile, setHasTemplateFile] = useState(false);
   
   // Initialize form data from template when editing
   useEffect(() => {
     if (template) {
       setFormData({
         nome: template.nome || '',
-        descricao: template.descricao || '', // Load description from template
+        descricao: template.descricao || '',
         conteudo: template.conteudo || '',
         status: template.status || 'ativo',
         signature_image: template.signature_image || (settings?.signature_image || ''),
+        template_file_url: template.template_file_url || '', // Load file URL if it exists
+        template_file_name: template.template_file_name || '', // Load filename if it exists
       });
+      
+      setHasTemplateFile(!!template.template_file_url);
     } else {
       // Use the user's signature from settings by default for new templates
       setFormData(prevData => ({
@@ -65,6 +72,15 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
       ...prevData,
       status: value
     }));
+  };
+
+  const handleFileUploaded = (fileUrl: string, fileName: string) => {
+    setFormData(prevData => ({
+      ...prevData,
+      template_file_url: fileUrl,
+      template_file_name: fileName
+    }));
+    setHasTemplateFile(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,7 +129,6 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
             />
           </div>
           
-          {/* Added description field */}
           <div className="space-y-2">
             <Label htmlFor="descricao">Descrição (Assunto do e-mail)</Label>
             <Input 
@@ -143,6 +158,20 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
                 <SelectItem value="rascunho">Rascunho</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* New Template File Upload Component */}
+          <div className="border p-4 rounded-md bg-muted/30">
+            <div className="flex items-center gap-2 mb-2">
+              <FileText className="h-5 w-5 text-primary" />
+              <h3 className="font-medium">Arquivo de Template</h3>
+            </div>
+            <TemplateFileUpload onFileUploaded={handleFileUploaded} />
+            {hasTemplateFile && (
+              <div className="mt-2 text-sm text-muted-foreground">
+                <p>Você pode usar o conteúdo do arquivo como template ou editar manualmente abaixo.</p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

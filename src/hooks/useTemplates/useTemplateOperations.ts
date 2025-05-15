@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,7 +60,9 @@ export function useTemplateOperations() {
         user_id: user.id,
         status: formData.status || 'ativo', // Ensure status is set
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
-        signature_image: formData.signature_image || (settings?.signature_image || null)
+        signature_image: formData.signature_image || (settings?.signature_image || null),
+        template_file_url: formData.template_file_url || null,
+        template_file_name: formData.template_file_name || null
       };
       
       // Ensure attachments is properly formatted and stored
@@ -111,7 +112,8 @@ export function useTemplateOperations() {
         ...templateData,
         attachments: templateData.attachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
-        descricao: templateData.descricao || 'não definida'
+        descricao: templateData.descricao || 'não definida',
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -137,7 +139,9 @@ export function useTemplateOperations() {
         canal: 'email',
         status: formData.status || 'ativo', // Ensure status is set
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
-        signature_image: formData.signature_image || (settings?.signature_image || null)
+        signature_image: formData.signature_image || (settings?.signature_image || null),
+        template_file_url: formData.template_file_url || null,
+        template_file_name: formData.template_file_name || null
       };
       
       // Ensure attachments is properly formatted and stored
@@ -187,7 +191,8 @@ export function useTemplateOperations() {
         ...templateData,
         attachments: templateData.attachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
-        descricao: templateData.descricao || 'não definida'
+        descricao: templateData.descricao || 'não definida',
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -227,14 +232,17 @@ export function useTemplateOperations() {
         signature_image: template.signature_image,
         attachments: template.attachments || JSON.stringify([]),
         status: template.status || 'ativo', // Ensure the duplicated template has a status
-        user_id: user?.id
+        user_id: user?.id,
+        template_file_url: template.template_file_url || null,
+        template_file_name: template.template_file_name || null
       };
       
       console.log('Duplicando template:', {
         nome: newTemplate.nome,
         status: newTemplate.status,
         attachments: newTemplate.attachments ? 'presente' : 'ausente',
-        descricao: newTemplate.descricao || 'não definida'
+        descricao: newTemplate.descricao || 'não definida',
+        template_file_url: newTemplate.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error: insertError } = await supabase

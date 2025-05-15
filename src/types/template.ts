@@ -10,7 +10,9 @@ export interface Template {
   signature_image?: string | null;
   status: string;
   attachments?: any;
-  descricao?: string; // Add description field
+  descricao?: string;
+  template_file_url?: string;  // Added for file upload
+  template_file_name?: string; // Added to store filename
 }
 
 export interface TemplateFormData {
@@ -20,5 +22,7 @@ export interface TemplateFormData {
   signature_image?: string | null;
   status: string;
   attachments?: any;
-  descricao?: string; // Add description field
+  descricao?: string;
+  template_file_url?: string; // Added for file upload 
+  template_file_name?: string; // Added to store filename
 }

@@ -24,25 +24,15 @@ export const useEmailSignature = () => {
       }
       
       const fileExt = file.name.split('.').pop()?.toLowerCase();
-      if (!['jpg', 'jpeg', 'png', 'gif'].includes(fileExt || '')) {
-        throw new Error('Formato de arquivo não suportado. Use JPG, PNG ou GIF');
+      if (!['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExt || '')) {
+        throw new Error('Formato de arquivo não suportado. Use JPG, PNG, GIF, WEBP ou SVG');
       }
       
-      // Criar nome de arquivo único
-      const fileName = `signature_${user.id}_${uuidv4()}.${fileExt}`;
-      const filePath = `signatures/${fileName}`;
+      // Criar nome de arquivo único com o ID do usuário
+      const fileName = `sig_${user.id}_${uuidv4()}.${fileExt}`;
+      const filePath = `${fileName}`;
       
-      // Verificar se o bucket existe ou criar
-      const { data: buckets } = await supabase.storage.listBuckets();
-      const signaturesBucket = buckets?.find(b => b.name === 'signatures');
-      
-      if (!signaturesBucket) {
-        // Se não existir, notificar que é necessário criar o bucket
-        console.warn('Bucket "signatures" não encontrado');
-        throw new Error('Configuração de armazenamento incompleta. Entre em contato com o suporte.');
-      }
-      
-      // Fazer o upload
+      // Fazer o upload para o bucket 'signatures'
       const { error: uploadError } = await supabase.storage
         .from('signatures')
         .upload(filePath, file, {
@@ -60,7 +50,8 @@ export const useEmailSignature = () => {
       toast.success('Imagem de assinatura enviada com sucesso!');
       return publicUrl;
     } catch (error: any) {
-      toast.error(`Erro ao fazer upload da assinatura: ${error.message}`);
+      const errorMsg = error.message || 'Erro ao fazer upload da assinatura';
+      toast.error(`Erro ao fazer upload da assinatura: ${errorMsg}`);
       console.error('Error uploading signature image:', error);
       return null;
     } finally {
@@ -75,14 +66,14 @@ export const useEmailSignature = () => {
     }
 
     try {
-      // Extract path from URL
+      // Extract filename from URL
       const urlParts = imageUrl.split('/');
       const fileName = urlParts[urlParts.length - 1];
-      const filePath = `signatures/${fileName}`;
 
+      // Delete file directly (no path needed)
       const { error } = await supabase.storage
         .from('signatures')
-        .remove([filePath]);
+        .remove([fileName]);
 
       if (error) throw error;
 
