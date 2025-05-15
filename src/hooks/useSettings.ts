@@ -1,16 +1,17 @@
-
 import { useState, useCallback } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, SettingsFormData } from '@/types/settings';
 import {
   fetchUserSettings,
   saveUserSettings,
   uploadProfilePhoto,
-  testSmtpConnection
+  testSmtpConnection,
+  type Settings,
+  type SettingsFormData
 } from '@/api/settings';
 
-export { type Settings, type SettingsFormData } from '@/types/settings';
+// Re-export types for convenience
+export type { Settings, SettingsFormData };
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);

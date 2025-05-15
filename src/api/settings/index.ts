@@ -12,4 +12,4 @@ export {
 };
 
 // Re-export types for convenience
-export { Settings, SettingsFormData } from './types';
+export type { Settings, SettingsFormData } from './types';
