@@ -82,8 +82,8 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
     smtp_nome: settings.smtp_nome,
     whatsapp_token: settings.whatsapp_token,
     two_factor_enabled: settings.two_factor_enabled,
-    use_smtp: settings.use_smtp
-    // We're excluding signature_image if it doesn't exist in the database schema yet
+    use_smtp: settings.use_smtp,
+    signature_image: settings.signature_image // Include signature_image in the settingsToSave object
   };
   
   let result;
