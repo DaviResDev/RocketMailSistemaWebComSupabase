@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -281,6 +282,8 @@ export function useTemplateOperations() {
         return false;
       }
       
+      // If no agendamentos are using this template, proceed with deletion
+      
       // First, get the template to access its attachments
       const { data: template, error: getError } = await supabase
         .from('templates')
@@ -293,7 +296,7 @@ export function useTemplateOperations() {
       // Delete attached files from storage if they exist
       if (template.attachments) {
         try {
-          // Corrigindo o erro TS2345: garantindo que attachments seja string antes de passar para JSON.parse
+          // Parse attachments and handle both string and object formats
           const attachmentsStr = typeof template.attachments === 'string' 
             ? template.attachments 
             : JSON.stringify(template.attachments);
@@ -320,7 +323,15 @@ export function useTemplateOperations() {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        // Special handling for foreign key constraint errors
+        if (error.code === '23503') {
+          toast.error('Este template não pode ser excluído pois está sendo usado em agendamentos. Cancele os agendamentos primeiro.');
+          return false;
+        }
+        throw error;
+      }
+      
       toast.success('Template excluído com sucesso!');
       await fetchTemplates();
       return true;
