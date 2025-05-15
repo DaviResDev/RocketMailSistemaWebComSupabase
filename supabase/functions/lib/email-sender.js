@@ -43,8 +43,8 @@ async function sendEmailViaSMTP(config, payload) {
     connectionTimeout: 15000, // 15 seconds
     greetingTimeout: 15000, // 15 seconds
     socketTimeout: 30000, // 30 seconds
-    logger: true, // Enable logging for better debugging
-    debug: true, // Include SMTP traffic in the logs
+    logger: false, // Disable logging for cleaner operation
+    debug: false, // Disable debug for cleaner operation
     tls: {
       rejectUnauthorized: false // Accept self-signed certificates for better compatibility
     },
@@ -58,17 +58,17 @@ async function sendEmailViaSMTP(config, payload) {
   const fromEmail = config.user; // Always use the configured email
   const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
   
-  // Prepare email data
+  // Prepare email data with improved structure for better MIME handling
   const mailOptions = {
     from: from,
     to: payload.to,
     subject: payload.subject,
     html: payload.html,
     headers: {
-      // Set custom headers that might help with deliverability
+      'MIME-Version': '1.0',
+      'Content-Type': 'text/html; charset=utf-8',
       'X-Mailer': 'RocketMail',
       'X-Priority': '3',
-      'Content-Type': 'text/html; charset=utf-8',
     }
   };
 
@@ -82,28 +82,32 @@ async function sendEmailViaSMTP(config, payload) {
     mailOptions.bcc = payload.bcc;
   }
   
-  // Improved attachment handling
+  // Improved attachment handling with better MIME type detection
   if (payload.attachments && payload.attachments.length > 0) {
-    // Make sure we're working with the proper format for nodemailer
     mailOptions.attachments = payload.attachments.map(attachment => {
-      // If it's already in the right format (has content buffer), return as is
+      // For binary content (Uint8Array)
       if (attachment.content instanceof Uint8Array) {
         return {
           filename: attachment.filename || attachment.name || 'attachment.file',
-          content: attachment.content
+          content: attachment.content,
+          encoding: 'binary'
         };
       }
       
-      // If it has base64 content
+      // For base64 content
       if (attachment.content && typeof attachment.content === 'string') {
+        // Remove the data URI prefix if present
+        const base64Content = attachment.content.includes('base64,') ? 
+          attachment.content.split('base64,')[1] : 
+          attachment.content;
+          
         return {
           filename: attachment.filename || attachment.name || 'attachment.file',
-          content: attachment.content,
+          content: base64Content,
           encoding: 'base64'
         };
       }
       
-      // Default case (shouldn't happen with our preprocessing)
       return attachment;
     });
     

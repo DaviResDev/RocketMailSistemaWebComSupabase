@@ -157,14 +157,18 @@ serve(async (req: Request) => {
       email_senha: settingsData.email_senha ? "configurado" : "não configurado"
     }) : "none");
 
-    // Ensure HTML content is properly formatted
+    // Ensure HTML content is properly formatted with improved structure
     let htmlContent = content;
-    // Convert line breaks to <br> only if not already HTML
-    if (!content.includes('<html') && !content.includes('<body') && !content.includes('<div')) {
-      htmlContent = content.replace(/\n/g, "<br>");
+    
+    // If content doesn't look like HTML, wrap it in proper HTML structure
+    if (!content.includes('<html') && !content.includes('<body')) {
+      // Convert line breaks to <br> for plain text
+      if (!content.includes('<div') && !content.includes('<p>')) {
+        htmlContent = content.replace(/\n/g, "<br>");
+      }
     }
     
-    // Prepare email data with improved HTML wrapper
+    // Prepare email data with improved HTML wrapper for better MIME handling
     const emailData = {
       to: recipient,
       subject,
@@ -179,6 +183,7 @@ serve(async (req: Request) => {
               body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; }
               .email-content { padding: 20px; }
               .signature { margin-top: 30px; }
+              img { max-width: 100%; height: auto; }
             </style>
           </head>
           <body>
@@ -200,7 +205,7 @@ serve(async (req: Request) => {
       emailData.bcc = bcc;
     }
 
-    // Process attachments with improved error handling
+    // Process attachments with improved error handling and logging
     const emailAttachments = [];
     
     if (attachments) {
@@ -210,14 +215,16 @@ serve(async (req: Request) => {
         if (typeof attachments === 'string') {
           try {
             parsedAttachments = JSON.parse(attachments);
+            console.log("Successfully parsed attachments JSON string");
           } catch (parseErr) {
             console.error("Error parsing attachments JSON:", parseErr);
+            console.log("Raw attachments string:", attachments.substring(0, 100) + "...");
             // Continue with original value if parsing fails
           }
         }
           
         if (Array.isArray(parsedAttachments)) {
-          console.log(`Processing ${parsedAttachments.length} attachments`);
+          console.log(`Processing ${parsedAttachments.length} attachments as array`);
           
           for (const attachment of parsedAttachments) {
             if (attachment.url) {
@@ -232,7 +239,9 @@ serve(async (req: Request) => {
                 const buffer = await response.arrayBuffer();
                 emailAttachments.push({
                   filename: attachment.name || attachment.filename || 'attachment.file',
-                  content: new Uint8Array(buffer)
+                  content: new Uint8Array(buffer),
+                  encoding: 'binary',
+                  contentType: response.headers.get('content-type') || undefined
                 });
                 console.log(`Attachment processed: ${attachment.name || attachment.filename}`);
               } catch (fetchErr) {
@@ -241,19 +250,25 @@ serve(async (req: Request) => {
             } else if (attachment.content) {
               // If the content is already provided in base64 format
               console.log(`Using provided content for attachment: ${attachment.name || attachment.filename || 'unnamed'}`);
+              
+              const content = typeof attachment.content === 'string' ? 
+                (attachment.content.includes('base64,') ? 
+                  attachment.content.split('base64,')[1] : 
+                  attachment.content) : 
+                attachment.content;
+                
               emailAttachments.push({
                 filename: attachment.name || attachment.filename || 'attachment.file',
-                content: typeof attachment.content === 'string' ? 
-                  (attachment.content.includes('base64,') ? 
-                    attachment.content.split('base64,')[1] : 
-                    attachment.content) : 
-                  attachment.content,
-                encoding: 'base64'
+                content: content,
+                encoding: 'base64',
+                contentType: attachment.contentType || attachment.type || undefined
               });
             }
           }
         } else if (parsedAttachments && typeof parsedAttachments === 'object') {
           // If it's a single object
+          console.log("Processing single attachment object");
+          
           if (parsedAttachments.url) {
             try {
               console.log(`Fetching single attachment: ${parsedAttachments.url}`);
@@ -264,7 +279,9 @@ serve(async (req: Request) => {
                 const buffer = await response.arrayBuffer();
                 emailAttachments.push({
                   filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
-                  content: new Uint8Array(buffer)
+                  content: new Uint8Array(buffer),
+                  encoding: 'binary',
+                  contentType: response.headers.get('content-type') || undefined
                 });
               }
             } catch (fetchErr) {
@@ -272,14 +289,18 @@ serve(async (req: Request) => {
             }
           } else if (parsedAttachments.content) {
             console.log(`Using provided content for single attachment`);
+            
+            const content = typeof parsedAttachments.content === 'string' ? 
+              (parsedAttachments.content.includes('base64,') ? 
+                parsedAttachments.content.split('base64,')[1] : 
+                parsedAttachments.content) : 
+              parsedAttachments.content;
+              
             emailAttachments.push({
               filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
-              content: typeof parsedAttachments.content === 'string' ? 
-                (parsedAttachments.content.includes('base64,') ? 
-                  parsedAttachments.content.split('base64,')[1] : 
-                  parsedAttachments.content) : 
-                parsedAttachments.content,
-              encoding: 'base64'
+              content: content,
+              encoding: 'base64',
+              contentType: parsedAttachments.contentType || parsedAttachments.type || undefined
             });
           }
         }
