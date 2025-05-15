@@ -1,4 +1,3 @@
-
 import React, { useCallback, useState } from 'react';
 import { 
   Bold, 
@@ -11,7 +10,7 @@ import {
   List,
   Link,
   Image,
-  TextColor
+  Paintbrush // Replacing TextColor with Paintbrush which is available in lucide-react
 } from 'lucide-react';
 import { 
   Button
@@ -231,7 +230,7 @@ const RichTextEditor = ({ value, onChange }: RichTextEditorProps) => {
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="h-8 px-2" title="Cor do texto">
-              <TextColor className="h-4 w-4" />
+              <Paintbrush className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-2">
@@ -253,7 +252,7 @@ const RichTextEditor = ({ value, onChange }: RichTextEditorProps) => {
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="h-8 px-2" title="Cor de fundo">
-              <TextColor className="h-4 w-4 opacity-50" />
+              <Paintbrush className="h-4 w-4 opacity-50" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-2">
