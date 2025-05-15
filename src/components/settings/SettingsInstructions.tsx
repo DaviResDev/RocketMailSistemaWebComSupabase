@@ -20,7 +20,7 @@ export function SettingsInstructions() {
       <CardContent className="space-y-4">
         <div>
           <p className="mb-4">
-            O DisparoPro usa o serviço Resend para garantir alta entregabilidade dos seus emails.
+            O RocketMail usa o serviço Resend para garantir alta entregabilidade dos seus emails.
             Você pode usar o sistema imediatamente de duas formas:
           </p>
           
@@ -30,7 +30,7 @@ export function SettingsInstructions() {
               <div>
                 <p className="font-medium">Envio Básico (já funcionando)</p>
                 <p className="text-sm text-muted-foreground">
-                  Seus emails serão enviados automaticamente com o remetente do sistema DisparoPro, 
+                  Seus emails serão enviados automaticamente com o remetente do sistema RocketMail, 
                   mas as respostas chegarão no seu email cadastrado.
                 </p>
               </div>
@@ -64,7 +64,7 @@ export function SettingsInstructions() {
           <ol className="space-y-2 ml-4 list-decimal">
             <li>Crie uma conta gratuita no Resend</li>
             <li>Adicione e verifique seu domínio de email</li>
-            <li>Volte ao DisparoPro e use seu email com domínio verificado</li>
+            <li>Volte ao RocketMail e use seu email com domínio verificado</li>
           </ol>
           <div className="mt-4 flex gap-2">
             <Button 
@@ -91,7 +91,7 @@ export function SettingsInstructions() {
         
         <p className="text-sm text-muted-foreground">
           Se você não tiver um domínio próprio, não se preocupe. 
-          O DisparoPro continuará enviando seus emails usando o sistema padrão, 
+          O RocketMail continuará enviando seus emails usando o sistema padrão, 
           mas recomendamos verificar periodicamente a pasta de spam dos destinatários.
         </p>
       </CardContent>

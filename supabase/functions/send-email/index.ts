@@ -49,6 +49,7 @@ serve(async (req: Request) => {
       template_id,
       agendamento_id
     }));
+    
     console.log("Content preview:", content?.substring(0, 200));
     if (attachments) {
       console.log("Attachments type:", typeof attachments);
@@ -359,7 +360,7 @@ serve(async (req: Request) => {
           name: settingsData?.smtp_nome || ''
         } : null,
         Deno.env.get("RESEND_API_KEY") || "",
-        settingsData?.smtp_nome || "RocketMail"
+        settingsData?.smtp_nome || "RocketMail" // Updated to RocketMail
       );
       
       console.log("Email sent successfully:", result);

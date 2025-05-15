@@ -81,6 +81,11 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
     setIsDeleteDialogOpen(true);
   };
 
+  const confirmDelete = () => {
+    onDelete(template.id);
+    setIsDeleteDialogOpen(false);
+  };
+
   return (
     <Card className="overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-all">
       <CardContent className="p-6">
@@ -135,8 +140,16 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
               <Copy className="h-4 w-4" />
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Excluir template">
-            <Trash2 className="h-4 w-4" />
+          
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={handleDelete}
+            className="text-white"
+            title="Excluir template"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Excluir
           </Button>
         </div>
       </CardFooter>
@@ -153,7 +166,7 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => onDelete(template.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

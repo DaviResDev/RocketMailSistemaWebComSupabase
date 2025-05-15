@@ -67,7 +67,7 @@ async function sendEmailViaSMTP(config, payload) {
     headers: {
       'MIME-Version': '1.0',
       'Content-Type': 'text/html; charset=utf-8',
-      'X-Mailer': 'RocketMail',
+      'X-Mailer': 'RocketMail', // Updated to RocketMail
       'X-Priority': '3',
     }
   };
@@ -168,7 +168,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   
   // Create email data for Resend
   const emailData = {
-    from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
+    from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`, // Updated to RocketMail
     to: [payload.to],
     subject: payload.subject,
     html: payload.html,
