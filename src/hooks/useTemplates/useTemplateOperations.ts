@@ -1,13 +1,48 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { TemplateFormData } from '@/types/template';
 import { useTemplatesData } from './useTemplatesData';
+import { v4 as uuidv4 } from 'uuid';
 
 export function useTemplateOperations() {
   const { user } = useAuth();
   const { fetchTemplates } = useTemplatesData();
+
+  // Helper function to upload file to Supabase storage
+  const uploadFileToStorage = async (file: File) => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `${user?.id}/${fileName}`;
+      
+      // Upload the file to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('template_attachments')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (error) throw error;
+      
+      // Get the public URL for the file
+      const { data: { publicUrl } } = supabase.storage
+        .from('template_attachments')
+        .getPublicUrl(filePath);
+        
+      return {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: publicUrl,
+        path: filePath
+      };
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
+  };
 
   const createTemplate = async (formData: TemplateFormData) => {
     if (!user) {
@@ -26,15 +61,42 @@ export function useTemplateOperations() {
       
       // Ensure attachments is properly formatted and stored
       if (templateData.attachments) {
-        // Se for um array, converter para string JSON
+        // Process attachments - if they are files, upload them to storage
         if (Array.isArray(templateData.attachments)) {
-          templateData.attachments = JSON.stringify(templateData.attachments);
+          const processedAttachments = [];
+          
+          for (const attachment of templateData.attachments) {
+            // If it's a File object, upload it to storage
+            if (attachment instanceof File) {
+              const uploadedFile = await uploadFileToStorage(attachment);
+              processedAttachments.push(uploadedFile);
+            } 
+            // If it's an object with file information, keep it
+            else if (typeof attachment === 'object') {
+              processedAttachments.push(attachment);
+            }
+          }
+          
+          // Store processed attachments as JSON string
+          templateData.attachments = JSON.stringify(processedAttachments);
         } 
         // Se for um objeto mas não um array, também converter para string
-        else if (typeof templateData.attachments === 'object') {
-          templateData.attachments = JSON.stringify(templateData.attachments);
+        else if (typeof templateData.attachments === 'object' && !(templateData.attachments instanceof File)) {
+          templateData.attachments = JSON.stringify([templateData.attachments]);
         }
-        // Se já for uma string, manter como está
+        // Se for um único arquivo, processar e converter
+        else if (templateData.attachments instanceof File) {
+          const uploadedFile = await uploadFileToStorage(templateData.attachments);
+          templateData.attachments = JSON.stringify([uploadedFile]);
+        }
+        // Se já for uma string, manter como está se for JSON válido
+        else if (typeof templateData.attachments === 'string') {
+          try {
+            JSON.parse(templateData.attachments); // Verificar se é um JSON válido
+          } catch (e) {
+            templateData.attachments = JSON.stringify([]);
+          }
+        }
       } else {
         // Ensure attachments is always at least an empty array
         templateData.attachments = JSON.stringify([]);
@@ -72,15 +134,42 @@ export function useTemplateOperations() {
       
       // Ensure attachments is properly formatted and stored
       if (templateData.attachments) {
-        // Se for um array, converter para string JSON
+        // Process attachments - if they are files, upload them to storage
         if (Array.isArray(templateData.attachments)) {
-          templateData.attachments = JSON.stringify(templateData.attachments);
+          const processedAttachments = [];
+          
+          for (const attachment of templateData.attachments) {
+            // If it's a File object, upload it to storage
+            if (attachment instanceof File) {
+              const uploadedFile = await uploadFileToStorage(attachment);
+              processedAttachments.push(uploadedFile);
+            } 
+            // If it's an object with file information, keep it
+            else if (typeof attachment === 'object') {
+              processedAttachments.push(attachment);
+            }
+          }
+          
+          // Store processed attachments as JSON string
+          templateData.attachments = JSON.stringify(processedAttachments);
         } 
         // Se for um objeto mas não um array, também converter para string
-        else if (typeof templateData.attachments === 'object') {
-          templateData.attachments = JSON.stringify(templateData.attachments);
+        else if (typeof templateData.attachments === 'object' && !(templateData.attachments instanceof File)) {
+          templateData.attachments = JSON.stringify([templateData.attachments]);
         }
-        // Se já for uma string, manter como está
+        // Se for um único arquivo, processar e converter
+        else if (templateData.attachments instanceof File) {
+          const uploadedFile = await uploadFileToStorage(templateData.attachments);
+          templateData.attachments = JSON.stringify([uploadedFile]);
+        }
+        // Se já for uma string, manter como está se for JSON válido
+        else if (typeof templateData.attachments === 'string') {
+          try {
+            JSON.parse(templateData.attachments); // Verificar se é um JSON válido
+          } catch (e) {
+            templateData.attachments = JSON.stringify([]);
+          }
+        }
       } else {
         // Ensure attachments is always at least an empty array
         templateData.attachments = JSON.stringify([]);
@@ -155,6 +244,35 @@ export function useTemplateOperations() {
 
   const deleteTemplate = async (id: string) => {
     try {
+      // First, get the template to access its attachments
+      const { data: template, error: getError } = await supabase
+        .from('templates')
+        .select('attachments')
+        .eq('id', id)
+        .single();
+        
+      if (getError) throw getError;
+      
+      // Delete attached files from storage if they exist
+      if (template.attachments) {
+        try {
+          const attachments = JSON.parse(template.attachments);
+          
+          if (Array.isArray(attachments)) {
+            for (const attachment of attachments) {
+              if (attachment.path) {
+                await supabase.storage
+                  .from('template_attachments')
+                  .remove([attachment.path]);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Erro ao analisar anexos:', e);
+        }
+      }
+      
+      // Delete the template from the database
       const { error } = await supabase
         .from('templates')
         .delete()

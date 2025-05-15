@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -253,7 +252,11 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
     else return (bytes / 1048576).toFixed(1) + ' MB';
   };
 
-  // Add variable to content at cursor position
+  // Adicionar função para verificar se um tipo de arquivo é uma imagem
+  const isImageFile = (fileType: string) => {
+    return fileType.startsWith('image/');
+  };
+
   const insertVariable = (variable: string) => {
     const textArea = document.getElementById('conteudo') as HTMLTextAreaElement;
     if (!textArea) return;
@@ -464,6 +467,7 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
                   className="hidden"
                   onChange={handleFileChange}
                   multiple
+                  accept="*/*"  // Aceitar todos os tipos de arquivo
                 />
                 <p className="text-xs text-muted-foreground">
                   Anexe arquivos que serão enviados com este template
@@ -478,7 +482,15 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
                     {files.map((file, index) => (
                       <li key={index} className="flex items-center justify-between bg-muted p-2 rounded">
                         <div className="flex items-center">
-                          <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
+                          {isImageFile(file.type) ? (
+                            <img 
+                              src={URL.createObjectURL(file)} 
+                              alt={file.name}
+                              className="h-8 w-8 mr-2 object-cover rounded"
+                            />
+                          ) : (
+                            <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
+                          )}
                           <span className="text-sm">{file.name}</span>
                           <span className="text-xs text-muted-foreground ml-2">
                             {formatFileSize(file.size)}
@@ -506,7 +518,15 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
                     {savedAttachments.map((attachment, index) => (
                       <li key={index} className="flex items-center justify-between bg-muted p-2 rounded">
                         <div className="flex items-center">
-                          <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
+                          {attachment.type && isImageFile(attachment.type) && attachment.url ? (
+                            <img 
+                              src={attachment.url} 
+                              alt={attachment.name}
+                              className="h-8 w-8 mr-2 object-cover rounded"
+                            />
+                          ) : (
+                            <FileIcon className="h-4 w-4 mr-2 text-blue-600" />
+                          )}
                           <span className="text-sm">{attachment.name}</span>
                           <span className="text-xs text-muted-foreground ml-2">
                             {formatFileSize(attachment.size)}
