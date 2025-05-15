@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -250,7 +251,7 @@ export function useTemplateOperations() {
 
   const deleteTemplate = async (id: string) => {
     try {
-      // Primeiro, verifica se o template está sendo referenciado na tabela envios
+      // First, check if the template is being referenced in the table envios
       const { data: envios, error: enviosError } = await supabase
         .from('envios')
         .select('id, data_envio, contato_id')
@@ -258,7 +259,7 @@ export function useTemplateOperations() {
         
       if (enviosError) throw enviosError;
       
-      // Se existem envios usando este template, mostrar mensagem de erro e impedir a exclusão
+      // If there are envios using this template, show error message and prevent deletion
       if (envios && envios.length > 0) {
         toast.error(`Não é possível excluir este template pois está sendo usado em ${envios.length} envio(s). 
                     Exclua os envios relacionados primeiro antes de excluir o template.`);

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,43 +73,49 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
           const fileName = `signature-${Date.now()}.${fileExt}`;
           const filePath = `signatures/${user.id}/${fileName}`;
           
-          // Verificamos se o bucket existe e se não existe, criamos um novo
-          const { data: bucketExists } = await supabase
+          // First, check if the bucket exists
+          const { data: buckets } = await supabase
             .storage
-            .getBucket('profile_signatures');
-            
+            .listBuckets();
+          
+          // Find bucket by name
+          const bucketExists = buckets?.some(bucket => bucket.name === 'profile_signatures');
+          
+          // Create bucket if it doesn't exist
           if (!bucketExists) {
-            // Tente criar o bucket se ele não existir
             try {
               await supabase.storage.createBucket('profile_signatures', {
                 public: true,
                 fileSizeLimit: 5242880, // 5MB
               });
-            } catch (bucketError) {
-              console.log("Bucket já existe ou erro ao criar:", bucketError);
-              // Continuar mesmo se houver erro, pois o bucket pode já existir
+              console.log("Bucket 'profile_signatures' created successfully");
+            } catch (bucketError: any) {
+              // If error is not because bucket already exists, log it
+              if (!bucketError.message?.includes('already exists')) {
+                console.error("Error creating bucket:", bucketError);
+              }
             }
           }
           
-          // Upload do arquivo
+          // Upload the file with upsert: true to overwrite if exists
           const { data, error } = await supabase.storage
             .from('profile_signatures')
             .upload(filePath, signatureFile, {
               cacheControl: '3600',
-              upsert: true // Alterado para true para sobrescrever se já existir
+              upsert: true
             });
           
           if (error) {
-            console.error("Erro detalhado:", error);
+            console.error("Upload error details:", error);
             throw error;
           }
           
-          // Busca a URL pública
+          // Get the public URL
           const { data: { publicUrl } } = supabase.storage
             .from('profile_signatures')
             .getPublicUrl(filePath);
             
-          console.log("Assinatura carregada com sucesso:", publicUrl);
+          console.log("Signature uploaded successfully:", publicUrl);
           setFormData({ ...formData, signature_image: publicUrl });
           
         } catch (error: any) {
