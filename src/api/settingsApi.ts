@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { toast } from 'sonner';
@@ -22,6 +23,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
   if (data) {
     console.log("Settings loaded:", data);
     // Make sure to transform the data to match our Settings type
+    // Adding signature_image with a fallback to null if it doesn't exist
     return {
       id: data.id,
       email_smtp: data.email_smtp,
@@ -100,6 +102,7 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
   console.log("Settings saved successfully:", newData);
   
   // Make sure to transform the data to match our Settings type
+  // Adding signature_image with a fallback to null if it doesn't exist
   return {
     ...newData,
     use_smtp: Boolean(newData.use_smtp),
