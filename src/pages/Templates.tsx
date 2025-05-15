@@ -4,7 +4,7 @@ import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { useTemplates } from '@/hooks/useTemplates';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, AlertCircle } from 'lucide-react';
+import { PlusCircle, AlertCircle, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Template } from '@/types/template';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
 
 const Templates = () => {
   const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate, sendTestEmail, duplicateTemplate } = useTemplates();
@@ -21,6 +22,7 @@ const Templates = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const { user } = useAuth();
 
   const loadTemplates = useCallback(async () => {
@@ -83,6 +85,10 @@ const Templates = () => {
       return false;
     }
   };
+  
+  const filteredTemplates = templates.filter(template => 
+    template.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (!user) {
     return (
@@ -170,25 +176,47 @@ const Templates = () => {
             </Button>
           </AlertDescription>
         </Alert>
-      ) : templates.length === 0 ? (
-        <Card className="p-6 text-center">
-          <p className="text-muted-foreground mb-4">Você ainda não criou nenhum template.</p>
-          <Button onClick={handleCreateClick} className="flex items-center mx-auto">
-            <PlusCircle className="mr-2 h-4 w-4" /> Criar primeiro template
-          </Button>
-        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {templates.map(template => (
-            <TemplateCard
-              key={template.id}
-              template={template}
-              onEdit={() => handleEditClick(template)}
-              onDelete={() => deleteTemplate(template.id)}
-              onDuplicate={() => duplicateTemplate(template.id)}
+        <>
+          {/* Campo de pesquisa */}
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar templates..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
             />
-          ))}
-        </div>
+          </div>
+          
+          {templates.length === 0 ? (
+            <Card className="p-6 text-center">
+              <p className="text-muted-foreground mb-4">Você ainda não criou nenhum template.</p>
+              <Button onClick={handleCreateClick} className="flex items-center mx-auto">
+                <PlusCircle className="mr-2 h-4 w-4" /> Criar primeiro template
+              </Button>
+            </Card>
+          ) : filteredTemplates.length === 0 ? (
+            <Card className="p-6 text-center">
+              <p className="text-muted-foreground mb-4">Nenhum template encontrado para "{searchTerm}".</p>
+              <Button variant="outline" onClick={() => setSearchTerm('')} className="mx-auto">
+                Limpar pesquisa
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredTemplates.map(template => (
+                <TemplateCard
+                  key={template.id}
+                  template={template}
+                  onEdit={() => handleEditClick(template)}
+                  onDelete={() => deleteTemplate(template.id)}
+                  onDuplicate={() => duplicateTemplate(template.id)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

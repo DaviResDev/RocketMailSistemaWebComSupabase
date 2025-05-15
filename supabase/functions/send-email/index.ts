@@ -29,7 +29,7 @@ serve(async (req: Request) => {
       console.error("Error parsing request body:", parseError, "Raw body:", requestBody);
       return new Response(
         JSON.stringify({ success: false, error: "Invalid JSON in request body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -54,7 +54,7 @@ serve(async (req: Request) => {
     if (!to && !contato_email) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing recipient email address" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -63,7 +63,7 @@ serve(async (req: Request) => {
     if (!subject || !content) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing required fields: subject or content" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -81,14 +81,20 @@ serve(async (req: Request) => {
       
       if (authHeader) {
         const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(authHeader);
-        if (userError) throw new Error("Unauthorized: " + userError.message);
+        if (userError) {
+          console.error("Auth error:", userError.message);
+          return new Response(
+            JSON.stringify({ success: false, error: "Unauthorized: " + userError.message }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         userId = user?.id;
       } else if (isTest) {
         // For test emails we allow without auth
       } else {
         return new Response(
           JSON.stringify({ success: false, error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
@@ -198,7 +204,10 @@ serve(async (req: Request) => {
               try {
                 console.log(`Fetching attachment: ${attachment.url}`);
                 const response = await fetch(attachment.url);
-                if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
+                if (!response.ok) {
+                  console.error(`Failed to fetch attachment: ${response.status}`);
+                  continue;
+                }
                 
                 const buffer = await response.arrayBuffer();
                 emailAttachments.push({
@@ -229,13 +238,15 @@ serve(async (req: Request) => {
             try {
               console.log(`Fetching attachment: ${parsedAttachments.url}`);
               const response = await fetch(parsedAttachments.url);
-              if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
-              
-              const buffer = await response.arrayBuffer();
-              emailAttachments.push({
-                filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
-                content: new Uint8Array(buffer)
-              });
+              if (!response.ok) {
+                console.error(`Failed to fetch attachment: ${response.status}`);
+              } else {
+                const buffer = await response.arrayBuffer();
+                emailAttachments.push({
+                  filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
+                  content: new Uint8Array(buffer)
+                });
+              }
             } catch (fetchErr) {
               console.error("Error fetching single attachment:", fetchErr);
             }
@@ -317,12 +328,13 @@ serve(async (req: Request) => {
         }
       }
       
+      // Importante: retornamos 200 mesmo em caso de erro para evitar o erro Edge Function returned a non-2xx status code
       return new Response(
         JSON.stringify({
           success: false,
           error: sendError.message,
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -361,12 +373,13 @@ serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("Unexpected error sending email:", error);
+    // Importante: retornamos 200 mesmo em caso de erro para evitar o erro Edge Function returned a non-2xx status code
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: error.message || "Erro inesperado ao enviar email" 
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
