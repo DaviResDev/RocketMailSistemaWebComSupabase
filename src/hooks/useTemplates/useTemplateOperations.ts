@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -261,24 +260,15 @@ export function useTemplateOperations() {
       
       // If there are linked agendamentos, inform the user instead of throwing an error
       if (agendamentos && agendamentos.length > 0) {
-        // Formatar a mensagem para mostrar quais agendamentos estão usando o template
+        // Format the message to show which schedules are using the template
         const agendamentosInfo = agendamentos.map(ag => {
           const data = new Date(ag.data_envio).toLocaleDateString('pt-BR');
           const contatoNome = ag.contato?.nome || 'Contato desconhecido';
           return `- ${contatoNome} (agendado para ${data})`;
         }).join('\n');
         
-        toast.error(
-          <div className="space-y-2">
-            <p>Não é possível excluir este template pois ele está sendo usado nos seguintes agendamentos:</p>
-            <div className="text-sm mt-2 max-h-40 overflow-y-auto">
-              {agendamentosInfo.split('\n').map((line, i) => (
-                <div key={i}>{line}</div>
-              ))}
-            </div>
-            <p className="text-sm mt-2">Cancele os agendamentos primeiro antes de excluir o template.</p>
-          </div>
-        );
+        // Use a string message instead of JSX in the toast
+        toast.error(`Não é possível excluir este template pois está sendo usado em agendamentos:\n${agendamentosInfo}\n\nCancele os agendamentos primeiro antes de excluir o template.`);
         return false;
       }
       
