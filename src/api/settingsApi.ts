@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { toast } from 'sonner';
@@ -37,8 +36,8 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       created_at: data.created_at,
       user_id: data.user_id,
       two_factor_enabled: Boolean(data.two_factor_enabled),
-      use_smtp: Boolean(data.use_smtp), // Ensure proper boolean casting
-      signature_image: data.signature_image || null // Handle the case when signature_image might be undefined
+      use_smtp: Boolean(data.use_smtp),
+      signature_image: data.signature_image || null
     };
   } else {
     // No settings found, create empty settings object with default true for use_smtp
@@ -55,7 +54,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       smtp_nome: '',
       two_factor_enabled: false, // Default value
       use_smtp: true, // Default to SMTP instead of Resend
-      signature_image: null // Add default value for signature_image
+      signature_image: null
     };
   }
 }
@@ -103,9 +102,9 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
   // Make sure to transform the data to match our Settings type
   return {
     ...newData,
-    use_smtp: Boolean(newData.use_smtp), // Ensure boolean type
-    two_factor_enabled: Boolean(newData.two_factor_enabled), // Ensure boolean type
-    signature_image: newData.signature_image || null // Ensure signature_image is included
+    use_smtp: Boolean(newData.use_smtp),
+    two_factor_enabled: Boolean(newData.two_factor_enabled),
+    signature_image: newData.signature_image || null
   } as Settings;
 }
 
