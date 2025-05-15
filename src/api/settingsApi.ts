@@ -23,6 +23,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
   if (data) {
     console.log("Settings loaded:", data);
     // Make sure to transform the data to match our Settings type
+    // Type assertion to handle potential missing fields
     return {
       id: data.id,
       email_smtp: data.email_smtp,
@@ -38,7 +39,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       user_id: data.user_id,
       two_factor_enabled: Boolean(data.two_factor_enabled),
       use_smtp: Boolean(data.use_smtp),
-      signature_image: data.signature_image || null // Handle the case where signature_image might not exist
+      signature_image: data.signature_image === undefined ? null : data.signature_image
     };
   } else {
     // No settings found, create empty settings object with default true for use_smtp
