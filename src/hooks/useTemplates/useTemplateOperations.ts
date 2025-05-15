@@ -250,7 +250,22 @@ export function useTemplateOperations() {
 
   const deleteTemplate = async (id: string) => {
     try {
-      // First, check if the template is referenced in agendamentos
+      // Primeiro, verifica se o template está sendo referenciado na tabela envios
+      const { data: envios, error: enviosError } = await supabase
+        .from('envios')
+        .select('id, data_envio, contato_id')
+        .eq('template_id', id);
+        
+      if (enviosError) throw enviosError;
+      
+      // Se existem envios usando este template, mostrar mensagem de erro e impedir a exclusão
+      if (envios && envios.length > 0) {
+        toast.error(`Não é possível excluir este template pois está sendo usado em ${envios.length} envio(s). 
+                    Exclua os envios relacionados primeiro antes de excluir o template.`);
+        return false;
+      }
+      
+      // Verificar também se o template é referenciado em agendamentos
       const { data: agendamentos, error: checkError } = await supabase
         .from('agendamentos')
         .select('id, data_envio, contato:contatos(nome)')
@@ -258,23 +273,22 @@ export function useTemplateOperations() {
         
       if (checkError) throw checkError;
       
-      // If there are linked agendamentos, inform the user instead of throwing an error
+      // Se há agendamentos vinculados, informar o usuário em vez de lançar erro
       if (agendamentos && agendamentos.length > 0) {
-        // Format the message to show which schedules are using the template
+        // Formatar a mensagem para mostrar quais agendamentos estão usando o template
         const agendamentosInfo = agendamentos.map(ag => {
           const data = new Date(ag.data_envio).toLocaleDateString('pt-BR');
           const contatoNome = ag.contato?.nome || 'Contato desconhecido';
           return `- ${contatoNome} (agendado para ${data})`;
         }).join('\n');
         
-        // Use a string message instead of JSX in the toast
         toast.error(`Não é possível excluir este template pois está sendo usado em agendamentos:\n${agendamentosInfo}\n\nCancele os agendamentos primeiro antes de excluir o template.`);
         return false;
       }
       
-      // If no agendamentos are using this template, proceed with deletion
+      // Se não há referências, continuar com o processo de exclusão
       
-      // First, get the template to access its attachments
+      // Primeiro, obter o template para acessar seus anexos
       const { data: template, error: getError } = await supabase
         .from('templates')
         .select('attachments')
@@ -283,10 +297,10 @@ export function useTemplateOperations() {
         
       if (getError) throw getError;
       
-      // Delete attached files from storage if they exist
+      // Excluir arquivos anexados do armazenamento, se existirem
       if (template.attachments) {
         try {
-          // Parse attachments and handle both string and object formats
+          // Interpretar anexos e lidar com formatos de string e objeto
           const attachmentsStr = typeof template.attachments === 'string' 
             ? template.attachments 
             : JSON.stringify(template.attachments);
@@ -307,20 +321,13 @@ export function useTemplateOperations() {
         }
       }
       
-      // Delete the template from the database
+      // Excluir o template do banco de dados
       const { error } = await supabase
         .from('templates')
         .delete()
         .eq('id', id);
 
-      if (error) {
-        // Special handling for foreign key constraint errors
-        if (error.code === '23503') {
-          toast.error('Este template não pode ser excluído pois está sendo usado em agendamentos. Cancele os agendamentos primeiro.');
-          return false;
-        }
-        throw error;
-      }
+      if (error) throw error;
       
       toast.success('Template excluído com sucesso!');
       await fetchTemplates();

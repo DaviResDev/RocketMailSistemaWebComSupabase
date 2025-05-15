@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,25 +70,50 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
         try {
           const fileExt = signatureFile.name.split('.').pop();
           const fileName = `signature-${Date.now()}.${fileExt}`;
-          const filePath = `${user.id}/${fileName}`;
+          const filePath = `signatures/${user.id}/${fileName}`;
           
+          // Verificamos se o bucket existe e se não existe, criamos um novo
+          const { data: bucketExists } = await supabase
+            .storage
+            .getBucket('profile_signatures');
+            
+          if (!bucketExists) {
+            // Tente criar o bucket se ele não existir
+            try {
+              await supabase.storage.createBucket('profile_signatures', {
+                public: true,
+                fileSizeLimit: 5242880, // 5MB
+              });
+            } catch (bucketError) {
+              console.log("Bucket já existe ou erro ao criar:", bucketError);
+              // Continuar mesmo se houver erro, pois o bucket pode já existir
+            }
+          }
+          
+          // Upload do arquivo
           const { data, error } = await supabase.storage
             .from('profile_signatures')
             .upload(filePath, signatureFile, {
               cacheControl: '3600',
-              upsert: false
+              upsert: true // Alterado para true para sobrescrever se já existir
             });
           
-          if (error) throw error;
+          if (error) {
+            console.error("Erro detalhado:", error);
+            throw error;
+          }
           
+          // Busca a URL pública
           const { data: { publicUrl } } = supabase.storage
             .from('profile_signatures')
             .getPublicUrl(filePath);
             
+          console.log("Assinatura carregada com sucesso:", publicUrl);
           setFormData({ ...formData, signature_image: publicUrl });
-        } catch (error) {
+          
+        } catch (error: any) {
           console.error('Erro ao carregar assinatura:', error);
-          toast.error('Erro ao carregar assinatura');
+          toast.error(`Erro ao carregar assinatura: ${error.message || 'Verifique o console para mais detalhes'}`);
         }
       }
     } finally {
