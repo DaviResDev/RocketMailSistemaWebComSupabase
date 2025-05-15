@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { toast } from 'sonner';
@@ -37,7 +36,8 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       created_at: data.created_at,
       user_id: data.user_id,
       two_factor_enabled: Boolean(data.two_factor_enabled),
-      use_smtp: Boolean(data.use_smtp) // Ensure proper boolean casting
+      use_smtp: Boolean(data.use_smtp), // Ensure proper boolean casting
+      signature_image: data.signature_image || null // Add the signature_image property
     };
   } else {
     // No settings found, create empty settings object with default true for use_smtp
@@ -53,7 +53,8 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       smtp_seguranca: 'tls', // Default to TLS
       smtp_nome: '',
       two_factor_enabled: false, // Default value
-      use_smtp: true // Default to SMTP instead of Resend
+      use_smtp: true, // Default to SMTP instead of Resend
+      signature_image: null // Add the signature_image property with null default
     };
   }
 }

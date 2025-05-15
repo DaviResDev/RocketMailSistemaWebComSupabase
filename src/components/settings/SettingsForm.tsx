@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +28,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     smtp_seguranca: 'tls',
     smtp_nome: null,
     two_factor_enabled: false,
-    use_smtp: true // Default to using SMTP
+    use_smtp: true, // Default to using SMTP
+    signature_image: null // Add the signature_image property
   });
   
   const [testingSmtp, setTestingSmtp] = useState(false);
@@ -47,7 +47,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         smtp_seguranca: settings.smtp_seguranca || 'tls',
         smtp_nome: settings.smtp_nome || '',
         two_factor_enabled: settings.two_factor_enabled || false,
-        use_smtp: settings.use_smtp !== undefined ? settings.use_smtp : true // Default to using SMTP if not defined
+        use_smtp: settings.use_smtp !== undefined ? settings.use_smtp : true, // Default to using SMTP if not defined
+        signature_image: settings.signature_image || null // Add the signature_image property
       });
     }
   }, [settings]);
