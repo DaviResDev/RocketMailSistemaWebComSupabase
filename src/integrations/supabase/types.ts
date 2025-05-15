@@ -214,6 +214,7 @@ export type Database = {
           id: string
           nome: string
           signature_image: string | null
+          status: string
           user_id: string
         }
         Insert: {
@@ -225,6 +226,7 @@ export type Database = {
           id?: string
           nome: string
           signature_image?: string | null
+          status?: string
           user_id: string
         }
         Update: {
@@ -236,6 +238,7 @@ export type Database = {
           id?: string
           nome?: string
           signature_image?: string | null
+          status?: string
           user_id?: string
         }
         Relationships: []

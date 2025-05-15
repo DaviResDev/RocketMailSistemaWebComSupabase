@@ -251,7 +251,7 @@ serve(async (req: Request) => {
                 emailAttachments.push({
                   filename: attachment.name || attachment.filename || 'attachment.file',
                   content: new Uint8Array(buffer),
-                  contentType: response.headers.get('content-type') || undefined
+                  contentType: response.headers.get('content-type') || attachment.type || undefined
                 });
                 console.log(`Attachment processed: ${attachment.name || attachment.filename}`);
               } catch (fetchErr) {
@@ -289,7 +289,7 @@ serve(async (req: Request) => {
                 emailAttachments.push({
                   filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
                   content: new Uint8Array(buffer),
-                  contentType: response.headers.get('content-type') || undefined
+                  contentType: response.headers.get('content-type') || parsedAttachments.type || undefined
                 });
               }
             } catch (fetchErr) {

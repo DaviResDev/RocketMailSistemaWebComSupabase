@@ -1,3 +1,4 @@
+
 // email-sender.js - Module for sending emails via SMTP or Resend API
 
 /**
@@ -103,7 +104,8 @@ async function sendEmailViaSMTP(config, payload) {
         return {
           filename: attachment.filename || attachment.name || 'attachment.file',
           content: base64Content,
-          encoding: 'base64'
+          encoding: 'base64',
+          contentType: attachment.contentType || attachment.type || undefined
         };
       }
       
@@ -199,6 +201,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
                 ? attachment.content.split('base64,')[1] 
                 : attachment.content)
             : attachment.content,
+        contentType: attachment.contentType || attachment.type || undefined
       };
     });
     
