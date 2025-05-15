@@ -104,6 +104,11 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
           {template.status && getStatusLabel(template.status)}
         </div>
         
+        {/* Display description if available */}
+        {template.descricao && (
+          <p className="text-sm text-muted-foreground mt-1 mb-2">{template.descricao}</p>
+        )}
+        
         <div className="mt-2 flex items-center text-sm text-muted-foreground">
           <Calendar className="h-4 w-4 mr-1" />
           <span>Criado em: {formatDate(template.created_at)}</span>
@@ -236,4 +241,4 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
       </Dialog>
     </Card>
   );
-};
+}

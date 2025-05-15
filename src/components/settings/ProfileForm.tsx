@@ -12,6 +12,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { SignaturePreview } from './SignaturePreview';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEmailSignature } from '@/hooks/useEmailSignature';
 
 interface ProfileFormProps {
   onSave?: () => void;
@@ -19,6 +22,7 @@ interface ProfileFormProps {
 
 export function ProfileForm({ onSave }: ProfileFormProps) {
   const { settings, loading, saveSettings, uploadProfilePhoto } = useSettings();
+  const { uploadSignatureImage } = useEmailSignature();
   const { user } = useAuth();
   
   const [formData, setFormData] = useState<Partial<SettingsFormData>>({
@@ -32,6 +36,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("profile");
 
   // Update form data when settings change
   useEffect(() => {
@@ -68,59 +73,9 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       
       // Upload signature if selected
       if (signatureFile) {
-        try {
-          const fileExt = signatureFile.name.split('.').pop();
-          const fileName = `signature-${Date.now()}.${fileExt}`;
-          const filePath = `signatures/${user.id}/${fileName}`;
-          
-          // First, check if the bucket exists
-          const { data: buckets } = await supabase
-            .storage
-            .listBuckets();
-          
-          // Find bucket by name
-          const bucketExists = buckets?.some(bucket => bucket.name === 'profile_signatures');
-          
-          // Create bucket if it doesn't exist
-          if (!bucketExists) {
-            try {
-              await supabase.storage.createBucket('profile_signatures', {
-                public: true,
-                fileSizeLimit: 5242880, // 5MB
-              });
-              console.log("Bucket 'profile_signatures' created successfully");
-            } catch (bucketError: any) {
-              // If error is not because bucket already exists, log it
-              if (!bucketError.message?.includes('already exists')) {
-                console.error("Error creating bucket:", bucketError);
-              }
-            }
-          }
-          
-          // Upload the file with upsert: true to overwrite if exists
-          const { data, error } = await supabase.storage
-            .from('profile_signatures')
-            .upload(filePath, signatureFile, {
-              cacheControl: '3600',
-              upsert: true
-            });
-          
-          if (error) {
-            console.error("Upload error details:", error);
-            throw error;
-          }
-          
-          // Get the public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('profile_signatures')
-            .getPublicUrl(filePath);
-            
-          console.log("Signature uploaded successfully:", publicUrl);
-          setFormData({ ...formData, signature_image: publicUrl });
-          
-        } catch (error: any) {
-          console.error('Erro ao carregar assinatura:', error);
-          toast.error(`Erro ao carregar assinatura: ${error.message || 'Verifique o console para mais detalhes'}`);
+        const signatureUrl = await uploadSignatureImage(signatureFile);
+        if (signatureUrl) {
+          setFormData({ ...formData, signature_image: signatureUrl });
         }
       }
     } finally {
@@ -180,101 +135,127 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
           </CardDescription>
         </CardHeader>
         
-        <CardContent className="space-y-6">
-          <div className="flex flex-col items-center space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src={formData.foto_perfil || ''} alt="Foto de perfil" />
-              <AvatarFallback className="text-lg">
-                {formData.smtp_nome ? formData.smtp_nome.substring(0, 2).toUpperCase() : 'DP'}
-              </AvatarFallback>
-            </Avatar>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="profile">Informações Pessoais</TabsTrigger>
+              <TabsTrigger value="signature">Assinatura de Email</TabsTrigger>
+            </TabsList>
             
-            <div>
-              <Label htmlFor="photo" className="block mb-2">Foto de Perfil</Label>
-              <div className="flex items-center space-x-2">
-                <Input
-                  id="photo"
-                  type="file"
-                  accept="image/*"
-                  className="max-w-sm"
-                  onChange={(e) => handleFileChange(e, 'photo')}
-                />
-                {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
+            <TabsContent value="profile" className="space-y-6">
+              <div className="flex flex-col items-center space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
+                <Avatar className="h-24 w-24">
+                  <AvatarImage src={formData.foto_perfil || ''} alt="Foto de perfil" />
+                  <AvatarFallback className="text-lg">
+                    {formData.smtp_nome ? formData.smtp_nome.substring(0, 2).toUpperCase() : 'DP'}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div>
+                  <Label htmlFor="photo" className="block mb-2">Foto de Perfil</Label>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      id="photo"
+                      type="file"
+                      accept="image/*"
+                      className="max-w-sm"
+                      onChange={(e) => handleFileChange(e, 'photo')}
+                    />
+                    {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Formatos aceitos: JPG, PNG. Tamanho máximo: 2MB.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Formatos aceitos: JPG, PNG. Tamanho máximo: 2MB.
-              </p>
-            </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="smtp_nome">Nome Completo</Label>
-            <Input
-              id="smtp_nome"
-              placeholder="Seu nome completo"
-              value={formData.smtp_nome || ''}
-              onChange={(e) => setFormData({ ...formData, smtp_nome: e.target.value })}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="email_usuario">Email para Contato</Label>
-            <Input
-              id="email_usuario"
-              type="email"
-              placeholder="seu.email@exemplo.com"
-              value={formData.email_usuario || ''}
-              onChange={(e) => setFormData({ ...formData, email_usuario: e.target.value })}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="area_negocio">Área de Atuação</Label>
-            <Input
-              id="area_negocio"
-              placeholder="Ex: Marketing Digital, E-commerce, Consultoria"
-              value={formData.area_negocio || ''}
-              onChange={(e) => setFormData({ ...formData, area_negocio: e.target.value })}
-            />
-            <p className="text-xs text-muted-foreground">
-              Esta informação será utilizada na assinatura dos seus emails.
-            </p>
-          </div>
-
-          <Separator className="my-4" />
-          
-          <div>
-            <h3 className="text-lg font-medium mb-2">Assinatura Digital</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Adicione sua assinatura digital que será exibida nos emails enviados
-            </p>
-            
-            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="signature">Imagem da Assinatura</Label>
+                <Label htmlFor="smtp_nome">Nome Completo</Label>
                 <Input
-                  id="signature"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileChange(e, 'signature')}
+                  id="smtp_nome"
+                  placeholder="Seu nome completo"
+                  value={formData.smtp_nome || ''}
+                  onChange={(e) => setFormData({ ...formData, smtp_nome: e.target.value })}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Recomendado: assinatura em PNG com fundo transparente
-                </p>
               </div>
               
-              {formData.signature_image && (
-                <div className="border p-4 rounded-md">
-                  <p className="text-sm font-medium mb-2">Assinatura atual:</p>
-                  <img 
-                    src={formData.signature_image} 
-                    alt="Assinatura digital" 
-                    className="max-h-20 object-contain" 
-                  />
+              <div className="space-y-2">
+                <Label htmlFor="email_usuario">Email para Contato</Label>
+                <Input
+                  id="email_usuario"
+                  type="email"
+                  placeholder="seu.email@exemplo.com"
+                  value={formData.email_usuario || ''}
+                  onChange={(e) => setFormData({ ...formData, email_usuario: e.target.value })}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="area_negocio">Área de Atuação</Label>
+                <Input
+                  id="area_negocio"
+                  placeholder="Ex: Marketing Digital, E-commerce, Consultoria"
+                  value={formData.area_negocio || ''}
+                  onChange={(e) => setFormData({ ...formData, area_negocio: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Esta informação será utilizada na assinatura dos seus emails.
+                </p>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="signature" className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-2">Assinatura Digital</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Adicione sua assinatura digital que será exibida automaticamente nos emails enviados
+                </p>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signature">Imagem da Assinatura</Label>
+                      <Input
+                        id="signature"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, 'signature')}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Recomendado: assinatura em PNG com fundo transparente
+                      </p>
+                    </div>
+                    
+                    {formData.signature_image && (
+                      <div className="border p-4 rounded-md">
+                        <p className="text-sm font-medium mb-2">Assinatura atual:</p>
+                        <img 
+                          src={formData.signature_image} 
+                          alt="Assinatura digital" 
+                          className="max-h-20 object-contain" 
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Prévia da Assinatura</Label>
+                    {settings && (
+                      <SignaturePreview 
+                        settings={{
+                          ...settings,
+                          smtp_nome: formData.smtp_nome || settings.smtp_nome,
+                          email_usuario: formData.email_usuario || settings.email_usuario,
+                          area_negocio: formData.area_negocio || settings.area_negocio,
+                          signature_image: formData.signature_image || settings.signature_image
+                        }} 
+                      />
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
         
         <CardFooter>

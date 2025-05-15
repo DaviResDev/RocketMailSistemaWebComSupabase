@@ -10,6 +10,7 @@ export interface Template {
   signature_image?: string | null;
   status: string;
   attachments?: any;
+  descricao?: string; // Add description field
 }
 
 export interface TemplateFormData {
@@ -19,4 +20,5 @@ export interface TemplateFormData {
   signature_image?: string | null;
   status: string;
   attachments?: any;
+  descricao?: string; // Add description field
 }

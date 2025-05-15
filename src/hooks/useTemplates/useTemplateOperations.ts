@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -110,7 +109,8 @@ export function useTemplateOperations() {
       console.log('Criando template com dados:', {
         ...templateData,
         attachments: templateData.attachments ? 'presente' : 'ausente',
-        signature_image: templateData.signature_image ? 'presente' : 'ausente'
+        signature_image: templateData.signature_image ? 'presente' : 'ausente',
+        descricao: templateData.descricao || 'não definida'
       });
       
       const { error } = await supabase
@@ -185,7 +185,8 @@ export function useTemplateOperations() {
       console.log('Atualizando template com dados:', {
         ...templateData,
         attachments: templateData.attachments ? 'presente' : 'ausente',
-        signature_image: templateData.signature_image ? 'presente' : 'ausente'
+        signature_image: templateData.signature_image ? 'presente' : 'ausente',
+        descricao: templateData.descricao || 'não definida'
       });
       
       const { error } = await supabase
@@ -219,6 +220,7 @@ export function useTemplateOperations() {
       const newTemplate = {
         nome: `${template.nome} (Cópia)`,
         conteudo: template.conteudo,
+        descricao: template.descricao, // Include description field
         canal: template.canal || 'email',
         assinatura: template.assinatura,
         signature_image: template.signature_image,
@@ -230,7 +232,8 @@ export function useTemplateOperations() {
       console.log('Duplicando template:', {
         nome: newTemplate.nome,
         status: newTemplate.status,
-        attachments: newTemplate.attachments ? 'presente' : 'ausente'
+        attachments: newTemplate.attachments ? 'presente' : 'ausente',
+        descricao: newTemplate.descricao || 'não definida'
       });
       
       const { error: insertError } = await supabase
