@@ -125,6 +125,12 @@ export function useTemplateOperations() {
         user_id: user?.id
       };
       
+      console.log('Duplicando template:', {
+        nome: newTemplate.nome,
+        status: newTemplate.status,
+        attachments: newTemplate.attachments ? 'presente' : 'ausente'
+      });
+      
       const { error: insertError } = await supabase
         .from('templates')
         .insert([newTemplate]);

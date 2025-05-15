@@ -15,7 +15,7 @@ const corsHeaders = {
 serve(async (req: Request) => {
   // Handle CORS pre-flight request
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders, status: 200 });
   }
 
   try {
@@ -61,6 +61,7 @@ serve(async (req: Request) => {
     const recipient = to || contato_email;
     
     if (!subject || !content) {
+      console.error("Missing required fields:", { subject, contentLength: content?.length });
       return new Response(
         JSON.stringify({ success: false, error: "Missing required fields: subject or content" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -328,7 +329,7 @@ serve(async (req: Request) => {
         }
       }
       
-      // Importante: retornamos 200 mesmo em caso de erro para evitar o erro Edge Function returned a non-2xx status code
+      // Always return 200 even in case of error to avoid the "Edge Function returned a non-2xx status code" error
       return new Response(
         JSON.stringify({
           success: false,
@@ -373,7 +374,7 @@ serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("Unexpected error sending email:", error);
-    // Importante: retornamos 200 mesmo em caso de erro para evitar o erro Edge Function returned a non-2xx status code
+    // Always return 200 even in case of error to avoid the "Edge Function returned a non-2xx status code" error
     return new Response(
       JSON.stringify({ 
         success: false, 

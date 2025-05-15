@@ -9,6 +9,11 @@ interface EnvioFormData {
   template_id: string;
   agendamento_id?: string;
   attachments?: any;
+  subject?: string;
+  content?: string;
+  signature_image?: string;
+  contato_nome?: string;
+  contato_email?: string;
 }
 
 interface Envio {
@@ -83,7 +88,7 @@ export function useEnvios() {
       const loadingToastId = toast.loading(`Iniciando envio para ${contatoData.nome}...`);
       
       try {
-        // Get template data to include attachments
+        // Get template data to include attachments and for content processing
         const { data: templateData, error: templateError } = await supabase
           .from('templates')
           .select('*')
@@ -91,20 +96,40 @@ export function useEnvios() {
           .single();
           
         if (templateError) throw templateError;
+
+        // Process template content with contact data for placeholders if not already provided
+        let processedContent = formData.content;
+        if (!processedContent) {
+          const currentDate = new Date();
+          const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+          
+          processedContent = templateData.conteudo
+            .replace(/{nome}/g, contatoData.nome || '')
+            .replace(/{email}/g, contatoData.email || '')
+            .replace(/{telefone}/g, "")
+            .replace(/{razao_social}/g, "")
+            .replace(/{cliente}/g, "")
+            .replace(/{dia}/g, formattedDate);
+        }
         
         // Include attachments from the template if they exist
         const dataToSend = {
           ...formData,
-          attachments: templateData.attachments || null,
+          attachments: formData.attachments || templateData.attachments || null,
           contato_nome: contatoData.nome,
-          contato_email: contatoData.email
+          contato_email: contatoData.email,
+          subject: formData.subject || templateData.nome,
+          content: processedContent,
+          signature_image: formData.signature_image || templateData.signature_image
         };
         
         console.log("Sending email with data:", { 
           to: contatoData.email,
           template_id: formData.template_id,
           contato_id: formData.contato_id,
-          has_attachments: !!templateData.attachments
+          has_attachments: !!templateData.attachments,
+          subject_length: dataToSend.subject?.length,
+          content_length: dataToSend.content?.length
         });
         
         // Update toast with processing status

@@ -90,6 +90,7 @@ async function sendEmailViaSMTP(config, payload) {
 
   console.log(`Sending email via SMTP: ${config.host}:${config.port}`);
   console.log(`From: ${mailOptions.from} To: ${payload.to}`);
+  console.log(`Subject: ${payload.subject}`);
   
   // Verify SMTP configuration before sending
   try {

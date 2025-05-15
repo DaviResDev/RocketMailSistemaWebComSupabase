@@ -55,6 +55,16 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw new Error("Dados incompletos para envio: contato ou template faltando");
       }
       
+      // Ensure template exists
+      if (!schedule.template) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Template não encontrado ou não carregado corretamente"
+        });
+        throw new Error("Template não encontrado ou não carregado corretamente");
+      }
+      
       // Get the full template details to include attachments
       const { data: template, error: templateError } = await supabase
         .from('templates')
@@ -72,6 +82,22 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw templateError;
       }
       
+      // Process template content with contact data for placeholders
+      let processedContent = template.conteudo;
+      
+      if (schedule.contato) {
+        const currentDate = new Date();
+        const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+        
+        processedContent = template.conteudo
+          .replace(/{nome}/g, schedule.contato.nome || '')
+          .replace(/{email}/g, schedule.contato.email || '')
+          .replace(/{telefone}/g, schedule.contato.telefone || '')
+          .replace(/{razao_social}/g, schedule.contato.razao_social || '')
+          .replace(/{cliente}/g, schedule.contato.cliente || '')
+          .replace(/{dia}/g, formattedDate);
+      }
+      
       // Parse template attachments if they exist
       let attachmentsData = null;
       if (template.attachments) {
@@ -84,22 +110,31 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
           }
         } else if (Array.isArray(template.attachments) && template.attachments.length > 0) {
           attachmentsData = template.attachments;
+        } else if (template.attachments && typeof template.attachments === 'object') {
+          attachmentsData = template.attachments;
         }
       }
       
-      // Convert schedule to EnvioFormData with typed attachments
+      // Prepare data to send
       const envioData = {
         contato_id: schedule.contato_id,
         template_id: schedule.template_id,
         agendamento_id: schedule.id,
         // Pass the processed attachments
-        attachments: attachmentsData
+        attachments: attachmentsData,
+        // Pass these explictly to the edge function:
+        subject: template.nome,
+        content: processedContent,
+        signature_image: template.signature_image,
+        contato_nome: schedule.contato?.nome,
+        contato_email: schedule.contato?.email
       };
       
-      // Adicionar logs para verificar os dados de envio
+      // Log the data being sent
       console.log("Enviando email com os seguintes dados:", {
         contato: schedule.contato,
-        template: schedule.template?.nome,
+        template: template.nome,
+        content_length: processedContent.length,
         agendamento: schedule.id,
         temAnexos: !!attachmentsData && 
                   (Array.isArray(attachmentsData) ? attachmentsData.length > 0 : true)
