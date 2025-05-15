@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTemplateEmail } from '@/hooks/useTemplates/useTemplateEmail';
+import { toast } from 'sonner';
 
 interface TemplateCardProps {
   template: Template;
@@ -74,6 +75,7 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
   const handleDuplicate = () => {
     if (onDuplicate) {
       onDuplicate(template.id);
+      toast.success('Template duplicado com sucesso!');
     }
   };
   
@@ -122,34 +124,47 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
       </CardContent>
       
       <CardFooter className="bg-muted/40 px-6 py-4">
-        <div className="w-full flex flex-wrap gap-2 justify-between">
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => onEdit(template)}>
-              <Edit className="h-4 w-4 mr-2" />
-              Editar
-            </Button>
-            
-            <Button variant="outline" size="sm" onClick={() => setIsTestEmailDialogOpen(true)}>
-              <Send className="h-4 w-4 mr-2" />
-              Testar
-            </Button>
-            
-            {onDuplicate && (
-              <Button variant="outline" size="sm" onClick={handleDuplicate}>
-                <Copy className="h-4 w-4 mr-2" />
-                Duplicar
-              </Button>
-            )}
-          </div>
+        <div className="w-full flex flex-wrap gap-2 justify-center">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => onEdit(template)} 
+            className="rounded-full h-10 w-10"
+            title="Editar template"
+          >
+            <Edit className="h-5 w-5 text-blue-600" />
+          </Button>
           
           <Button 
-            variant="destructive" 
-            size="sm" 
-            onClick={handleDelete}
-            className="ml-auto"
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setIsTestEmailDialogOpen(true)} 
+            className="rounded-full h-10 w-10"
+            title="Testar envio"
           >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Excluir
+            <Send className="h-5 w-5 text-green-600" />
+          </Button>
+          
+          {onDuplicate && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleDuplicate} 
+              className="rounded-full h-10 w-10"
+              title="Duplicar template"
+            >
+              <Copy className="h-5 w-5 text-purple-600" />
+            </Button>
+          )}
+          
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleDelete} 
+            className="rounded-full h-10 w-10"
+            title="Excluir template"
+          >
+            <Trash2 className="h-5 w-5 text-red-600" />
           </Button>
         </div>
       </CardFooter>

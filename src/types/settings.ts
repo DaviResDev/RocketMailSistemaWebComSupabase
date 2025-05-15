@@ -14,6 +14,7 @@ export type Settings = {
   user_id?: string;
   two_factor_enabled: boolean;
   use_smtp: boolean; // Property to control if SMTP is used instead of Resend
+  signature_image: string | null; // URL da imagem da assinatura digital
 };
 
 export type SettingsFormData = Omit<Settings, 'id' | 'created_at' | 'user_id'>;

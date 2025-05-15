@@ -245,6 +245,20 @@ export function useTemplateOperations() {
 
   const deleteTemplate = async (id: string) => {
     try {
+      // First, check if the template is referenced in agendamentos
+      const { data: agendamentos, error: checkError } = await supabase
+        .from('agendamentos')
+        .select('id')
+        .eq('template_id', id);
+        
+      if (checkError) throw checkError;
+      
+      // If there are linked agendamentos, inform the user
+      if (agendamentos && agendamentos.length > 0) {
+        toast.error('Não é possível excluir este template pois ele está sendo usado em agendamentos.');
+        return false;
+      }
+      
       // First, get the template to access its attachments
       const { data: template, error: getError } = await supabase
         .from('templates')

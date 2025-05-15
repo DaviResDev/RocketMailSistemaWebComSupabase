@@ -7,6 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { Loader2, Save, Upload } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ProfileFormProps {
   onSave?: () => void;
@@ -14,14 +19,18 @@ interface ProfileFormProps {
 
 export function ProfileForm({ onSave }: ProfileFormProps) {
   const { settings, loading, saveSettings, uploadProfilePhoto } = useSettings();
+  const { user } = useAuth();
+  
   const [formData, setFormData] = useState<Partial<SettingsFormData>>({
     area_negocio: '',
     foto_perfil: '',
     smtp_nome: '',
     email_usuario: '',
+    signature_image: '',
   });
   
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
   // Update form data when settings change
@@ -32,6 +41,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
         foto_perfil: settings.foto_perfil || '',
         smtp_nome: settings.smtp_nome || '',
         email_usuario: settings.email_usuario || '',
+        signature_image: settings.signature_image || '',
         // Make sure we include the use_smtp field to fix the type error
         use_smtp: settings.use_smtp
       });
@@ -41,18 +51,51 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Upload photo if selected
-    if (photoFile) {
-      setUploading(true);
-      try {
+    if (!user) {
+      toast.error('Você precisa estar logado para salvar configurações');
+      return;
+    }
+    
+    setUploading(true);
+    try {
+      // Upload photo if selected
+      if (photoFile) {
         const photoUrl = await uploadProfilePhoto(photoFile);
         if (photoUrl) {
           setFormData({...formData, foto_perfil: photoUrl});
         }
-      } finally {
-        setUploading(false);
-        setPhotoFile(null);
       }
+      
+      // Upload signature if selected
+      if (signatureFile) {
+        try {
+          const fileExt = signatureFile.name.split('.').pop();
+          const fileName = `signature-${Date.now()}.${fileExt}`;
+          const filePath = `${user.id}/${fileName}`;
+          
+          const { data, error } = await supabase.storage
+            .from('profile_signatures')
+            .upload(filePath, signatureFile, {
+              cacheControl: '3600',
+              upsert: false
+            });
+          
+          if (error) throw error;
+          
+          const { data: { publicUrl } } = supabase.storage
+            .from('profile_signatures')
+            .getPublicUrl(filePath);
+            
+          setFormData({ ...formData, signature_image: publicUrl });
+        } catch (error) {
+          console.error('Erro ao carregar assinatura:', error);
+          toast.error('Erro ao carregar assinatura');
+        }
+      }
+    } finally {
+      setUploading(false);
+      setPhotoFile(null);
+      setSignatureFile(null);
     }
     
     // Include all required fields in the saveSettings call
@@ -65,6 +108,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       foto_perfil: formData.foto_perfil || null,
       smtp_seguranca: settings?.smtp_seguranca || 'tls',
       smtp_nome: formData.smtp_nome || null,
+      signature_image: formData.signature_image || null,
       two_factor_enabled: settings?.two_factor_enabled || false,
       use_smtp: settings?.use_smtp || false
     };
@@ -75,9 +119,13 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'photo' | 'signature') => {
     if (e.target.files && e.target.files[0]) {
-      setPhotoFile(e.target.files[0]);
+      if (type === 'photo') {
+        setPhotoFile(e.target.files[0]);
+      } else {
+        setSignatureFile(e.target.files[0]);
+      }
     }
   };
 
@@ -118,7 +166,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
                   type="file"
                   accept="image/*"
                   className="max-w-sm"
-                  onChange={handleFileChange}
+                  onChange={(e) => handleFileChange(e, 'photo')}
                 />
                 {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
               </div>
@@ -160,6 +208,41 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
             <p className="text-xs text-muted-foreground">
               Esta informação será utilizada na assinatura dos seus emails.
             </p>
+          </div>
+
+          <Separator className="my-4" />
+          
+          <div>
+            <h3 className="text-lg font-medium mb-2">Assinatura Digital</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Adicione sua assinatura digital que será exibida nos emails enviados
+            </p>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="signature">Imagem da Assinatura</Label>
+                <Input
+                  id="signature"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, 'signature')}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Recomendado: assinatura em PNG com fundo transparente
+                </p>
+              </div>
+              
+              {formData.signature_image && (
+                <div className="border p-4 rounded-md">
+                  <p className="text-sm font-medium mb-2">Assinatura atual:</p>
+                  <img 
+                    src={formData.signature_image} 
+                    alt="Assinatura digital" 
+                    className="max-h-20 object-contain" 
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
         
