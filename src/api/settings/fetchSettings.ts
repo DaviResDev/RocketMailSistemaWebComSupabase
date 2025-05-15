@@ -22,7 +22,8 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
   if (data) {
     console.log("Settings loaded:", data);
     // Make sure to transform the data to match our Settings type
-    return {
+    // We need to explicitly handle the signature_image property
+    const settings: Settings = {
       id: data.id,
       email_smtp: data.email_smtp,
       email_porta: data.email_porta,
@@ -39,6 +40,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       use_smtp: Boolean(data.use_smtp),
       signature_image: data.signature_image || null
     };
+    return settings;
   } else {
     // No settings found, create empty settings object with default true for use_smtp
     console.log("No settings found, using empty defaults with SMTP enabled");
