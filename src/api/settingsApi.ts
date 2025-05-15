@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { toast } from 'sonner';
@@ -103,7 +104,8 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
   return {
     ...newData,
     use_smtp: Boolean(newData.use_smtp), // Ensure boolean type
-    two_factor_enabled: Boolean(newData.two_factor_enabled) // Ensure boolean type
+    two_factor_enabled: Boolean(newData.two_factor_enabled), // Ensure boolean type
+    signature_image: newData.signature_image || null // Ensure signature_image is included
   } as Settings;
 }
 
