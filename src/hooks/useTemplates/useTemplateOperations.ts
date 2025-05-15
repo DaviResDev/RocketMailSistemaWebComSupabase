@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,7 +12,7 @@ export function useTemplateOperations() {
   const { fetchTemplates } = useTemplatesData();
   const { settings } = useSettings();
 
-  // Helper function to upload file to Supabase storage
+  // Helper function to upload file to storage
   const uploadFileToStorage = async (file: File) => {
     try {
       const fileExt = file.name.split('.').pop();
@@ -220,7 +221,7 @@ export function useTemplateOperations() {
       const newTemplate = {
         nome: `${template.nome} (Cópia)`,
         conteudo: template.conteudo,
-        descricao: template.descricao, // Include description field
+        descricao: template.descricao || '', // Include description field with fallback
         canal: template.canal || 'email',
         assinatura: template.assinatura,
         signature_image: template.signature_image,

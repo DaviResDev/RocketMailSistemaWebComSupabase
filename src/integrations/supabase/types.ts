@@ -214,6 +214,7 @@ export type Database = {
           canal: string
           conteudo: string
           created_at: string
+          descricao: string | null
           id: string
           nome: string
           signature_image: string | null
@@ -226,6 +227,7 @@ export type Database = {
           canal: string
           conteudo: string
           created_at?: string
+          descricao?: string | null
           id?: string
           nome: string
           signature_image?: string | null
@@ -238,6 +240,7 @@ export type Database = {
           canal?: string
           conteudo?: string
           created_at?: string
+          descricao?: string | null
           id?: string
           nome?: string
           signature_image?: string | null
