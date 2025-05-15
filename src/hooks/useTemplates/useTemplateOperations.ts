@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -233,8 +234,9 @@ export function useTemplateOperations() {
         attachments: template.attachments || JSON.stringify([]),
         status: template.status || 'ativo', // Ensure the duplicated template has a status
         user_id: user?.id,
-        template_file_url: template.template_file_url || null,
-        template_file_name: template.template_file_name || null
+        // Safely access the template file properties with a type assertion
+        template_file_url: (template as any).template_file_url || null,
+        template_file_name: (template as any).template_file_name || null
       };
       
       console.log('Duplicando template:', {
