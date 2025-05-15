@@ -4,7 +4,6 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Save, Send, File as FileIcon, Loader2, X, Upload, PaperclipIcon, Image, Variable } from 'lucide-react';
@@ -18,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import RichTextEditor from './RichTextEditor';
 
 export function TemplateForm({ template, isEditing = false, onSave, onCancel, onSendTest }: TemplateFormProps) {
   const [formData, setFormData] = useState({
@@ -87,6 +87,10 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
   
   const handleSelectChange = (name: string, value: string) => {
     setFormData({ ...formData, [name]: value });
+  };
+
+  const handleRichTextChange = (content: string) => {
+    setFormData({ ...formData, conteudo: content });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -258,24 +262,11 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
   };
 
   const insertVariable = (variable: string) => {
-    const textArea = document.getElementById('conteudo') as HTMLTextAreaElement;
-    if (!textArea) return;
-    
-    const startPos = textArea.selectionStart;
-    const endPos = textArea.selectionEnd;
-    
-    const newContent = 
-      formData.conteudo.substring(0, startPos) + 
-      `{${variable}}` + 
-      formData.conteudo.substring(endPos);
-    
-    setFormData({ ...formData, conteudo: newContent });
-    
-    // Set focus back to textarea
-    setTimeout(() => {
-      textArea.focus();
-      textArea.setSelectionRange(startPos + variable.length + 2, startPos + variable.length + 2);
-    }, 0);
+    // Com o rich text editor, precisamos inserir as variáveis de forma diferente
+    setFormData(prev => {
+      const newContent = prev.conteudo + `{${variable}}`;
+      return { ...prev, conteudo: newContent };
+    });
   };
 
   return (
@@ -326,14 +317,10 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <Textarea
-                  id="conteudo"
-                  name="conteudo"
+                {/* Substituir o textarea pelo Rich Text Editor */}
+                <RichTextEditor 
                   value={formData.conteudo}
-                  onChange={handleChange}
-                  placeholder="Digite o conteúdo do seu template aqui..."
-                  rows={12}
-                  className="font-mono text-sm"
+                  onChange={handleRichTextChange}
                 />
                 <p className="text-sm text-muted-foreground">
                   Use {'{nome}'} para incluir o nome do contato automaticamente.
@@ -345,7 +332,6 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
               <div 
                 dangerouslySetInnerHTML={{
                   __html: formData.conteudo
-                    .replace(/\n/g, '<br>')
                     .replace(/\{nome\}/g, '<span class="bg-yellow-100 px-1">Nome do Contato</span>')
                     .replace(/\{email\}/g, '<span class="bg-yellow-100 px-1">Email do Contato</span>')
                     .replace(/\{telefone\}/g, '<span class="bg-yellow-100 px-1">Telefone do Contato</span>')
@@ -383,6 +369,7 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
             </Select>
           </div>
 
+          {/* ... keep existing code for assinatura digital */}
           <div className="space-y-2">
             <Label>Assinatura Digital</Label>
             <div className="border rounded-md p-4">
@@ -447,6 +434,7 @@ export function TemplateForm({ template, isEditing = false, onSave, onCancel, on
             </div>
           </div>
           
+          {/* ... keep existing code for anexos */}
           <div className="space-y-2">
             <Label>Anexos</Label>
             <div className="border rounded-md p-4">

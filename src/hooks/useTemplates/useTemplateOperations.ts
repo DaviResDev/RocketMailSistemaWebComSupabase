@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -256,7 +257,12 @@ export function useTemplateOperations() {
       // Delete attached files from storage if they exist
       if (template.attachments) {
         try {
-          const attachments = JSON.parse(template.attachments);
+          // Corrigindo o erro TS2345: garantindo que attachments seja string antes de passar para JSON.parse
+          const attachmentsStr = typeof template.attachments === 'string' 
+            ? template.attachments 
+            : JSON.stringify(template.attachments);
+            
+          const attachments = JSON.parse(attachmentsStr);
           
           if (Array.isArray(attachments)) {
             for (const attachment of attachments) {
