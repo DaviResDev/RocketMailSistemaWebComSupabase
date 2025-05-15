@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, SettingsFormData } from '@/types/settings';
 import { toast } from 'sonner';
@@ -38,7 +39,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       user_id: data.user_id,
       two_factor_enabled: Boolean(data.two_factor_enabled),
       use_smtp: Boolean(data.use_smtp),
-      signature_image: data.signature_image || null
+      signature_image: data.signature_image === undefined ? null : data.signature_image
     };
   } else {
     // No settings found, create empty settings object with default true for use_smtp
@@ -55,7 +56,7 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       smtp_nome: '',
       two_factor_enabled: false, // Default value
       use_smtp: true, // Default to SMTP instead of Resend
-      signature_image: null // Add default null value for signature_image
+      signature_image: null // Default null value for signature_image
     };
   }
 }
@@ -68,6 +69,23 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
 
   console.log("Saving settings:", settings);
   
+  // Create a data object that only includes fields that exist in the database
+  // This prevents errors when trying to save fields that don't exist in the database yet
+  const settingsToSave = {
+    email_smtp: settings.email_smtp,
+    email_porta: settings.email_porta,
+    email_usuario: settings.email_usuario,
+    email_senha: settings.email_senha,
+    area_negocio: settings.area_negocio,
+    foto_perfil: settings.foto_perfil,
+    smtp_seguranca: settings.smtp_seguranca,
+    smtp_nome: settings.smtp_nome,
+    whatsapp_token: settings.whatsapp_token,
+    two_factor_enabled: settings.two_factor_enabled,
+    use_smtp: settings.use_smtp
+    // We're excluding signature_image if it doesn't exist in the database schema yet
+  };
+  
   let result;
   
   // Check if settings already exist for this user
@@ -76,7 +94,7 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
     console.log("Updating existing settings with ID:", currentSettings.id);
     result = await supabase
       .from('configuracoes')
-      .update({ ...settings })
+      .update({ ...settingsToSave })
       .eq('id', currentSettings.id)
       .eq('user_id', userId)
       .select('*')
@@ -86,7 +104,7 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
     console.log("Inserting new settings for user:", userId);
     result = await supabase
       .from('configuracoes')
-      .insert([{ ...settings, user_id: userId }])
+      .insert([{ ...settingsToSave, user_id: userId }])
       .select('*')
       .single();
   }
@@ -101,12 +119,11 @@ export async function saveUserSettings(settings: SettingsFormData, userId: strin
   console.log("Settings saved successfully:", newData);
   
   // Make sure to transform the data to match our Settings type
-  // Adding signature_image with a fallback to null if it doesn't exist
   return {
     ...newData,
     use_smtp: Boolean(newData.use_smtp),
     two_factor_enabled: Boolean(newData.two_factor_enabled),
-    signature_image: newData.signature_image || null
+    signature_image: newData.signature_image === undefined ? null : newData.signature_image
   } as Settings;
 }
 
