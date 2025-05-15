@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -114,6 +115,9 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         }
       }
       
+      console.log("Template attachments:", template.attachments);
+      console.log("Parsed attachments data:", attachmentsData);
+      
       // Prepare data to send
       const envioData = {
         contato_id: schedule.contato_id,
@@ -136,7 +140,8 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         content_length: processedContent.length,
         agendamento: schedule.id,
         temAnexos: !!attachmentsData && 
-                  (Array.isArray(attachmentsData) ? attachmentsData.length > 0 : true)
+                  (Array.isArray(attachmentsData) ? attachmentsData.length > 0 : true),
+        signature_image: !!template.signature_image
       });
       
       // Send email immediately using sendEmail

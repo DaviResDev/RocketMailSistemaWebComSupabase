@@ -82,15 +82,38 @@ async function sendEmailViaSMTP(config, payload) {
     mailOptions.bcc = payload.bcc;
   }
   
-  // Add attachments if provided
+  // Improved attachment handling
   if (payload.attachments && payload.attachments.length > 0) {
-    mailOptions.attachments = payload.attachments;
-    console.log(`Adding ${payload.attachments.length} attachments to email`);
+    // Make sure we're working with the proper format for nodemailer
+    mailOptions.attachments = payload.attachments.map(attachment => {
+      // If it's already in the right format (has content buffer), return as is
+      if (attachment.content instanceof Uint8Array) {
+        return {
+          filename: attachment.filename || attachment.name || 'attachment.file',
+          content: attachment.content
+        };
+      }
+      
+      // If it has base64 content
+      if (attachment.content && typeof attachment.content === 'string') {
+        return {
+          filename: attachment.filename || attachment.name || 'attachment.file',
+          content: attachment.content,
+          encoding: 'base64'
+        };
+      }
+      
+      // Default case (shouldn't happen with our preprocessing)
+      return attachment;
+    });
+    
+    console.log(`Adding ${mailOptions.attachments.length} attachments to email`);
   }
 
   console.log(`Sending email via SMTP: ${config.host}:${config.port}`);
   console.log(`From: ${mailOptions.from} To: ${payload.to}`);
   console.log(`Subject: ${payload.subject}`);
+  console.log(`HTML content length: ${payload.html?.length || 0} characters`);
   
   // Verify SMTP configuration before sending
   try {
@@ -160,17 +183,29 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
     emailData.bcc = payload.bcc;
   }
   
-  // Add attachments if provided
+  // Add attachments if provided - improved handling
   if (payload.attachments && payload.attachments.length > 0) {
-    emailData.attachments = payload.attachments.map(attachment => ({
-      filename: attachment.filename || attachment.name,
-      content: attachment.content,
-    }));
+    emailData.attachments = payload.attachments.map(attachment => {
+      // Return an object in the format Resend expects
+      return {
+        filename: attachment.filename || attachment.name || 'attachment.file',
+        content: attachment.content instanceof Uint8Array 
+          ? Buffer.from(attachment.content).toString('base64')
+          : typeof attachment.content === 'string'
+            ? (attachment.content.includes('base64,') 
+                ? attachment.content.split('base64,')[1] 
+                : attachment.content)
+            : attachment.content,
+      };
+    });
+    
+    console.log(`Adding ${emailData.attachments.length} attachments to email (Resend)`);
   }
   
   console.log(`Sending email via Resend`);
   console.log(`From: ${emailData.from} To: ${payload.to}`);
   console.log(`Subject: ${payload.subject}`);
+  console.log(`HTML content length: ${payload.html?.length || 0} characters`);
   
   try {
     const result = await resend.emails.send(emailData);

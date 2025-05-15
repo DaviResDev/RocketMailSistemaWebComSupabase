@@ -157,18 +157,37 @@ serve(async (req: Request) => {
       email_senha: settingsData.email_senha ? "configurado" : "não configurado"
     }) : "none");
 
-    // Convert content to HTML format
-    const htmlContent = content.replace(/\n/g, "<br>");
+    // Ensure HTML content is properly formatted
+    let htmlContent = content;
+    // Convert line breaks to <br> only if not already HTML
+    if (!content.includes('<html') && !content.includes('<body') && !content.includes('<div')) {
+      htmlContent = content.replace(/\n/g, "<br>");
+    }
     
-    // Prepare email data
+    // Prepare email data with improved HTML wrapper
     const emailData = {
       to: recipient,
       subject,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px;">
-          <div>${htmlContent}</div>
-          ${signature_image ? `<div style="margin-top: 20px;"><img src="${signature_image}" alt="Assinatura" style="max-height: 60px;" /></div>` : ''}
-        </div>
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; }
+              .email-content { padding: 20px; }
+              .signature { margin-top: 30px; }
+            </style>
+          </head>
+          <body>
+            <div class="email-content">
+              ${htmlContent}
+              ${signature_image ? `<div class="signature"><img src="${signature_image}" alt="Assinatura" style="max-height: 80px;" /></div>` : ''}
+            </div>
+          </body>
+        </html>
       `,
     } as any;
     
@@ -181,7 +200,7 @@ serve(async (req: Request) => {
       emailData.bcc = bcc;
     }
 
-    // Process attachments
+    // Process attachments with improved error handling
     const emailAttachments = [];
     
     if (attachments) {
@@ -203,7 +222,7 @@ serve(async (req: Request) => {
           for (const attachment of parsedAttachments) {
             if (attachment.url) {
               try {
-                console.log(`Fetching attachment: ${attachment.url}`);
+                console.log(`Fetching attachment from URL: ${attachment.url}`);
                 const response = await fetch(attachment.url);
                 if (!response.ok) {
                   console.error(`Failed to fetch attachment: ${response.status}`);
@@ -221,6 +240,7 @@ serve(async (req: Request) => {
               }
             } else if (attachment.content) {
               // If the content is already provided in base64 format
+              console.log(`Using provided content for attachment: ${attachment.name || attachment.filename || 'unnamed'}`);
               emailAttachments.push({
                 filename: attachment.name || attachment.filename || 'attachment.file',
                 content: typeof attachment.content === 'string' ? 
@@ -230,14 +250,13 @@ serve(async (req: Request) => {
                   attachment.content,
                 encoding: 'base64'
               });
-              console.log(`Attachment included from content: ${attachment.name || attachment.filename}`);
             }
           }
         } else if (parsedAttachments && typeof parsedAttachments === 'object') {
           // If it's a single object
           if (parsedAttachments.url) {
             try {
-              console.log(`Fetching attachment: ${parsedAttachments.url}`);
+              console.log(`Fetching single attachment: ${parsedAttachments.url}`);
               const response = await fetch(parsedAttachments.url);
               if (!response.ok) {
                 console.error(`Failed to fetch attachment: ${response.status}`);
@@ -252,6 +271,7 @@ serve(async (req: Request) => {
               console.error("Error fetching single attachment:", fetchErr);
             }
           } else if (parsedAttachments.content) {
+            console.log(`Using provided content for single attachment`);
             emailAttachments.push({
               filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
               content: typeof parsedAttachments.content === 'string' ? 
@@ -271,6 +291,10 @@ serve(async (req: Request) => {
     if (emailAttachments.length > 0) {
       emailData.attachments = emailAttachments;
       console.log(`Added ${emailAttachments.length} attachments to the email`);
+      // Log some details about the first attachment for debugging
+      if (emailAttachments.length > 0) {
+        console.log(`First attachment: ${emailAttachments[0].filename}, content type: ${typeof emailAttachments[0].content}`);
+      }
     }
 
     // Check if SMTP is configured and should be used

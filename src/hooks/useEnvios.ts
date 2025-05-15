@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -112,10 +111,35 @@ export function useEnvios() {
             .replace(/{dia}/g, formattedDate);
         }
         
+        // Handle attachments more carefully
+        let attachmentsToSend = formData.attachments;
+        if (!attachmentsToSend && templateData.attachments) {
+          // Log detailed info about template attachments for debugging
+          console.log("Template attachments data:", {
+            type: typeof templateData.attachments,
+            isArray: Array.isArray(templateData.attachments),
+            value: templateData.attachments
+          });
+          
+          if (typeof templateData.attachments === 'string' && templateData.attachments !== '[]') {
+            try {
+              attachmentsToSend = JSON.parse(templateData.attachments);
+              console.log("Parsed attachments from string:", attachmentsToSend);
+            } catch (err) {
+              console.error("Error parsing attachments JSON string:", err);
+              // Keep the original value if parsing fails
+              attachmentsToSend = templateData.attachments;
+            }
+          } else {
+            // Use as is if already an object or array
+            attachmentsToSend = templateData.attachments;
+          }
+        }
+        
         // Include attachments from the template if they exist
         const dataToSend = {
           ...formData,
-          attachments: formData.attachments || templateData.attachments || null,
+          attachments: attachmentsToSend || null,
           contato_nome: contatoData.nome,
           contato_email: contatoData.email,
           subject: formData.subject || templateData.nome,
@@ -127,9 +151,11 @@ export function useEnvios() {
           to: contatoData.email,
           template_id: formData.template_id,
           contato_id: formData.contato_id,
-          has_attachments: !!templateData.attachments,
-          subject_length: dataToSend.subject?.length,
-          content_length: dataToSend.content?.length
+          has_attachments: !!attachmentsToSend,
+          attachments_type: typeof attachmentsToSend,
+          subject: dataToSend.subject,
+          content_length: dataToSend.content?.length,
+          signature_image: !!dataToSend.signature_image
         });
         
         // Update toast with processing status
@@ -203,12 +229,27 @@ export function useEnvios() {
       toast.loading(`Processando reenvio para ${envio.contato.nome}...`, {
         id: loadingToastId
       });
+
+      // Handle attachments
+      let attachmentsToSend = null;
+      if (templateData.attachments) {
+        if (typeof templateData.attachments === 'string' && templateData.attachments !== '[]') {
+          try {
+            attachmentsToSend = JSON.parse(templateData.attachments);
+          } catch (err) {
+            console.error('Erro ao analisar anexos:', err);
+            attachmentsToSend = templateData.attachments;
+          }
+        } else {
+          attachmentsToSend = templateData.attachments;
+        }
+      }
       
       const result = await sendEmail({
         contato_id: envio.contato_id,
         template_id: envio.template_id,
-        // Include attachments from the template
-        attachments: templateData.attachments || null
+        attachments: attachmentsToSend,
+        signature_image: templateData.signature_image
       });
       
       toast.dismiss(loadingToastId);
