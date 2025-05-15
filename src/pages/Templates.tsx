@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
@@ -55,6 +54,16 @@ const Templates = () => {
     setSelectedTemplate(template);
     setIsEditing(true);
     setIsCreating(true);
+  };
+
+  const handleDeleteTemplate = async (id: string) => {
+    try {
+      const success = await deleteTemplate(id);
+      return success;
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      return false;
+    }
   };
 
   const handleRetry = () => {
@@ -210,7 +219,7 @@ const Templates = () => {
                   key={template.id}
                   template={template}
                   onEdit={() => handleEditClick(template)}
-                  onDelete={() => deleteTemplate(template.id)}
+                  onDelete={handleDeleteTemplate}
                   onDuplicate={() => duplicateTemplate(template.id)}
                 />
               ))}

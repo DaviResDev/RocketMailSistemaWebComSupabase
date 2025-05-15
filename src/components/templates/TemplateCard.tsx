@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,11 +82,12 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
     setIsDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
-    onDelete(template.id);
+  const confirmDelete = async () => {
     setIsDeleteDialogOpen(false);
+    const success = await onDelete(template.id);
+    // O feedback de sucesso/erro já é mostrado pelo hook useTemplateOperations
   };
-
+  
   return (
     <Card className="overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-all">
       <CardContent className="p-6">
@@ -177,6 +177,8 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
             <AlertDialogDescription>
               Tem certeza que deseja excluir o template "{template.nome}"?
               Esta ação não pode ser desfeita.
+              <br /><br />
+              <strong>Nota:</strong> Templates usados em agendamentos não podem ser excluídos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

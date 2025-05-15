@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -253,9 +252,9 @@ export function useTemplateOperations() {
         
       if (checkError) throw checkError;
       
-      // If there are linked agendamentos, inform the user
+      // If there are linked agendamentos, inform the user instead of throwing an error
       if (agendamentos && agendamentos.length > 0) {
-        toast.error('Não é possível excluir este template pois ele está sendo usado em agendamentos.');
+        toast.error('Não é possível excluir este template pois ele está sendo usado em agendamentos. Remova os agendamentos relacionados primeiro.');
         return false;
       }
       
