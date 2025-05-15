@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -14,6 +13,9 @@ export type Schedule = {
   contato?: {
     nome: string;
     email: string;
+    telefone?: string;
+    razao_social?: string;
+    cliente?: string;
   };
   template?: {
     nome: string;
@@ -49,7 +51,10 @@ export function useSchedules() {
           *,
           contato:contatos (
             nome,
-            email
+            email,
+            telefone,
+            razao_social,
+            cliente
           ),
           template:templates (
             nome
@@ -69,7 +74,11 @@ export function useSchedules() {
       const errorMessage = error.message || 'Erro ao carregar agendamentos';
       console.error("Error in fetchSchedules:", errorMessage);
       setError(errorMessage);
-      toast.error('Erro ao carregar agendamentos: ' + errorMessage);
+      toast({
+        title: "Erro",
+        description: 'Erro ao carregar agendamentos: ' + errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -77,7 +86,11 @@ export function useSchedules() {
 
   const createSchedule = async (formData: ScheduleFormData) => {
     if (!user) {
-      toast.error('Você precisa estar logado para criar agendamentos');
+      toast({
+        title: "Erro",
+        description: 'Você precisa estar logado para criar agendamentos',
+        variant: "destructive"
+      });
       return false;
     }
 
@@ -87,11 +100,18 @@ export function useSchedules() {
         .insert([{ ...formData, user_id: user.id }]);
 
       if (error) throw error;
-      toast.success('Agendamento criado com sucesso!');
+      toast({
+        title: "Sucesso",
+        description: 'Agendamento criado com sucesso!'
+      });
       await fetchSchedules();
       return true;
     } catch (error: any) {
-      toast.error('Erro ao criar agendamento: ' + error.message);
+      toast({
+        title: "Erro",
+        description: 'Erro ao criar agendamento: ' + error.message,
+        variant: "destructive"
+      });
       return false;
     }
   };
@@ -104,11 +124,18 @@ export function useSchedules() {
         .eq('id', id);
 
       if (error) throw error;
-      toast.success('Agendamento atualizado com sucesso!');
+      toast({
+        title: "Sucesso",
+        description: 'Agendamento atualizado com sucesso!'
+      });
       await fetchSchedules();
       return true;
     } catch (error: any) {
-      toast.error('Erro ao atualizar agendamento: ' + error.message);
+      toast({
+        title: "Erro",
+        description: 'Erro ao atualizar agendamento: ' + error.message,
+        variant: "destructive"
+      });
       return false;
     }
   };
@@ -121,11 +148,18 @@ export function useSchedules() {
         .eq('id', id);
 
       if (error) throw error;
-      toast.success('Agendamento excluído com sucesso!');
+      toast({
+        title: "Sucesso",
+        description: 'Agendamento excluído com sucesso!'
+      });
       await fetchSchedules();
       return true;
     } catch (error: any) {
-      toast.error('Erro ao excluir agendamento: ' + error.message);
+      toast({
+        title: "Erro",
+        description: 'Erro ao excluir agendamento: ' + error.message,
+        variant: "destructive"
+      });
       return false;
     }
   };
