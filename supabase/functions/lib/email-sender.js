@@ -85,6 +85,8 @@ async function sendEmailViaSMTP(config, payload) {
   // Improved attachment handling with better MIME type detection
   if (payload.attachments && payload.attachments.length > 0) {
     mailOptions.attachments = payload.attachments.map(attachment => {
+      console.log(`Processing attachment: ${JSON.stringify(attachment.filename || attachment.name || 'unnamed')}`);
+      
       // For binary content (Uint8Array)
       if (attachment.content instanceof Uint8Array) {
         return {
@@ -107,6 +109,15 @@ async function sendEmailViaSMTP(config, payload) {
           content: base64Content,
           contentType: attachment.contentType || attachment.type || undefined,
           encoding: 'base64'
+        };
+      }
+      
+      // If content is not provided but url is
+      if (attachment.url && !attachment.content) {
+        return {
+          path: attachment.url,
+          filename: attachment.filename || attachment.name || 'attachment.file',
+          contentType: attachment.contentType || attachment.type || undefined
         };
       }
       
@@ -192,6 +203,8 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   // Add attachments if provided - improved handling
   if (payload.attachments && payload.attachments.length > 0) {
     emailData.attachments = payload.attachments.map(attachment => {
+      console.log(`Processing Resend attachment: ${JSON.stringify(attachment.filename || attachment.name || 'unnamed')}`);
+      
       // Return an object in the format Resend expects
       let content = '';
       

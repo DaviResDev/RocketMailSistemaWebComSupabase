@@ -121,32 +121,32 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
         </div>
       </CardContent>
       
-      <CardFooter className="bg-muted/40 px-6 py-4 flex justify-between">
-        <div className="flex space-x-1">
-          <Button variant="outline" size="sm" onClick={() => onEdit(template)}>
-            <Edit className="h-4 w-4 mr-2" />
-            Editar
-          </Button>
-          
-          <Button variant="outline" size="sm" onClick={() => setIsTestEmailDialogOpen(true)}>
-            <Send className="h-4 w-4 mr-2" />
-            Testar
-          </Button>
-        </div>
-        
-        <div className="flex space-x-1">
-          {onDuplicate && (
-            <Button variant="ghost" size="sm" onClick={handleDuplicate} title="Duplicar template">
-              <Copy className="h-4 w-4" />
+      <CardFooter className="bg-muted/40 px-6 py-4">
+        <div className="w-full flex flex-wrap gap-2 justify-between">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => onEdit(template)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
             </Button>
-          )}
+            
+            <Button variant="outline" size="sm" onClick={() => setIsTestEmailDialogOpen(true)}>
+              <Send className="h-4 w-4 mr-2" />
+              Testar
+            </Button>
+            
+            {onDuplicate && (
+              <Button variant="outline" size="sm" onClick={handleDuplicate}>
+                <Copy className="h-4 w-4 mr-2" />
+                Duplicar
+              </Button>
+            )}
+          </div>
           
           <Button 
             variant="destructive" 
             size="sm" 
             onClick={handleDelete}
-            className="text-white"
-            title="Excluir template"
+            className="ml-auto"
           >
             <Trash2 className="h-4 w-4 mr-2" />
             Excluir

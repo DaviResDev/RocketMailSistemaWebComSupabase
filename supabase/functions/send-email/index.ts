@@ -240,6 +240,14 @@ serve(async (req: Request) => {
           console.log(`Processing ${parsedAttachments.length} attachments as array`);
           
           for (const attachment of parsedAttachments) {
+            console.log(`Processing attachment: ${JSON.stringify({
+              name: attachment.name || attachment.filename || 'unnamed',
+              type: attachment.type || attachment.contentType,
+              hasUrl: !!attachment.url,
+              hasContent: !!attachment.content,
+              contentLength: attachment.content ? (typeof attachment.content === 'string' ? attachment.content.length : 'binary') : 'none'
+            })}`);
+            
             if (attachment.url) {
               try {
                 console.log(`Fetching attachment from URL: ${attachment.url}`);
@@ -276,7 +284,8 @@ serve(async (req: Request) => {
               emailAttachments.push({
                 filename: attachment.name || attachment.filename || 'attachment.file',
                 content: content,
-                contentType: contentType
+                contentType: contentType,
+                encoding: 'base64'
               });
             }
           }
@@ -317,7 +326,8 @@ serve(async (req: Request) => {
             emailAttachments.push({
               filename: parsedAttachments.name || parsedAttachments.filename || 'attachment.file',
               content: content,
-              contentType: contentType
+              contentType: contentType,
+              encoding: 'base64'
             });
           }
         }
