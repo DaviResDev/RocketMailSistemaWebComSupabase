@@ -170,7 +170,7 @@ const Templates = () => {
             setIsEditing(false);
             setSelectedTemplate(null);
           }}
-          onSendTest={handleSendTest}
+          onSendTest={sendTestEmail}
         />
       ) : loading && !isInitialized ? (
         <TemplateSkeletons />

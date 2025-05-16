@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -6,8 +7,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import RichTextEditor from './RichTextEditor'; // Corrigido para importação padrão
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import RichTextEditor from './RichTextEditor';
 import { Template, TemplateFormData } from '@/types/template';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,13 +18,8 @@ import { useSettings } from '@/hooks/useSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplateFileUpload } from './TemplateFileUpload';
 import { TemplatePreview } from './TemplatePreview';
-
-// Adicionando a interface para TemplateFileUploadProps
-interface TemplateFileUploadProps {
-  attachments?: any[];
-  onChange: (newAttachments: any[]) => void;
-  onFileUploaded: (fileUrl: string, fileName: string) => void;
-}
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { SaveIcon, Send, Paperclip, FileText, PencilIcon } from "lucide-react";
 
 const templateSchema = z.object({
   nome: z.string().min(1, { message: 'Nome é obrigatório' }),
@@ -48,7 +44,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
   
-  // Opções de assinatura fixas já que não temos signatureOptions no hook
   const signatureOptions = [
     { value: settings?.signature_image || 'default_signature', label: 'Assinatura padrão' },
     { value: 'no_signature', label: 'Sem assinatura' }
@@ -86,12 +81,11 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         assinatura: template.assinatura || 'não',
         signature_image: template.signature_image || settings?.signature_image || 'default_signature',
         attachments: template.attachments || [],
-        template_file: null, // Clear the file input
+        template_file: null,
         template_file_url: template.template_file_url || null,
         template_file_name: template.template_file_name || null
       });
       
-      // Initialize attachments if they exist
       if (template.attachments) {
         try {
           const parsedAttachments = JSON.parse(template.attachments as string);
@@ -104,13 +98,11 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         setAttachments([]);
       }
       
-      // Initialize template file info
       setTemplateFileUrl(template.template_file_url || null);
       setTemplateFileName(template.template_file_name || null);
       setUseSignature(template.assinatura !== 'não');
       setShouldUseSignature(template.assinatura !== 'não');
     } else {
-      // Reset form and clear attachments when creating a new template
       form.reset();
       setAttachments([]);
       setTemplateFileUrl(null);
@@ -138,18 +130,11 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
 
   async function onSubmit(values: TemplateFormData) {
     try {
-      // Set attachments to the form data
       values.attachments = attachments;
-      
-      // Set signature usage
       values.assinatura = useSignature ? 'sim' : 'não';
-      
-      // Set template file
       values.template_file = templateFile;
       values.template_file_url = templateFileUrl;
       values.template_file_name = templateFileName;
-      
-      // Set signature image
       values.signature_image = shouldUseSignature ? values.signature_image : null;
       
       console.log('Enviando dados do formulário:', values);
@@ -195,11 +180,14 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   }, [form.watch('nome'), form.watch('conteudo'), shouldUseSignature]);
 
   return (
-    <div>
-      <Form {...form}>
-        <Card className="w-full">
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <Form {...form}>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>{isEditing ? 'Editar Template' : 'Novo Template'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <FormField
                 control={form.control}
                 name="nome"
@@ -255,40 +243,25 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
               )}
             />
           </CardContent>
-          
-          <CardFooter className="flex justify-between items-center bg-gray-100 border-t">
-            <h2 className="text-lg font-semibold">Editor de Template</h2>
-            <div className="flex space-x-2">
-              {onSendTest && (
-                <Button type="button" variant="outline" onClick={() => onSendTest(template?.id || '')}>
-                  Enviar Teste
-                </Button>
-              )}
-              <Button type="button" variant="secondary" onClick={onCancel}>
-                Cancelar
-              </Button>
-              <Button type="submit" onClick={form.handleSubmit(onSubmit)}>
-                {isEditing ? 'Atualizar' : 'Criar'}
-              </Button>
-            </div>
-          </CardFooter>
         </Card>
         
         <Tabs defaultValue="editor" className="w-full">
-          <TabsList className="mb-4">
-            <TabsTrigger value="editor">Editor</TabsTrigger>
-            <TabsTrigger value="preview">Visualização</TabsTrigger>
+          <TabsList className="mb-4 w-full flex justify-center">
+            <TabsTrigger value="editor" className="flex-1"><PencilIcon className="w-4 h-4 mr-2" />Editor</TabsTrigger>
+            <TabsTrigger value="preview" className="flex-1"><FileText className="w-4 h-4 mr-2" />Visualização</TabsTrigger>
           </TabsList>
           
           <TabsContent value="editor" className="space-y-4">
-            <Card className="w-full">
-              <CardContent className="space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium">Conteúdo do Template</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <FormField
                   control={form.control}
                   name="conteudo"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Conteúdo</FormLabel>
                       <FormControl>
                         <RichTextEditor value={field.value} onChange={field.onChange} />
                       </FormControl>
@@ -299,138 +272,155 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
               </CardContent>
             </Card>
             
-            <Card className="w-full">
-              <CardContent className="space-y-4">
-                <TemplateFileUpload
-                  attachments={attachments}
-                  onChange={handleAttachmentChange}
-                  onFileUploaded={(fileUrl, fileName) => {
-                    setTemplateFileUrl(fileUrl);
-                    setTemplateFileName(fileName);
-                  }}
-                />
-              </CardContent>
-            </Card>
-            
-            <Card className="w-full">
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="assinatura"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Usar assinatura?</FormLabel>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={shouldUseSignature}
-                          onCheckedChange={(checked) => {
-                            handleSignatureChange(checked);
-                            setShouldUseSignature(checked);
-                          }}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="attachments">
+                <AccordionTrigger className="py-3 px-4 bg-muted/50 rounded-t-md hover:no-underline">
+                  <div className="flex items-center">
+                    <Paperclip className="w-4 h-4 mr-2" />
+                    <span>Anexos</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="border border-t-0 rounded-b-md border-muted p-4 bg-background">
+                  <TemplateFileUpload
+                    attachments={attachments}
+                    onChange={handleAttachmentChange}
+                    onFileUploaded={(fileUrl, fileName) => {
+                      setTemplateFileUrl(fileUrl);
+                      setTemplateFileName(fileName);
+                    }}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+              
+              <AccordionItem value="signature" className="mt-2">
+                <AccordionTrigger className="py-3 px-4 bg-muted/50 rounded-t-md hover:no-underline">
+                  <div className="flex items-center">
+                    <FileText className="w-4 h-4 mr-2" />
+                    <span>Configuração de Assinatura</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="border border-t-0 rounded-b-md border-muted p-4 bg-background">
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="assinatura"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Usar assinatura?</FormLabel>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={shouldUseSignature}
+                              onCheckedChange={(checked) => {
+                                handleSignatureChange(checked);
+                                setShouldUseSignature(checked);
+                              }}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
 
-                {shouldUseSignature && (
+                    {shouldUseSignature && (
+                      <FormField
+                        control={form.control}
+                        name="signature_image"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Imagem da Assinatura</FormLabel>
+                            <Select
+                              disabled={!shouldUseSignature}
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                setSignatureImage(value);
+                              }}
+                              defaultValue={form.getValues('signature_image') || settings?.signature_image || 'default_signature'}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione a assinatura" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {signatureOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+              
+              <AccordionItem value="templateFile" className="mt-2">
+                <AccordionTrigger className="py-3 px-4 bg-muted/50 rounded-t-md hover:no-underline">
+                  <div className="flex items-center">
+                    <FileText className="w-4 h-4 mr-2" />
+                    <span>Arquivo de Template</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="border border-t-0 rounded-b-md border-muted p-4 bg-background">
                   <FormField
                     control={form.control}
-                    name="signature_image"
+                    name="template_file"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Imagem da Assinatura</FormLabel>
-                        <Select
-                          disabled={!shouldUseSignature}
-                          onValueChange={(value) => {
-                            field.onChange(value);
-                            setSignatureImage(value);
-                          }}
-                          defaultValue={form.getValues('signature_image') || settings?.signature_image || 'default_signature'}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione a assinatura" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {signatureOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormLabel>Arquivo de Template</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="file"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                const file = e.target.files[0];
+                                handleTemplateFileChange(file);
+                                setTemplateFileName(file.name);
+                                setTemplateFileUrl(URL.createObjectURL(file));
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        {templateFileName && (
+                          <p className="text-sm text-gray-500">
+                            Arquivo selecionado: {templateFileName}
+                          </p>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="w-full">
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="template_file"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Arquivo de Template</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="file"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files.length > 0) {
-                              const file = e.target.files[0];
-                              handleTemplateFileChange(file);
-                              setTemplateFileName(file.name);
-                              setTemplateFileUrl(URL.createObjectURL(file));
-                            }
-                          }}
-                        />
-                      </FormControl>
-                      {templateFileName && (
-                        <p className="text-sm text-gray-500">
-                          Arquivo selecionado: {templateFileName}
-                        </p>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </TabsContent>
           
           <TabsContent value="preview">
-            <div className="mb-6">
-              <TemplatePreview template={previewTemplate} />
-            </div>
+            <TemplatePreview template={previewTemplate} />
           </TabsContent>
         </Tabs>
 
-        <Card className="w-full">
-          <CardFooter className="flex justify-between items-center bg-gray-100 border-t">
-            <h2 className="text-lg font-semibold">Ações</h2>
-            <div className="flex space-x-2">
-              {onSendTest && (
-                <Button type="button" variant="outline" onClick={() => onSendTest(template?.id || '')}>
-                  Enviar Teste
-                </Button>
-              )}
-              <Button type="button" variant="secondary" onClick={onCancel}>
-                Cancelar
+        <div className="flex justify-between pt-4">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <div className="space-x-2">
+            {onSendTest && template?.id && (
+              <Button type="button" variant="outline" onClick={() => onSendTest(template.id)}>
+                <Send className="w-4 h-4 mr-2" />Enviar Teste
               </Button>
-              <Button type="submit" onClick={form.handleSubmit(onSubmit)}>
-                {isEditing ? 'Atualizar' : 'Criar'}
-              </Button>
-            </div>
-          </CardFooter>
-        </Card>
-      </Form>
-    </div>
+            )}
+            <Button type="submit" onClick={form.handleSubmit(onSubmit)}>
+              <SaveIcon className="w-4 h-4 mr-2" />{isEditing ? 'Atualizar' : 'Criar'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Form>
   );
 };

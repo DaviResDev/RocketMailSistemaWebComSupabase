@@ -335,24 +335,13 @@ export function useTemplateOperations() {
         if (updateError) throw updateError;
       }
       
-      // Check if it's being used in sent emails
-      const { data: envios, error: enviosError } = await supabase
+      // Atualizar envios para que o template_id seja NULL ao excluir o template
+      const { error: enviosError } = await supabase
         .from('envios')
-        .select('id, data_envio, contato_id')
+        .update({ template_id: null, status: 'template_deleted' })
         .eq('template_id', id);
         
       if (enviosError) throw enviosError;
-      
-      // Handle dependencies by updating sent emails to mark the template as deleted
-      if (envios && envios.length > 0) {
-        // Instead of preventing deletion, update the status of sent emails
-        const { error: updateError } = await supabase
-          .from('envios')
-          .update({ status: 'template_deleted' })
-          .eq('template_id', id);
-          
-        if (updateError) throw updateError;
-      }
       
       // Get the template to access its attachments before deletion
       const { data: template, error: getError } = await supabase

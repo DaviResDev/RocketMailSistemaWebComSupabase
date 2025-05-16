@@ -51,6 +51,11 @@ export function SignaturePreview({
                   src={signature_image} 
                   alt="Assinatura" 
                   className="max-h-20 object-contain"
+                  onError={(e) => {
+                    // If image fails to load, remove src to prevent broken image icon
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
                 />
               </div>
             )}
