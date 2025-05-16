@@ -219,6 +219,8 @@ export type Database = {
           nome: string
           signature_image: string | null
           status: string
+          template_file_name: string | null
+          template_file_url: string | null
           user_id: string
         }
         Insert: {
@@ -232,6 +234,8 @@ export type Database = {
           nome: string
           signature_image?: string | null
           status?: string
+          template_file_name?: string | null
+          template_file_url?: string | null
           user_id: string
         }
         Update: {
@@ -245,6 +249,8 @@ export type Database = {
           nome?: string
           signature_image?: string | null
           status?: string
+          template_file_name?: string | null
+          template_file_url?: string | null
           user_id?: string
         }
         Relationships: []

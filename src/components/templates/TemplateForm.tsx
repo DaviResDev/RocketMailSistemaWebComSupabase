@@ -22,8 +22,8 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
     conteudo: '',
     status: 'ativo',
     signature_image: '',
-    template_file_url: '', // Added for file upload
-    template_file_name: '', // Added to store filename
+    template_file_url: '',
+    template_file_name: '',
   });
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,8 +38,8 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
         conteudo: template.conteudo || '',
         status: template.status || 'ativo',
         signature_image: template.signature_image || (settings?.signature_image || ''),
-        template_file_url: template.template_file_url || '', // Load file URL if it exists
-        template_file_name: template.template_file_name || '', // Load filename if it exists
+        template_file_url: template.template_file_url || '',
+        template_file_name: template.template_file_name || '',
       });
       
       setHasTemplateFile(!!template.template_file_url);
@@ -88,7 +88,13 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
     setIsSaving(true);
     
     try {
-      const success = await onSave(formData);
+      // Always ensure signature_image is included from settings if not specified
+      const dataToSave = {
+        ...formData,
+        signature_image: formData.signature_image || settings?.signature_image || ''
+      };
+      
+      const success = await onSave(dataToSave);
       if (!success) {
         throw new Error("Falha ao salvar o template");
       }
@@ -160,7 +166,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
             </Select>
           </div>
 
-          {/* New Template File Upload Component */}
+          {/* Template File Upload Component */}
           <div className="border p-4 rounded-md bg-muted/30">
             <div className="flex items-center gap-2 mb-2">
               <FileText className="h-5 w-5 text-primary" />

@@ -126,16 +126,19 @@ export function useEnvios() {
           attachmentsToSend = templateData.attachments;
         }
         
+        // Always use signature from template or default settings
+        const signatureImage = formData.signature_image || templateData.signature_image;
+        
         // Include attachments from the template if they exist
         const dataToSend = {
           ...formData,
           attachments: attachmentsToSend || null,
           contato_nome: contatoData.nome,
           contato_email: contatoData.email,
-          // Use template description as subject if available, otherwise use template name
+          // Always use template description as subject if available, otherwise use template name
           subject: formData.subject || templateData.descricao || templateData.nome,
           content: processedContent,
-          signature_image: formData.signature_image || templateData.signature_image,
+          signature_image: signatureImage,
           template_name: templateData.nome
         };
         
@@ -144,7 +147,6 @@ export function useEnvios() {
           template_id: formData.template_id,
           contato_id: formData.contato_id,
           has_attachments: !!attachmentsToSend,
-          attachments_type: typeof attachmentsToSend,
           subject: dataToSend.subject,
           content_length: dataToSend.content?.length,
           signature_image: !!dataToSend.signature_image
@@ -242,7 +244,7 @@ export function useEnvios() {
         template_id: envio.template_id,
         attachments: attachmentsToSend,
         signature_image: templateData.signature_image,
-        // Use template description as subject if available
+        // Always use template description as subject if available, otherwise use template name
         subject: templateData.descricao || templateData.nome
       });
       

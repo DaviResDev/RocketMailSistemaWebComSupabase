@@ -35,32 +35,19 @@ export function useTemplateEmail() {
         .replace(/{razao_social}/g, "Empresa Teste")
         .replace(/{cliente}/g, "Cliente Teste")
         .replace(/{dia}/g, formattedDate);
-        
-      // Parse attachments if they exist
-      let attachmentsData = null;
-      if (template.attachments) {
-        if (typeof template.attachments === 'string' && template.attachments !== '[]') {
-          try {
-            attachmentsData = JSON.parse(template.attachments);
-          } catch (err) {
-            console.error('Erro ao analisar anexos:', err);
-            // Continue without attachments
-          }
-        } else if (Array.isArray(template.attachments) && template.attachments.length > 0) {
-          attachmentsData = template.attachments;
-        }
-      }
+      
+      // Use template description as subject, or fallback to template name
+      const emailSubject = template.descricao || template.nome;
       
       // Call our send-email edge function
       const response = await supabase.functions.invoke('send-email', {
         body: {
           to: email,
-          subject: template.descricao ? template.descricao : `[TESTE] ${template.nome}`,
+          subject: `[TESTE] ${emailSubject}`,
           content: processedContent,
           isTest: true,
           signature_image: template.signature_image,
-          attachments: attachmentsData,
-          template_name: template.nome
+          attachments: template.attachments
         },
       });
       
@@ -75,5 +62,7 @@ export function useTemplateEmail() {
     }
   };
 
-  return { sendTestEmail };
+  return {
+    sendTestEmail
+  };
 }
