@@ -1,23 +1,11 @@
+
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Select = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>
->(({ className, ...props }, ref) => (
-  <SelectPrimitive.Root
-    ref={ref}
-    className={cn(
-      "relative",
-      className
-    )}
-    {...props}
-  />
-))
-Select.displayName = SelectPrimitive.Root.displayName
+const Select = SelectPrimitive.Root
 
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,

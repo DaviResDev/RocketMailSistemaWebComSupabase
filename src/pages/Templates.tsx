@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
@@ -170,7 +171,7 @@ const Templates = () => {
             setIsEditing(false);
             setSelectedTemplate(null);
           }}
-          onSendTest={sendTestEmail}
+          onSendTest={handleSendTest}
         />
       ) : loading && !isInitialized ? (
         <TemplateSkeletons />
