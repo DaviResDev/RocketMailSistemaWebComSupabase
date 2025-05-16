@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -285,9 +286,9 @@ export function useTemplateOperations() {
         attachments: template.attachments || JSON.stringify([]),
         status: template.status || 'ativo', // Ensure the duplicated template has a status
         user_id: user?.id,
-        // Safely access the template file properties with a type assertion
-        template_file_url: (template as any).template_file_url || null,
-        template_file_name: (template as any).template_file_name || null
+        // Safely access the template file properties with a type check
+        template_file_url: template.template_file_url !== undefined ? template.template_file_url : null,
+        template_file_name: template.template_file_name !== undefined ? template.template_file_name : null
       };
       
       console.log('Duplicando template:', {
@@ -359,14 +360,15 @@ export function useTemplateOperations() {
       // Get the template to access its attachments before deletion
       const { data: template, error: getError } = await supabase
         .from('templates')
-        .select('attachments, template_file_url')
+        .select('*')
         .eq('id', id)
         .single();
         
       if (getError) throw getError;
       
+      // Use type checking instead of direct property access
       // Delete attached files from storage, if they exist
-      if (template.attachments) {
+      if (template && template.attachments) {
         try {
           // Parse attachments and handle string and object formats
           const attachmentsStr = typeof template.attachments === 'string' 
@@ -390,10 +392,12 @@ export function useTemplateOperations() {
       }
       
       // Delete template file if it exists
-      if (template.template_file_url) {
+      // Use optional chaining and nullish coalescing for safer property access
+      const templateFileUrl = template?.template_file_url;
+      if (templateFileUrl) {
         try {
           // Extract filename from URL
-          const urlParts = template.template_file_url.split('/');
+          const urlParts = templateFileUrl.split('/');
           const fileName = urlParts[urlParts.length - 1];
           const filePath = `${user?.id}/${fileName}`;
           
