@@ -50,8 +50,8 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   
   // Opções de assinatura fixas já que não temos signatureOptions no hook
   const signatureOptions = [
-    { value: settings?.signature_image || '', label: 'Assinatura padrão' },
-    { value: '', label: 'Sem assinatura' }
+    { value: settings?.signature_image || 'default_signature', label: 'Assinatura padrão' },
+    { value: 'no_signature', label: 'Sem assinatura' }
   ];
   
   const [useSignature, setUseSignature] = useState(!!template?.assinatura && template?.assinatura !== 'não');
@@ -66,7 +66,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       canal: template?.canal || 'email',
       status: template?.status || 'ativo',
       assinatura: template?.assinatura || 'não',
-      signature_image: template?.signature_image || settings?.signature_image || null,
+      signature_image: template?.signature_image || settings?.signature_image || 'default_signature',
       attachments: template?.attachments || [],
       template_file: null,
       template_file_url: template?.template_file_url || null,
@@ -84,7 +84,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         canal: template.canal || 'email',
         status: template.status || 'ativo',
         assinatura: template.assinatura || 'não',
-        signature_image: template.signature_image || settings?.signature_image || null,
+        signature_image: template.signature_image || settings?.signature_image || 'default_signature',
         attachments: template.attachments || [],
         template_file: null, // Clear the file input
         template_file_url: template.template_file_url || null,
@@ -177,7 +177,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   const [previewTemplate, setPreviewTemplate] = useState<Partial<Template>>({
     nome: template?.nome || '',
     conteudo: template?.conteudo || '',
-    signature_image: template?.signature_image || settings?.signature_image || null,
+    signature_image: template?.signature_image || settings?.signature_image || 'default_signature',
     attachments: template?.attachments || '[]'
   });
 
@@ -189,7 +189,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       nome: formValues.nome,
       conteudo: formValues.conteudo,
       signature_image: shouldUseSignature 
-        ? (formValues.signature_image || settings?.signature_image || null) 
+        ? (formValues.signature_image || settings?.signature_image || 'default_signature') 
         : null,
     });
   }, [form.watch('nome'), form.watch('conteudo'), shouldUseSignature]);
@@ -348,7 +348,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                             field.onChange(value);
                             setSignatureImage(value);
                           }}
-                          defaultValue={form.getValues('signature_image') || settings?.signature_image || 'default'}
+                          defaultValue={form.getValues('signature_image') || settings?.signature_image || 'default_signature'}
                         >
                           <FormControl>
                             <SelectTrigger>
