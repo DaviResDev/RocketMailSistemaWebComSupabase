@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -26,6 +27,7 @@ interface Envio {
   template?: {
     nome: string;
     canal?: string;
+    descricao?: string;
   };
   erro?: string;
   attachments?: any[];
@@ -122,9 +124,6 @@ export function useEnvios() {
           });
           
           attachmentsToSend = templateData.attachments;
-          
-          // If the attachments is a string, preserve it as is (don't try to parse)
-          // The edge function will handle parsing on the server
         }
         
         // Include attachments from the template if they exist
@@ -133,9 +132,11 @@ export function useEnvios() {
           attachments: attachmentsToSend || null,
           contato_nome: contatoData.nome,
           contato_email: contatoData.email,
-          subject: formData.subject || templateData.nome,
+          // Use template description as subject if available, otherwise use template name
+          subject: formData.subject || templateData.descricao || templateData.nome,
           content: processedContent,
-          signature_image: formData.signature_image || templateData.signature_image
+          signature_image: formData.signature_image || templateData.signature_image,
+          template_name: templateData.nome
         };
         
         console.log("Sending email with data:", { 
@@ -240,7 +241,9 @@ export function useEnvios() {
         contato_id: envio.contato_id,
         template_id: envio.template_id,
         attachments: attachmentsToSend,
-        signature_image: templateData.signature_image
+        signature_image: templateData.signature_image,
+        // Use template description as subject if available
+        subject: templateData.descricao || templateData.nome
       });
       
       toast.dismiss(loadingToastId);

@@ -36,12 +36,6 @@ export function useTemplateEmail() {
         .replace(/{cliente}/g, "Cliente Teste")
         .replace(/{dia}/g, formattedDate);
         
-      // Add signature if it exists
-      if (template.assinatura && template.assinatura !== 'não') {
-        // The signature content will be added in the edge function
-        // based on signature_image parameter
-      }
-      
       // Parse attachments if they exist
       let attachmentsData = null;
       if (template.attachments) {
@@ -61,11 +55,12 @@ export function useTemplateEmail() {
       const response = await supabase.functions.invoke('send-email', {
         body: {
           to: email,
-          subject: `[TESTE] ${template.nome}`,
+          subject: template.descricao ? template.descricao : `[TESTE] ${template.nome}`,
           content: processedContent,
           isTest: true,
           signature_image: template.signature_image,
-          attachments: attachmentsData
+          attachments: attachmentsData,
+          template_name: template.nome
         },
       });
       

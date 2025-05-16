@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +46,38 @@ export function useTemplateOperations() {
     }
   };
 
+  // Function to upload template file
+  const uploadTemplateFile = async (file: File) => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `${user?.id}/${fileName}`;
+      
+      // Upload the file to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('template_files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (error) throw error;
+      
+      // Get the public URL for the file
+      const { data: { publicUrl } } = supabase.storage
+        .from('template_files')
+        .getPublicUrl(filePath);
+        
+      return {
+        url: publicUrl,
+        name: file.name
+      };
+    } catch (error) {
+      console.error('Error uploading template file:', error);
+      throw error;
+    }
+  };
+
   const createTemplate = async (formData: TemplateFormData) => {
     if (!user) {
       toast.error('Você precisa estar logado para criar templates');
@@ -54,6 +85,16 @@ export function useTemplateOperations() {
     }
 
     try {
+      // Process template file if provided
+      let templateFileUrl = formData.template_file_url;
+      let templateFileName = formData.template_file_name;
+      
+      if (formData.template_file instanceof File) {
+        const templateFile = await uploadTemplateFile(formData.template_file);
+        templateFileUrl = templateFile.url;
+        templateFileName = templateFile.name;
+      }
+      
       // Set default value for email
       const templateData = {
         ...formData,
@@ -62,8 +103,8 @@ export function useTemplateOperations() {
         status: formData.status || 'ativo', // Ensure status is set
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
         signature_image: formData.signature_image || (settings?.signature_image || null),
-        template_file_url: formData.template_file_url || null,
-        template_file_name: formData.template_file_name || null
+        template_file_url: templateFileUrl || null,
+        template_file_name: templateFileName || null
       };
       
       // Ensure attachments is properly formatted and stored
@@ -134,6 +175,16 @@ export function useTemplateOperations() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
+      // Process template file if provided
+      let templateFileUrl = formData.template_file_url;
+      let templateFileName = formData.template_file_name;
+      
+      if (formData.template_file instanceof File) {
+        const templateFile = await uploadTemplateFile(formData.template_file);
+        templateFileUrl = templateFile.url;
+        templateFileName = templateFile.name;
+      }
+      
       // Always set to 'email' for backwards compatibility
       const templateData = {
         ...formData, 
@@ -141,8 +192,8 @@ export function useTemplateOperations() {
         status: formData.status || 'ativo', // Ensure status is set
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
         signature_image: formData.signature_image || (settings?.signature_image || null),
-        template_file_url: formData.template_file_url || null,
-        template_file_name: formData.template_file_name || null
+        template_file_url: templateFileUrl || null,
+        template_file_name: templateFileName || null
       };
       
       // Ensure attachments is properly formatted and stored
@@ -265,22 +316,7 @@ export function useTemplateOperations() {
 
   const deleteTemplate = async (id: string) => {
     try {
-      // First, check if the template is being referenced in the table envios
-      const { data: envios, error: enviosError } = await supabase
-        .from('envios')
-        .select('id, data_envio, contato_id')
-        .eq('template_id', id);
-        
-      if (enviosError) throw enviosError;
-      
-      // If there are envios using this template, show error message and prevent deletion
-      if (envios && envios.length > 0) {
-        toast.error(`Não é possível excluir este template pois está sendo usado em ${envios.length} envio(s). 
-                    Exclua os envios relacionados primeiro antes de excluir o template.`);
-        return false;
-      }
-      
-      // Verificar também se o template é referenciado em agendamentos
+      // First, check if the template is being referenced in scheduled tasks
       const { data: agendamentos, error: checkError } = await supabase
         .from('agendamentos')
         .select('id, data_envio, contato:contatos(nome)')
@@ -288,9 +324,9 @@ export function useTemplateOperations() {
         
       if (checkError) throw checkError;
       
-      // Se há agendamentos vinculados, informar o usuário em vez de lançar erro
+      // If there are scheduled tasks using this template, prevent deletion
       if (agendamentos && agendamentos.length > 0) {
-        // Formatar a mensagem para mostrar quais agendamentos estão usando o template
+        // Format message to show which scheduled tasks are using the template
         const agendamentosInfo = agendamentos.map(ag => {
           const data = new Date(ag.data_envio).toLocaleDateString('pt-BR');
           const contatoNome = ag.contato?.nome || 'Contato desconhecido';
@@ -301,21 +337,38 @@ export function useTemplateOperations() {
         return false;
       }
       
-      // Se não há referências, continuar com o processo de exclusão
+      // Check if it's being used in sent emails
+      const { data: envios, error: enviosError } = await supabase
+        .from('envios')
+        .select('id, data_envio, contato_id')
+        .eq('template_id', id);
+        
+      if (enviosError) throw enviosError;
       
-      // Primeiro, obter o template para acessar seus anexos
+      // Handle dependencies by updating sent emails to mark the template as deleted
+      if (envios && envios.length > 0) {
+        // Instead of preventing deletion, update the status of sent emails
+        const { error: updateError } = await supabase
+          .from('envios')
+          .update({ status: 'template_deleted' })
+          .eq('template_id', id);
+          
+        if (updateError) throw updateError;
+      }
+      
+      // Get the template to access its attachments before deletion
       const { data: template, error: getError } = await supabase
         .from('templates')
-        .select('attachments')
+        .select('attachments, template_file_url')
         .eq('id', id)
         .single();
         
       if (getError) throw getError;
       
-      // Excluir arquivos anexados do armazenamento, se existirem
+      // Delete attached files from storage, if they exist
       if (template.attachments) {
         try {
-          // Interpretar anexos e lidar com formatos de string e objeto
+          // Parse attachments and handle string and object formats
           const attachmentsStr = typeof template.attachments === 'string' 
             ? template.attachments 
             : JSON.stringify(template.attachments);
@@ -336,7 +389,23 @@ export function useTemplateOperations() {
         }
       }
       
-      // Excluir o template do banco de dados
+      // Delete template file if it exists
+      if (template.template_file_url) {
+        try {
+          // Extract filename from URL
+          const urlParts = template.template_file_url.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          const filePath = `${user?.id}/${fileName}`;
+          
+          await supabase.storage
+            .from('template_files')
+            .remove([filePath]);
+        } catch (e) {
+          console.error('Erro ao excluir arquivo de template:', e);
+        }
+      }
+      
+      // Delete the template from the database
       const { error } = await supabase
         .from('templates')
         .delete()

@@ -25,4 +25,5 @@ export interface TemplateFormData {
   descricao?: string;
   template_file_url?: string; // Added for file upload 
   template_file_name?: string; // Added to store filename
+  template_file?: File; // Added to handle file upload
 }
