@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import { RichTextEditor } from './RichTextEditor';
+import RichTextEditor from './RichTextEditor'; // Corrigido para importação padrão
 import { Template, TemplateFormData } from '@/types/template';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +17,12 @@ import { useSettings } from '@/hooks/useSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplateFileUpload } from './TemplateFileUpload';
 import { TemplatePreview } from './TemplatePreview';
+
+// Adicionando a interface para TemplateFileUploadProps
+interface TemplateFileUploadProps {
+  attachments?: any[];
+  onChange: (newAttachments: any[]) => void;
+}
 
 const templateSchema = z.object({
   nome: z.string().min(1, { message: 'Nome é obrigatório' }),
@@ -39,7 +45,14 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   const [templateFileUrl, setTemplateFileUrl] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
-  const { signatureOptions } = useEmailSignature();
+  const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
+  
+  // Opções de assinatura fixas já que não temos signatureOptions no hook
+  const signatureOptions = [
+    { value: settings?.signature_image || '', label: 'Assinatura padrão' },
+    { value: '', label: 'Sem assinatura' }
+  ];
+  
   const [useSignature, setUseSignature] = useState(!!template?.assinatura && template?.assinatura !== 'não');
   const [shouldUseSignature, setShouldUseSignature] = useState(!!template?.assinatura && template?.assinatura !== 'não');
 
@@ -54,7 +67,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       assinatura: template?.assinatura || 'não',
       signature_image: template?.signature_image || settings?.signature_image || null,
       attachments: template?.attachments || [],
-      template_file: template?.template_file || null,
+      template_file: null,
       template_file_url: template?.template_file_url || null,
       template_file_name: template?.template_file_name || null
     },
@@ -73,8 +86,8 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         signature_image: template.signature_image || settings?.signature_image || null,
         attachments: template.attachments || [],
         template_file: null, // Clear the file input
-        template_file_url: (template as any).template_file_url || null,
-        template_file_name: (template as any).template_file_name || null
+        template_file_url: template.template_file_url || null,
+        template_file_name: template.template_file_name || null
       });
       
       // Initialize attachments if they exist
@@ -91,8 +104,8 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       }
       
       // Initialize template file info
-      setTemplateFileUrl((template as any).template_file_url || null);
-      setTemplateFileName((template as any).template_file_name || null);
+      setTemplateFileUrl(template.template_file_url || null);
+      setTemplateFileName(template.template_file_name || null);
       setUseSignature(template.assinatura !== 'não');
       setShouldUseSignature(template.assinatura !== 'não');
     } else {

@@ -62,7 +62,8 @@ const bgColors = [
   '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
 ];
 
-const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) => {
+// Alterando a exportação para ser nomeada e padrão ao mesmo tempo
+export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder }: RichTextEditorProps) => {
   const [editorContent, setEditorContent] = useState(value || '');
   const [linkUrl, setLinkUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
