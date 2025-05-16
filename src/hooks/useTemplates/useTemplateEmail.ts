@@ -47,7 +47,8 @@ export function useTemplateEmail() {
           content: processedContent,
           isTest: true,
           signature_image: template.signature_image,
-          attachments: template.attachments
+          attachments: template.attachments,
+          description: template.descricao // Enviando a descrição para ser usada no email
         },
       });
       

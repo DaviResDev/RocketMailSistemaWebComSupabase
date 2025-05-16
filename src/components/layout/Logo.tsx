@@ -15,26 +15,26 @@ export const Logo: React.FC<LogoProps> = ({
   const getSizeClasses = () => {
     switch (size) {
       case 'small':
-        return 'h-8';
+        return 'h-7'; // Reduzido de h-8
       case 'large':
-        return 'h-24';
+        return 'h-20'; // Reduzido de h-24
       case 'medium':
       default:
-        return 'h-16';
+        return 'h-14'; // Reduzido de h-16
     }
   };
 
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div className={cn('flex items-center gap-2', className)}>
       <div className="relative flex items-center justify-center">
         {/* Sophisticated glow effect */}
-        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-700 via-indigo-600 to-purple-700 blur-[8px] opacity-80" />
-        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 blur-[5px] opacity-70" />
+        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-700 via-indigo-600 to-purple-700 blur-[6px] opacity-80" />
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 blur-[4px] opacity-70" />
         
         {/* More professional icon with 3D effect */}
-        <div className="relative bg-gradient-to-br from-blue-700 to-indigo-800 text-white p-2.5 rounded-full shadow-xl border border-blue-500/30">
+        <div className="relative bg-gradient-to-br from-blue-700 to-indigo-800 text-white p-2 rounded-full shadow-xl border border-blue-500/30">
           <Rocket 
-            size={size === 'large' ? 34 : size === 'medium' ? 26 : 20} 
+            size={size === 'large' ? 30 : size === 'medium' ? 22 : 18} 
             className="text-white" 
             strokeWidth={2}
           />
@@ -46,7 +46,7 @@ export const Logo: React.FC<LogoProps> = ({
         <div className="relative">
           <span className={cn(
             "font-sans tracking-tight text-foreground font-bold", 
-            size === 'large' ? 'text-4xl' : size === 'medium' ? 'text-2xl' : 'text-lg'
+            size === 'large' ? 'text-3xl' : size === 'medium' ? 'text-xl' : 'text-base'
           )}>
             Rocket Mail
           </span>
@@ -55,7 +55,7 @@ export const Logo: React.FC<LogoProps> = ({
         
         <span className={cn(
           "text-muted-foreground leading-tight mt-0.5", 
-          size === 'large' ? 'text-base' : size === 'medium' ? 'text-sm' : 'text-xs'
+          size === 'large' ? 'text-sm' : size === 'medium' ? 'text-xs' : 'text-[10px]'
         )}>
           Disparo Automático
         </span>

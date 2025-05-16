@@ -6,9 +6,14 @@ import { Settings } from '@/types/settings';
 interface SignaturePreviewProps {
   settings: Settings;
   emailContent?: string;
+  emailDescription?: string;
 }
 
-export function SignaturePreview({ settings, emailContent = "Conteúdo do email..." }: SignaturePreviewProps) {
+export function SignaturePreview({ 
+  settings, 
+  emailContent = "Conteúdo do email...", 
+  emailDescription
+}: SignaturePreviewProps) {
   const { smtp_nome, email_usuario, area_negocio, signature_image } = settings || {};
   
   return (
@@ -18,7 +23,7 @@ export function SignaturePreview({ settings, emailContent = "Conteúdo do email.
           <div className="border-b pb-2 mb-2">
             <div className="font-semibold">De: {smtp_nome || 'Seu Nome'}</div>
             <div>Para: destinatario@exemplo.com</div>
-            <div>Assunto: {emailContent ? emailContent.slice(0, 30) + (emailContent.length > 30 ? '...' : '') : 'Assunto do Email'}</div>
+            <div>Assunto: {emailDescription || (emailContent ? emailContent.slice(0, 30) + (emailContent.length > 30 ? '...' : '') : 'Assunto do Email')}</div>
           </div>
           
           <div className="prose max-w-full mb-6">
