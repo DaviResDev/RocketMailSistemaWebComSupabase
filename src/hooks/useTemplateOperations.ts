@@ -1,8 +1,9 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { TemplateFormData } from '@/types/template';
-import { useTemplatesData } from './useTemplatesData';
+import { useTemplatesData } from '@/hooks/useTemplates/useTemplatesData';
 import { v4 as uuidv4 } from 'uuid';
 import { useSettings } from '@/hooks/useSettings';
 
