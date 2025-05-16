@@ -22,6 +22,7 @@ import { TemplatePreview } from './TemplatePreview';
 interface TemplateFileUploadProps {
   attachments?: any[];
   onChange: (newAttachments: any[]) => void;
+  onFileUploaded: (fileUrl: string, fileName: string) => void;
 }
 
 const templateSchema = z.object({
@@ -303,6 +304,10 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                 <TemplateFileUpload
                   attachments={attachments}
                   onChange={handleAttachmentChange}
+                  onFileUploaded={(fileUrl, fileName) => {
+                    setTemplateFileUrl(fileUrl);
+                    setTemplateFileName(fileName);
+                  }}
                 />
               </CardContent>
             </Card>
