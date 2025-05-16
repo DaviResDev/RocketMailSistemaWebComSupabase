@@ -16,7 +16,7 @@ export type Database = {
           data_envio: string
           id: string
           status: string
-          template_id: string
+          template_id: string | null
           user_id: string
         }
         Insert: {
@@ -25,7 +25,7 @@ export type Database = {
           data_envio: string
           id?: string
           status?: string
-          template_id: string
+          template_id?: string | null
           user_id: string
         }
         Update: {
@@ -34,7 +34,7 @@ export type Database = {
           data_envio?: string
           id?: string
           status?: string
-          template_id?: string
+          template_id?: string | null
           user_id?: string
         }
         Relationships: [

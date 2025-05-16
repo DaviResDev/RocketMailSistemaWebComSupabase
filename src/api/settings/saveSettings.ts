@@ -14,6 +14,7 @@ export async function saveUserSettings(
   }
 
   console.log("Saving settings:", settings);
+  console.log("Signature image being saved:", settings.signature_image);
   
   // Create a data object that only includes fields that exist in the database
   // This prevents errors when trying to save fields that don't exist in the database yet
@@ -29,7 +30,7 @@ export async function saveUserSettings(
     whatsapp_token: settings.whatsapp_token,
     two_factor_enabled: settings.two_factor_enabled,
     use_smtp: settings.use_smtp,
-    signature_image: settings.signature_image // Include signature_image in the settingsToSave object
+    signature_image: settings.signature_image // Garantir que signature_image seja incluído
   };
   
   let result;
@@ -40,7 +41,7 @@ export async function saveUserSettings(
     console.log("Updating existing settings with ID:", currentSettings.id);
     result = await supabase
       .from('configuracoes')
-      .update({ ...settingsToSave })
+      .update(settingsToSave)
       .eq('id', currentSettings.id)
       .eq('user_id', userId)
       .select('*')
@@ -63,12 +64,13 @@ export async function saveUserSettings(
   }
   
   console.log("Settings saved successfully:", newData);
+  console.log("Signature image after save:", newData.signature_image);
   
   // Make sure to transform the data to match our Settings type
   return {
     ...newData,
     use_smtp: Boolean(newData.use_smtp),
     two_factor_enabled: Boolean(newData.two_factor_enabled),
-    signature_image: newData.signature_image === undefined ? null : newData.signature_image
+    signature_image: newData.signature_image // Garantir que signature_image seja retornado corretamente
   } as Settings;
 }

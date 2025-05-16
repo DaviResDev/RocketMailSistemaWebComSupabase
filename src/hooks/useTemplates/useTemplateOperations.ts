@@ -324,17 +324,15 @@ export function useTemplateOperations() {
         
       if (checkError) throw checkError;
       
-      // If there are scheduled tasks using this template, prevent deletion
+      // Se existirem agendamentos com este template, atualizar para NULL em vez de impedir a exclusão
       if (agendamentos && agendamentos.length > 0) {
-        // Format message to show which scheduled tasks are using the template
-        const agendamentosInfo = agendamentos.map(ag => {
-          const data = new Date(ag.data_envio).toLocaleDateString('pt-BR');
-          const contatoNome = ag.contato?.nome || 'Contato desconhecido';
-          return `- ${contatoNome} (agendado para ${data})`;
-        }).join('\n');
-        
-        toast.error(`Não é possível excluir este template pois está sendo usado em agendamentos:\n${agendamentosInfo}\n\nCancele os agendamentos primeiro antes de excluir o template.`);
-        return false;
+        console.log(`Atualizando ${agendamentos.length} agendamentos para template_id NULL`);
+        const { error: updateError } = await supabase
+          .from('agendamentos')
+          .update({ template_id: null })
+          .eq('template_id', id);
+          
+        if (updateError) throw updateError;
       }
       
       // Check if it's being used in sent emails
