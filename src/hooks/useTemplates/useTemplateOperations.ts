@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -286,9 +285,9 @@ export function useTemplateOperations() {
         attachments: template.attachments || JSON.stringify([]),
         status: template.status || 'ativo', // Ensure the duplicated template has a status
         user_id: user?.id,
-        // Safely access the template file properties with a type check
-        template_file_url: template.template_file_url !== undefined ? template.template_file_url : null,
-        template_file_name: template.template_file_name !== undefined ? template.template_file_name : null
+        // Use type assertion for template_file properties
+        template_file_url: (template as any).template_file_url || null,
+        template_file_name: (template as any).template_file_name || null
       };
       
       console.log('Duplicando template:', {
@@ -392,8 +391,8 @@ export function useTemplateOperations() {
       }
       
       // Delete template file if it exists
-      // Use optional chaining and nullish coalescing for safer property access
-      const templateFileUrl = template?.template_file_url;
+      // Use optional chaining and type assertion for safer property access
+      const templateFileUrl = (template as any).template_file_url;
       if (templateFileUrl) {
         try {
           // Extract filename from URL
