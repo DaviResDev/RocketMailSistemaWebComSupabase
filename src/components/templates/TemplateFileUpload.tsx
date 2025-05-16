@@ -10,6 +10,8 @@ import { Card, CardContent } from '@/components/ui/card';
 
 interface TemplateFileUploadProps {
   onFileUploaded: (fileUrl: string, fileName: string) => void;
+  attachments?: any[]; // Add the attachments property
+  onChange?: (newAttachments: any[]) => void; // Add the onChange property
 }
 
 interface UploadedFile {
@@ -19,7 +21,7 @@ interface UploadedFile {
   type: string;
 }
 
-export function TemplateFileUpload({ onFileUploaded }: TemplateFileUploadProps) {
+export function TemplateFileUpload({ onFileUploaded, attachments = [], onChange }: TemplateFileUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +94,13 @@ export function TemplateFileUpload({ onFileUploaded }: TemplateFileUploadProps) 
 
       setUploadedFile(uploadedFileInfo);
       onFileUploaded(publicUrl, file.name);
+      
+      // Update attachments if onChange handler is provided
+      if (onChange) {
+        const newAttachments = [...attachments, uploadedFileInfo];
+        onChange(newAttachments);
+      }
+      
       toast.success(`Arquivo ${file.name} enviado com sucesso!`);
     } catch (error: any) {
       console.error('Erro ao enviar arquivo:', error);
