@@ -125,7 +125,16 @@ serve(async (req) => {
     
     if (error) {
       console.error("Error sending email with Resend:", error);
-      throw error;
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error.message
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
     }
     
     console.log("Email sent successfully:", data);

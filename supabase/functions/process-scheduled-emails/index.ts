@@ -194,9 +194,9 @@ serve(async (req) => {
               continue;
             }
             
-            if (sendResult && sendResult.error) {
-              console.error(`Error in send-email function on attempt ${attemptCount}:`, sendResult.error);
-              lastError = sendResult.error;
+            if (!sendResult || !sendResult.success) {
+              console.error(`Error in send-email function on attempt ${attemptCount}:`, sendResult?.error || "Unknown error");
+              lastError = sendResult?.error || new Error("Unknown error in send-email function");
               // Wait a moment before retrying
               await new Promise(resolve => setTimeout(resolve, 500));
               continue;

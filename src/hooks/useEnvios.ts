@@ -98,6 +98,12 @@ export function useEnvios() {
           
         if (templateError) throw templateError;
 
+        // Get user settings to include signature
+        const { data: userSettings } = await supabase
+          .from('configuracoes')
+          .select('signature_image')
+          .single();
+
         // Process template content with contact data for placeholders if not already provided
         let processedContent = formData.content;
         if (!processedContent) {
@@ -126,8 +132,8 @@ export function useEnvios() {
           attachmentsToSend = templateData.attachments;
         }
         
-        // Always use signature from template or user settings
-        const signatureImage = templateData.signature_image;
+        // Use signature from user settings or template
+        const signatureImage = userSettings?.signature_image || templateData.signature_image;
         
         // Construct the final email body with image at top, content in middle, and signature at bottom
         let finalContent = '';
@@ -139,9 +145,6 @@ export function useEnvios() {
         
         // Add main content
         finalContent += processedContent;
-        
-        // Add signature separator and placeholder - the actual signature will be attached by the edge function
-        finalContent += `<br><br>--<br>`;
         
         // Include attachments from the template if they exist
         const dataToSend = {
@@ -183,8 +186,8 @@ export function useEnvios() {
         
         // Check data response
         const responseData = response.data;
-        if (!responseData.success) {
-          throw new Error(responseData.error || "Falha ao enviar email");
+        if (!responseData || !responseData.success) {
+          throw new Error(responseData?.error || "Falha ao enviar email");
         }
         
         // Success case

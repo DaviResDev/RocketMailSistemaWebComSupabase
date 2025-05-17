@@ -181,7 +181,9 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       const result = await sendEmail(envioData);
       
       if (!result) {
-        toast.dismiss(loadingToastId);
+        if (loadingToastId) {
+          toast.dismiss(loadingToastId);
+        }
         toast({
           variant: "destructive",
           title: "Erro",
