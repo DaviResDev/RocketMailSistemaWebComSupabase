@@ -27,10 +27,15 @@ export function useTemplateEmail() {
       if (templateError) throw templateError;
       
       // Get user settings to include signature and SMTP settings
-      const { data: userSettings } = await supabase
+      const { data: userSettings, error: settingsError } = await supabase
         .from('configuracoes')
         .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_nome, smtp_seguranca, use_smtp')
+        .eq('user_id', user.id)
         .single();
+        
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        console.error("Error fetching user settings:", settingsError);
+      }
       
       // Process template with sample data
       const currentDate = new Date();
@@ -67,7 +72,7 @@ export function useTemplateEmail() {
       }
 
       // Always use settings signature image if available, otherwise use template's
-      const signatureImageToUse = settings?.signature_image || template.signature_image;
+      const signatureImageToUse = settings?.signature_image || userSettings?.signature_image || template.signature_image;
       
       console.log("Using signature image:", signatureImageToUse);
       
@@ -100,12 +105,14 @@ export function useTemplateEmail() {
       toast.dismiss(loadingToastId);
       
       if (response.error) {
-        throw new Error(response.error.message);
+        console.error("Edge function error:", response.error);
+        throw new Error(`Erro na função de envio: ${response.error.message}`);
       }
       
       // Verificar a resposta da função
       const responseData = response.data;
       if (!responseData || !responseData.success) {
+        console.error("Failed response from send-email:", responseData);
         throw new Error(responseData?.error || "Falha ao enviar email de teste");
       }
       
