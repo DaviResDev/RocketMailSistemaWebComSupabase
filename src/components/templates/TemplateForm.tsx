@@ -17,9 +17,8 @@ import { useEmailSignature } from '@/hooks/useEmailSignature';
 import { useSettings } from '@/hooks/useSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplatePreview } from './TemplatePreview';
-import { ImageUploader } from './ImageUploader';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { SaveIcon, Send, Image, FileText, PencilIcon, Variable } from "lucide-react";
+import { SaveIcon, Send, FileText, PencilIcon, Variable } from "lucide-react";
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from '@/integrations/supabase/client';
@@ -52,7 +51,6 @@ const VARIABLES = [
 
 export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) => {
   const { settings } = useSettings();
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
@@ -105,13 +103,11 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         setAttachments([]);
       }
       
-      setImageUrl(template.image_url || null);
       setUseSignature(true);
       setShouldUseSignature(true);
     } else {
       form.reset();
       setAttachments([]);
-      setImageUrl(null);
       setUseSignature(true);
       setShouldUseSignature(true);
     }
@@ -196,11 +192,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     }
   };
 
-  const handleImageUploaded = (url: string) => {
-    setImageUrl(url);
-    form.setValue('image_url', url);
-  };
-
   const insertVariable = (variable: string) => {
     if (editorInstance) {
       editorInstance.insertContent(`{{${variable}}}`);
@@ -212,7 +203,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       values.attachments = attachments;
       values.assinatura = 'sim'; // Always use signature
       values.signature_image = settings?.signature_image || 'default_signature'; // Always use signature from settings
-      values.image_url = imageUrl;
       
       console.log('Enviando dados do formulário:', values);
       
@@ -221,7 +211,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       if (success) {
         form.reset();
         setAttachments([]);
-        setImageUrl(null);
       }
       
       return success;
@@ -234,6 +223,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   // Preview state
   const [previewTemplate, setPreviewTemplate] = useState<Partial<Template>>({
     nome: template?.nome || '',
+    descricao: template?.descricao || '',
     conteudo: template?.conteudo || '',
     signature_image: settings?.signature_image || 'default_signature',
     attachments: template?.attachments || '[]',
@@ -246,12 +236,12 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     setPreviewTemplate({
       ...previewTemplate,
       nome: formValues.nome,
+      descricao: formValues.descricao || '',
       conteudo: formValues.conteudo,
       signature_image: settings?.signature_image || 'default_signature',
-      image_url: imageUrl,
       attachments: attachments.length > 0 ? JSON.stringify(attachments) : '[]'
     });
-  }, [form.watch('nome'), form.watch('conteudo'), imageUrl, settings, attachments]);
+  }, [form.watch('nome'), form.watch('descricao'), form.watch('conteudo'), settings, attachments]);
 
   return (
     <Form {...form}>
@@ -324,15 +314,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
             <CardTitle className="text-base font-medium">Conteúdo do Template</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Image uploader component - above the content editor */}
-            <div className="mb-4">
-              <h3 className="text-sm font-medium mb-2">Imagem do Template</h3>
-              <ImageUploader 
-                initialImageUrl={imageUrl} 
-                onImageUploaded={handleImageUploaded} 
-              />
-            </div>
-            
             {/* Rich text editor with variable insertion button */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">

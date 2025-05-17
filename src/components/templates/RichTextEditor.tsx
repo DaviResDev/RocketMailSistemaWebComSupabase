@@ -1,5 +1,5 @@
 
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { 
   Bold, 
   Italic, 
@@ -11,7 +11,7 @@ import {
   List,
   Link,
   Image,
-  Paintbrush // Replacing TextColor with Paintbrush which is available in lucide-react
+  Paintbrush
 } from 'lucide-react';
 import { 
   Button
@@ -37,12 +37,16 @@ import {
 } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'sonner';
 
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
-  placeholder?: string; // Added placeholder as an optional prop
-  onEditorInit?: (editorElement: HTMLElement) => void; // Added callback for editor initialization
+  placeholder?: string;
+  onEditorInit?: (editorElement: HTMLElement) => void;
 }
 
 const fontSizes = [
@@ -64,7 +68,6 @@ const bgColors = [
   '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
 ];
 
-// Alterando a exportação para ser nomeada e padrão ao mesmo tempo
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({ 
   value, 
   onChange, 
@@ -74,6 +77,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [editorContent, setEditorContent] = useState(value || '');
   const [linkUrl, setLinkUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
   
   // Function to apply basic formatting commands
   const execCommand = useCallback((command: string, value?: string) => {
@@ -139,6 +145,108 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
+  // Handle image file upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user) {
+      return;
+    }
+
+    const file = files[0];
+    const fileExt = file.name.split('.').pop();
+    const allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    
+    if (!allowedTypes.includes(fileExt?.toLowerCase() || '')) {
+      toast.error('Tipo de arquivo não suportado. Use imagens: jpg, jpeg, png, gif ou webp');
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error('A imagem é muito grande. O tamanho máximo é 5MB');
+      return;
+    }
+
+    toast.loading('Enviando imagem...');
+    
+    try {
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+      
+      const { data, error } = await supabase.storage
+        .from('template-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (error) throw error;
+      
+      // Get the public URL for the file
+      const { data: { publicUrl } } = supabase.storage
+        .from('template-images')
+        .getPublicUrl(filePath);
+      
+      // Insert image at current cursor position
+      const imageHtml = `<img src="${publicUrl}" alt="Imagem" style="max-width: 100%; margin: 10px 0;" />`;
+      
+      // Insert at beginning of content if no selection
+      const editorEl = document.getElementById('rich-text-editor');
+      const sel = window.getSelection();
+      
+      if (editorEl) {
+        if (sel && !sel.isCollapsed) {
+          // Insert at current selection
+          execCommand('insertHTML', imageHtml);
+        } else {
+          // Insert at the beginning of the content
+          const oldContent = editorEl.innerHTML;
+          editorEl.innerHTML = imageHtml + oldContent;
+          onChange(editorEl.innerHTML);
+          setEditorContent(editorEl.innerHTML);
+        }
+      }
+      
+      toast.dismiss();
+      toast.success('Imagem inserida com sucesso!');
+      
+      // Reset file input
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      toast.dismiss();
+      toast.error(`Erro ao enviar imagem: ${error.message || 'Falha no upload'}`);
+      console.error('Erro ao enviar imagem:', error);
+    }
+  };
+
+  // Insert image from URL
+  const insertImageFromUrl = () => {
+    if (imageUrl) {
+      const imageHtml = `<img src="${imageUrl}" alt="Imagem" style="max-width: 100%; margin: 10px 0;" />`;
+      
+      // Insert at beginning of content if no selection
+      const editorEl = document.getElementById('rich-text-editor');
+      const sel = window.getSelection();
+      
+      if (editorEl) {
+        if (sel && !sel.isCollapsed) {
+          // Insert at current selection
+          execCommand('insertHTML', imageHtml);
+        } else {
+          // Insert at the beginning of the content
+          const oldContent = editorEl.innerHTML;
+          editorEl.innerHTML = imageHtml + oldContent;
+          onChange(editorEl.innerHTML);
+          setEditorContent(editorEl.innerHTML);
+        }
+      }
+      
+      setImageUrl('');
+    }
+  };
+
   // Synchronize editor content with state
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
     const content = e.currentTarget.innerHTML;
@@ -161,8 +269,24 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [onEditorInit]);
   
+  // Hidden file input for image upload
+  const triggerImageUpload = () => {
+    if (imageInputRef.current) {
+      imageInputRef.current.click();
+    }
+  };
+  
   return (
     <div className="border rounded-md">
+      {/* Hidden file input */}
+      <input 
+        type="file" 
+        ref={imageInputRef} 
+        className="hidden" 
+        accept="image/*" 
+        onChange={handleImageUpload}
+      />
+      
       {/* Toolbar */}
       <div className="border-b p-2 bg-muted/50 flex flex-wrap gap-1 items-center">
         {/* Basic text styles */}
@@ -325,21 +449,28 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80 p-2">
-            <div className="space-y-2">
-              <Label htmlFor="image-url">URL da Imagem</Label>
-              <div className="flex gap-2">
-                <Input 
-                  id="image-url" 
-                  placeholder="https://exemplo.com/imagem.jpg"
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                />
-                <Button onClick={() => {
-                  if (linkUrl) {
-                    const imageHtml = `<img src="${linkUrl}" alt="Imagem" style="max-width: 100%;" />`;
-                    execCommand('insertHTML', imageHtml);
-                    setLinkUrl('');
-                  }
-                }}>Inserir</Button>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Upload de Imagem</Label>
+                <Button onClick={triggerImageUpload} className="w-full justify-center">
+                  Selecionar Imagem do Computador
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Formatos: JPG, PNG, GIF, WEBP (máx: 5MB)
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="image-url">Ou Inserir URL da Imagem</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    id="image-url" 
+                    placeholder="https://exemplo.com/imagem.jpg"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                  />
+                  <Button onClick={insertImageFromUrl}>Inserir</Button>
+                </div>
               </div>
             </div>
           </PopoverContent>
@@ -353,9 +484,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         contentEditable="true"
         dangerouslySetInnerHTML={{ __html: editorContent }}
         onInput={handleEditorChange}
-        data-placeholder={placeholder} // Add data-placeholder attribute
+        data-placeholder={placeholder}
         style={{ 
-          position: 'relative'
+          position: 'relative',
+          direction: 'ltr' // Fix for RTL issue
         }}
       />
     </div>

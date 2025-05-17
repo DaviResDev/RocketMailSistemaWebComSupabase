@@ -31,6 +31,7 @@ export function useTemplateEmail() {
       const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
       const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
       
+      // Make sure to replace variables in the proper order
       let processedContent = template.conteudo
         .replace(/\{\{nome\}\}/g, "Usuário Teste")
         .replace(/\{\{email\}\}/g, email)

@@ -92,6 +92,13 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
       <div className="space-y-4">
         <h3 className="text-lg font-medium border-b pb-2">{template.nome || 'Preview do Template'}</h3>
         
+        {/* Display description if present */}
+        {template.descricao && (
+          <div className="text-sm text-muted-foreground italic border-l-2 border-muted-foreground/30 pl-3 my-2">
+            {template.descricao}
+          </div>
+        )}
+        
         {/* Display image at the top if present */}
         {template.image_url && (
           <div className="mb-4">
