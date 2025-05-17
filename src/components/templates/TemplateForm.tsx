@@ -18,8 +18,9 @@ import { useSettings } from '@/hooks/useSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplateFileUpload } from './TemplateFileUpload';
 import { TemplatePreview } from './TemplatePreview';
+import { ImageUploader } from './ImageUploader';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { SaveIcon, Send, Paperclip, FileText, PencilIcon } from "lucide-react";
+import { SaveIcon, Send, Paperclip, FileText, PencilIcon, Image } from "lucide-react";
 
 const templateSchema = z.object({
   nome: z.string().min(1, { message: 'Nome é obrigatório' }),
@@ -32,7 +33,8 @@ const templateSchema = z.object({
   attachments: z.any().optional(),
   template_file: z.any().optional(),
   template_file_url: z.string().optional().nullable(),
-  template_file_name: z.string().optional().nullable()
+  template_file_name: z.string().optional().nullable(),
+  image_url: z.string().optional().nullable()
 });
 
 export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) => {
@@ -40,6 +42,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [templateFileName, setTemplateFileName] = useState<string | null>(null);
   const [templateFileUrl, setTemplateFileUrl] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
@@ -51,6 +54,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   
   const [useSignature, setUseSignature] = useState(!!template?.assinatura && template?.assinatura !== 'não');
   const [shouldUseSignature, setShouldUseSignature] = useState(!!template?.assinatura && template?.assinatura !== 'não');
+  const [editorInstance, setEditorInstance] = useState<any>(null);
 
   const form = useForm<TemplateFormData>({
     resolver: zodResolver(templateSchema),
@@ -65,7 +69,8 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       attachments: template?.attachments || [],
       template_file: null,
       template_file_url: template?.template_file_url || null,
-      template_file_name: template?.template_file_name || null
+      template_file_name: template?.template_file_name || null,
+      image_url: template?.image_url || null,
     },
     mode: 'onChange'
   });
@@ -83,7 +88,8 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         attachments: template.attachments || [],
         template_file: null,
         template_file_url: template.template_file_url || null,
-        template_file_name: template.template_file_name || null
+        template_file_name: template.template_file_name || null,
+        image_url: template.image_url || null,
       });
       
       if (template.attachments) {
@@ -100,6 +106,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       
       setTemplateFileUrl(template.template_file_url || null);
       setTemplateFileName(template.template_file_name || null);
+      setImageUrl(template.image_url || null);
       setUseSignature(template.assinatura !== 'não');
       setShouldUseSignature(template.assinatura !== 'não');
     } else {
@@ -107,6 +114,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       setAttachments([]);
       setTemplateFileUrl(null);
       setTemplateFileName(null);
+      setImageUrl(null);
       setUseSignature(false);
       setShouldUseSignature(false);
     }
@@ -128,6 +136,43 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     form.setValue('assinatura', value ? 'sim' : 'não');
   };
 
+  const handleImageUploaded = (url: string) => {
+    setImageUrl(url);
+    form.setValue('image_url', url);
+  };
+
+  const handleInsertImage = (url: string) => {
+    if (editorInstance) {
+      const imageHtml = `<img src="${url}" alt="Imagem do Template" style="max-width: 100%; height: auto;" />`;
+      const editorEl = document.getElementById('rich-text-editor');
+      if (editorEl) {
+        // Get current selection or move to the end
+        const selection = window.getSelection();
+        let range;
+        
+        if (selection && selection.rangeCount > 0) {
+          range = selection.getRangeAt(0);
+        } else {
+          range = document.createRange();
+          range.selectNodeContents(editorEl);
+          range.collapse(false);
+        }
+        
+        // Create a temporary div with the image HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = imageHtml;
+        
+        // Insert each child of the temp div
+        while (tempDiv.firstChild) {
+          range.insertNode(tempDiv.firstChild);
+        }
+        
+        // Update form value with new content
+        form.setValue('conteudo', editorEl.innerHTML);
+      }
+    }
+  };
+
   async function onSubmit(values: TemplateFormData) {
     try {
       values.attachments = attachments;
@@ -136,6 +181,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       values.template_file_url = templateFileUrl;
       values.template_file_name = templateFileName;
       values.signature_image = shouldUseSignature ? values.signature_image : null;
+      values.image_url = imageUrl;
       
       console.log('Enviando dados do formulário:', values);
       
@@ -147,6 +193,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         setTemplateFile(null);
         setTemplateFileUrl(null);
         setTemplateFileName(null);
+        setImageUrl(null);
         setUseSignature(false);
         setShouldUseSignature(false);
       }
@@ -163,7 +210,8 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     nome: template?.nome || '',
     conteudo: template?.conteudo || '',
     signature_image: template?.signature_image || settings?.signature_image || 'default_signature',
-    attachments: template?.attachments || '[]'
+    attachments: template?.attachments || '[]',
+    image_url: template?.image_url || null
   });
 
   // Update preview when form values change
@@ -176,8 +224,9 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       signature_image: shouldUseSignature 
         ? (formValues.signature_image || settings?.signature_image || 'default_signature') 
         : null,
+      image_url: imageUrl
     });
-  }, [form.watch('nome'), form.watch('conteudo'), shouldUseSignature]);
+  }, [form.watch('nome'), form.watch('conteudo'), shouldUseSignature, imageUrl]);
 
   return (
     <Form {...form}>
@@ -248,6 +297,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         <Tabs defaultValue="editor" className="w-full">
           <TabsList className="mb-4 w-full flex justify-center">
             <TabsTrigger value="editor" className="flex-1"><PencilIcon className="w-4 h-4 mr-2" />Editor</TabsTrigger>
+            <TabsTrigger value="image" className="flex-1"><Image className="w-4 h-4 mr-2" />Imagem</TabsTrigger>
             <TabsTrigger value="preview" className="flex-1"><FileText className="w-4 h-4 mr-2" />Visualização</TabsTrigger>
           </TabsList>
           
@@ -263,7 +313,11 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <RichTextEditor value={field.value} onChange={field.onChange} />
+                        <RichTextEditor 
+                          value={field.value} 
+                          onChange={field.onChange} 
+                          onEditorInit={(editor) => setEditorInstance(editor)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -398,6 +452,20 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
+          </TabsContent>
+          
+          <TabsContent value="image">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium">Anexar Imagem</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ImageUploader 
+                  onImageUploaded={handleImageUploaded} 
+                  onInsertImage={handleInsertImage}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
           
           <TabsContent value="preview">

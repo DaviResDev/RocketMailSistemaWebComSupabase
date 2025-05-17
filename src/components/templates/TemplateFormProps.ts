@@ -1,11 +1,10 @@
 
-import { FormEvent } from "react";
-import { TemplateFormData, Template } from "@/types/template";
+import { Template, TemplateFormData } from '@/types/template';
 
 export interface TemplateFormProps {
   template?: Template;
-  isEditing?: boolean;
-  onSave: (formData: any) => Promise<boolean>;
-  onCancel?: () => void;
+  isEditing: boolean;
+  onSave: (formData: TemplateFormData) => Promise<boolean>;
+  onCancel: () => void;
   onSendTest?: (templateId: string) => Promise<boolean>;
 }

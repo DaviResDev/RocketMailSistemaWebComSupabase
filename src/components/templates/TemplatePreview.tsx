@@ -1,90 +1,79 @@
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Template } from '@/types/template';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSettings } from '@/hooks/useSettings';
 
 interface TemplatePreviewProps {
   template: Partial<Template>;
-  showHeader?: boolean;
 }
 
-export const TemplatePreview: React.FC<TemplatePreviewProps> = ({ template, showHeader = true }) => {
-  // Prepare sample data for preview
-  const previewData = {
-    nome: 'João Silva',
-    email: 'joao@exemplo.com',
-    telefone: '(11) 99999-9999',
-    razao_social: 'Empresa Exemplo Ltda',
-    cliente: 'Cliente Exemplo',
-    dia: new Date().toLocaleDateString('pt-BR')
-  };
-
-  // Process template content with sample data
+export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
+  const { settings } = useSettings();
+  
+  // Replace template variables with sample values
   const processContent = (content: string) => {
-    if (!content) return '';
-    
     return content
-      .replace(/{nome}/g, previewData.nome)
-      .replace(/{email}/g, previewData.email)
-      .replace(/{telefone}/g, previewData.telefone)
-      .replace(/{razao_social}/g, previewData.razao_social)
-      .replace(/{cliente}/g, previewData.cliente)
-      .replace(/{dia}/g, previewData.dia);
+      .replace(/{nome}/g, "Nome do Cliente")
+      .replace(/{email}/g, "cliente@exemplo.com")
+      .replace(/{telefone}/g, "(00) 00000-0000")
+      .replace(/{razao_social}/g, "Empresa Exemplo")
+      .replace(/{cliente}/g, "Cliente Exemplo")
+      .replace(/{dia}/g, new Date().toLocaleDateString('pt-BR'));
   };
-
-  const processedContent = processContent(template.conteudo || '');
-
+  
+  const getSignatureImage = () => {
+    // If template has a specific signature image, use it
+    if (template.signature_image && template.signature_image !== 'no_signature') {
+      // If it's the default signature, use the one from settings
+      if (template.signature_image === 'default_signature') {
+        return settings?.signature_image || null;
+      }
+      return template.signature_image;
+    }
+    return null;
+  };
+  
+  const signatureImage = getSignatureImage();
+  
   return (
-    <Tabs defaultValue="preview" className="w-full">
-      <TabsList className="mb-2">
-        <TabsTrigger value="preview">Visualização</TabsTrigger>
-        <TabsTrigger value="code">HTML</TabsTrigger>
-      </TabsList>
-      
-      <TabsContent value="preview" className="mt-0">
-        <Card className="border shadow-sm">
-          {showHeader && (
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">{template.nome || 'Visualização do Template'}</CardTitle>
-            </CardHeader>
-          )}
-          <CardContent>
-            <div 
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: processedContent }}
+    <Card className="p-6">
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium border-b pb-2">{template.nome || 'Preview do Template'}</h3>
+        
+        <div 
+          className="prose max-w-none"
+          dangerouslySetInnerHTML={{ 
+            __html: template.conteudo ? processContent(template.conteudo) : '<p>Sem conteúdo</p>' 
+          }} 
+        />
+        
+        {/* Display signature if present */}
+        {signatureImage && (
+          <div className="pt-4 border-t mt-6">
+            <p className="text-sm text-muted-foreground mb-2">Assinatura:</p>
+            <img 
+              src={signatureImage} 
+              alt="Assinatura" 
+              className="max-h-24" 
+              style={{ maxWidth: '100%' }}
             />
-            
-            {template.signature_image && (
-              <div className="mt-4 border-t pt-4">
-                <img 
-                  src={template.signature_image} 
-                  alt="Assinatura Digital" 
-                  className="max-h-24"
-                />
-              </div>
-            )}
-            
-            {template.attachments && (
-              <div className="mt-4 text-sm text-muted-foreground">
-                {template.attachments !== '[]' && (
-                  <p>📎 Template contém anexos que serão enviados com o email</p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="code" className="mt-0">
-        <Card className="border shadow-sm">
-          <CardContent className="pt-6">
-            <pre className="bg-muted p-4 rounded-md overflow-auto max-h-[500px] text-xs">
-              <code>{processedContent}</code>
-            </pre>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+          </div>
+        )}
+
+        {/* Display template image if present */}
+        {template.image_url && (
+          <div className="pt-4 mt-2">
+            <p className="text-sm text-muted-foreground mb-2">Imagem anexada:</p>
+            <img 
+              src={template.image_url} 
+              alt="Imagem do template" 
+              className="rounded-md border p-1" 
+              style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }}
+            />
+          </div>
+        )}
+      </div>
+    </Card>
   );
 };

@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from 'react';
+
+import React, { useCallback, useState, useEffect } from 'react';
 import { 
   Bold, 
   Italic, 
@@ -41,6 +42,7 @@ interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string; // Added placeholder as an optional prop
+  onEditorInit?: (editorElement: HTMLElement) => void; // Added callback for editor initialization
 }
 
 const fontSizes = [
@@ -63,12 +65,17 @@ const bgColors = [
 ];
 
 // Alterando a exportação para ser nomeada e padrão ao mesmo tempo
-export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder }: RichTextEditorProps) => {
+export const RichTextEditor: React.FC<RichTextEditorProps> = ({ 
+  value, 
+  onChange, 
+  placeholder,
+  onEditorInit 
+}: RichTextEditorProps) => {
   const [editorContent, setEditorContent] = useState(value || '');
   const [linkUrl, setLinkUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
   
-  // Função para aplicar comandos básicos de formatação
+  // Function to apply basic formatting commands
   const execCommand = useCallback((command: string, value?: string) => {
     document.execCommand(command, false, value);
     const editorEl = document.getElementById('rich-text-editor');
@@ -78,12 +85,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
     }
   }, [onChange]);
   
-  // Aplica família de fonte
+  // Apply font family
   const applyFontFamily = (fontFamily: string) => {
     execCommand('fontName', fontFamily);
   };
   
-  // Aplica tamanho de fonte
+  // Apply font size
   const applyFontSize = (fontSize: string) => {
     const sizeMapping: { [key: string]: string } = {
       '10px': '1', '12px': '2', '14px': '3', '16px': '4',
@@ -92,7 +99,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
     };
     execCommand('fontSize', sizeMapping[fontSize] || '3');
     
-    // Aplica CSS para tamanho mais preciso
+    // Apply CSS for more precise sizing
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) {
       const range = selection.getRangeAt(0);
@@ -113,17 +120,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
     }
   };
   
-  // Aplica cor ao texto
+  // Apply text color
   const applyTextColor = (color: string) => {
     execCommand('foreColor', color);
   };
   
-  // Aplica cor de fundo
+  // Apply background color
   const applyBgColor = (color: string) => {
     execCommand('hiliteColor', color);
   };
   
-  // Insere um link
+  // Insert link
   const insertLink = () => {
     if (linkUrl) {
       execCommand('createLink', linkUrl);
@@ -132,25 +139,33 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
     }
   };
 
-  // Sincroniza o conteúdo do editor com o estado
+  // Synchronize editor content with state
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
     const content = e.currentTarget.innerHTML;
     setEditorContent(content);
     onChange(content);
   };
   
-  // Sincroniza o conteúdo do editor quando o valor externo muda
-  React.useEffect(() => {
+  // Synchronize when external value changes
+  useEffect(() => {
     if (value !== editorContent) {
       setEditorContent(value);
     }
   }, [value]);
   
+  // Initialize editor and pass reference to parent
+  useEffect(() => {
+    const editorEl = document.getElementById('rich-text-editor');
+    if (editorEl && onEditorInit) {
+      onEditorInit(editorEl);
+    }
+  }, [onEditorInit]);
+  
   return (
     <div className="border rounded-md">
-      {/* Barra de ferramentas */}
+      {/* Toolbar */}
       <div className="border-b p-2 bg-muted/50 flex flex-wrap gap-1 items-center">
-        {/* Estilos de texto básicos */}
+        {/* Basic text styles */}
         <ToggleGroup type="multiple" className="flex flex-wrap gap-1">
           <ToggleGroupItem value="bold" aria-label="Negrito" onClick={() => execCommand('bold')}>
             <Bold className="h-4 w-4" />
@@ -165,7 +180,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
 
         <div className="h-6 w-px bg-border mx-1" />
         
-        {/* Alinhamento */}
+        {/* Alignment */}
         <ToggleGroup type="single" className="flex flex-wrap gap-1">
           <ToggleGroupItem value="left" aria-label="Alinhar à esquerda" onClick={() => execCommand('justifyLeft')}>
             <AlignLeft className="h-4 w-4" />
@@ -180,7 +195,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
         
         <div className="h-6 w-px bg-border mx-1" />
         
-        {/* Listas */}
+        {/* Lists */}
         <ToggleGroup type="single" className="flex flex-wrap gap-1">
           <ToggleGroupItem value="ordered" aria-label="Lista ordenada" onClick={() => execCommand('insertOrderedList')}>
             <ListOrdered className="h-4 w-4" />
@@ -192,7 +207,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
         
         <div className="h-6 w-px bg-border mx-1" />
         
-        {/* Família de fonte */}
+        {/* Font family */}
         <Select onValueChange={applyFontFamily}>
           <SelectTrigger className="w-[130px] h-8">
             <SelectValue placeholder="Fonte" />
@@ -209,7 +224,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
           </SelectContent>
         </Select>
         
-        {/* Tamanho da fonte */}
+        {/* Font size */}
         <Select onValueChange={applyFontSize}>
           <SelectTrigger className="w-[80px] h-8">
             <SelectValue placeholder="Tamanho" />
@@ -228,7 +243,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
         
         <div className="h-6 w-px bg-border mx-1" />
         
-        {/* Cor do texto */}
+        {/* Text color */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="h-8 px-2" title="Cor do texto">
@@ -250,7 +265,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
           </PopoverContent>
         </Popover>
         
-        {/* Cor de fundo */}
+        {/* Background color */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="h-8 px-2" title="Cor de fundo">
@@ -297,6 +312,34 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
                   placeholder="https://exemplo.com"
                 />
                 <Button onClick={insertLink}>Inserir</Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Image Insert Button */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-8 px-2" title="Inserir imagem">
+              <Image className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-2">
+            <div className="space-y-2">
+              <Label htmlFor="image-url">URL da Imagem</Label>
+              <div className="flex gap-2">
+                <Input 
+                  id="image-url" 
+                  placeholder="https://exemplo.com/imagem.jpg"
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                />
+                <Button onClick={() => {
+                  if (linkUrl) {
+                    const imageHtml = `<img src="${linkUrl}" alt="Imagem" style="max-width: 100%;" />`;
+                    execCommand('insertHTML', imageHtml);
+                    setLinkUrl('');
+                  }
+                }}>Inserir</Button>
               </div>
             </div>
           </PopoverContent>

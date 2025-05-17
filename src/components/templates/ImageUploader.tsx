@@ -1,0 +1,150 @@
+
+import React, { useState } from 'react';
+import { Upload, Image, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
+
+interface ImageUploaderProps {
+  onImageUploaded: (url: string) => void;
+  onInsertImage: (url: string) => void;
+}
+
+export const ImageUploader = ({ onImageUploaded, onInsertImage }: ImageUploaderProps) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const { user } = useAuth();
+
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml'];
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    // Validate file type
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      toast.error('Tipo de arquivo não suportado. Use PNG, JPG, JPEG, GIF, WEBP ou SVG.');
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('Arquivo muito grande. O tamanho máximo é 5MB.');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `${user?.id}/${fileName}`;
+
+      // Upload the file to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('template-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL for the file
+      const { data: { publicUrl } } = supabase.storage
+        .from('template-images')
+        .getPublicUrl(filePath);
+
+      setImageUrl(publicUrl);
+      onImageUploaded(publicUrl);
+      toast.success('Imagem carregada com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao fazer upload da imagem:', error);
+      toast.error(`Erro ao fazer upload da imagem: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!imageUrl) return;
+
+    try {
+      // Extract file path from the URL
+      const urlParts = imageUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      const userId = user?.id;
+      const filePath = `${userId}/${fileName}`;
+
+      // Delete file from storage
+      const { error } = await supabase.storage
+        .from('template-images')
+        .remove([filePath]);
+
+      if (error) throw error;
+
+      setImageUrl(null);
+      onImageUploaded('');
+      toast.success('Imagem removida com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao remover a imagem:', error);
+      toast.error(`Erro ao remover a imagem: ${error.message}`);
+    }
+  };
+
+  const handleInsertImage = () => {
+    if (imageUrl) {
+      onInsertImage(imageUrl);
+      toast.success('Imagem inserida no corpo do e-mail!');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {!imageUrl ? (
+        <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-10 bg-muted/50">
+          <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+          <p className="text-muted-foreground mb-4">Arraste uma imagem ou clique para fazer upload</p>
+          <input
+            type="file"
+            id="image-upload"
+            className="hidden"
+            onChange={handleUpload}
+            accept=".png,.jpg,.jpeg,.gif,.webp,.svg"
+            disabled={isUploading}
+          />
+          <label htmlFor="image-upload">
+            <Button variant="secondary" disabled={isUploading}>
+              {isUploading ? 'Carregando...' : 'Selecionar imagem'}
+            </Button>
+          </label>
+          <p className="text-xs text-muted-foreground mt-2">
+            Formatos suportados: PNG, JPG, JPEG, GIF, WEBP, SVG (máx. 5MB)
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center">
+          <div className="relative max-w-md mx-auto">
+            <img
+              src={imageUrl}
+              alt="Imagem do template"
+              className="rounded-md max-h-[300px] object-contain border p-2"
+            />
+          </div>
+          <div className="flex mt-4 space-x-2">
+            <Button variant="default" onClick={handleInsertImage}>
+              <Image className="h-4 w-4 mr-2" /> Inserir no corpo do e-mail
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteImage}>
+              <Trash2 className="h-4 w-4 mr-2" /> Excluir imagem
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

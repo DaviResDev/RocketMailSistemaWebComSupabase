@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -105,7 +104,8 @@ export function useTemplateOperations() {
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
         signature_image: formData.signature_image || (settings?.signature_image || null),
         template_file_url: templateFileUrl || null,
-        template_file_name: templateFileName || null
+        template_file_name: templateFileName || null,
+        image_url: formData.image_url || null // Add the image_url field
       };
       
       // Ensure attachments is properly formatted and stored
@@ -156,7 +156,8 @@ export function useTemplateOperations() {
         attachments: templateData.attachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
-        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente',
+        image_url: templateData.image_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -194,7 +195,8 @@ export function useTemplateOperations() {
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
         signature_image: formData.signature_image || (settings?.signature_image || null),
         template_file_url: templateFileUrl || null,
-        template_file_name: templateFileName || null
+        template_file_name: templateFileName || null,
+        image_url: formData.image_url || null // Add the image_url field
       };
       
       // Ensure attachments is properly formatted and stored
@@ -245,7 +247,8 @@ export function useTemplateOperations() {
         attachments: templateData.attachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
-        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente',
+        image_url: templateData.image_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -288,7 +291,8 @@ export function useTemplateOperations() {
         user_id: user?.id,
         // Use type assertion for template_file properties
         template_file_url: (template as any).template_file_url || null,
-        template_file_name: (template as any).template_file_name || null
+        template_file_name: (template as any).template_file_name || null,
+        image_url: (template as any).image_url || null // Add the image_url field
       };
       
       console.log('Duplicando template:', {
@@ -296,7 +300,8 @@ export function useTemplateOperations() {
         status: newTemplate.status,
         attachments: newTemplate.attachments ? 'presente' : 'ausente',
         descricao: newTemplate.descricao || 'não definida',
-        template_file_url: newTemplate.template_file_url ? 'presente' : 'ausente'
+        template_file_url: newTemplate.template_file_url ? 'presente' : 'ausente',
+        image_url: newTemplate.image_url ? 'presente' : 'ausente'
       });
       
       const { error: insertError } = await supabase
@@ -406,6 +411,24 @@ export function useTemplateOperations() {
             .remove([filePath]);
         } catch (e) {
           console.error('Erro ao excluir arquivo de template:', e);
+        }
+      }
+      
+      // Delete template image if it exists
+      const templateImageUrl = (template as any).image_url;
+      if (templateImageUrl) {
+        try {
+          // Extract filename from URL
+          const urlParts = templateImageUrl.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          const userId = user?.id;
+          const filePath = `${userId}/${fileName}`;
+          
+          await supabase.storage
+            .from('template-images')
+            .remove([filePath]);
+        } catch (e) {
+          console.error('Erro ao excluir imagem do template:', e);
         }
       }
       

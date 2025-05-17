@@ -216,6 +216,7 @@ export type Database = {
           created_at: string
           descricao: string | null
           id: string
+          image_url: string | null
           nome: string
           signature_image: string | null
           status: string
@@ -231,6 +232,7 @@ export type Database = {
           created_at?: string
           descricao?: string | null
           id?: string
+          image_url?: string | null
           nome: string
           signature_image?: string | null
           status?: string
@@ -246,6 +248,7 @@ export type Database = {
           created_at?: string
           descricao?: string | null
           id?: string
+          image_url?: string | null
           nome?: string
           signature_image?: string | null
           status?: string
