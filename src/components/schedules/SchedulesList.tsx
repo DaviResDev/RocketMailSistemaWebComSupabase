@@ -32,17 +32,21 @@ interface SchedulesListProps {
 export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
   const { sendEmail, fetchEnvios } = useEnvios();
   const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
+  const [loadingToastId, setLoadingToastId] = useState<string | null>(null);
 
   const handleSendNow = async (schedule: Schedule) => {
     try {
       // Mark this specific item as loading
       setLoadingItems(prev => ({ ...prev, [schedule.id]: true }));
       
-      // Show sending toast
-      toast({
+      // Show sending toast and store its ID
+      const toastId = toast({
         title: "Enviando email",
         description: `Enviando para ${schedule.contato?.nome || 'contato'}`,
-      });
+      }).id;
+      
+      // Store the toast ID for later dismissal
+      setLoadingToastId(toastId);
       
       // Check if we have all required data
       if (!schedule.contato_id || !schedule.template_id) {
@@ -139,9 +143,11 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       console.log("Using signature image:", signatureImageToUse);
       
       // Update toast with processing status
-      toast.loading(`Processando envio para ${schedule.contato?.nome}...`, {
-        id: loadingToastId
-      });
+      if (loadingToastId) {
+        toast.loading(`Processando envio para ${schedule.contato?.nome}...`, {
+          id: loadingToastId
+        });
+      }
       
       // Prepare data to send
       const envioData = {
@@ -190,7 +196,9 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         .update({ status: 'enviado' })
         .eq('id', schedule.id);
       
-      toast.dismiss(loadingToastId);
+      if (loadingToastId) {
+        toast.dismiss(loadingToastId);
+      }
       toast({
         title: "Sucesso",
         description: `Email enviado com sucesso para ${schedule.contato?.nome}!`
@@ -219,6 +227,10 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         });
       }
       
+      if (loadingToastId) {
+        toast.dismiss(loadingToastId);
+      }
+      
       toast({
         variant: "destructive",
         title: "Erro ao enviar email",
@@ -233,6 +245,8 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
     } finally {
       // Always unmark the item as loading
       setLoadingItems(prev => ({ ...prev, [schedule.id]: false }));
+      // Clear the toast ID
+      setLoadingToastId(null);
     }
   };
 
