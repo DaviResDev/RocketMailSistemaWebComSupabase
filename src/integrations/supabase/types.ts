@@ -146,6 +146,7 @@ export type Database = {
       }
       envios: {
         Row: {
+          attachments: Json | null
           contato_id: string
           data_envio: string
           erro: string | null
@@ -155,6 +156,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attachments?: Json | null
           contato_id: string
           data_envio?: string
           erro?: string | null
@@ -164,6 +166,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attachments?: Json | null
           contato_id?: string
           data_envio?: string
           erro?: string | null

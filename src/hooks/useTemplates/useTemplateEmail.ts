@@ -58,13 +58,15 @@ export function useTemplateEmail() {
         .replace(/\{\{hora\}\}/g, formattedTime);
         
       // Parse attachments if present
-      let attachments = [];
+      let parsedAttachments = [];
       if (template.attachments) {
         try {
           if (typeof template.attachments === 'string') {
-            attachments = JSON.parse(template.attachments);
+            parsedAttachments = JSON.parse(template.attachments);
           } else if (Array.isArray(template.attachments)) {
-            attachments = template.attachments;
+            parsedAttachments = template.attachments;
+          } else {
+            parsedAttachments = [template.attachments];
           }
         } catch (error) {
           console.error('Erro ao processar anexos:', error);
@@ -75,6 +77,7 @@ export function useTemplateEmail() {
       const signatureImageToUse = settings?.signature_image || userSettings?.signature_image || template.signature_image;
       
       console.log("Using signature image:", signatureImageToUse);
+      console.log("Attachments:", parsedAttachments);
       
       // Prepare SMTP settings if user has configured them
       const smtpSettings = userSettings?.use_smtp ? {
@@ -94,7 +97,7 @@ export function useTemplateEmail() {
           content: processedContent,
           isTest: true,
           signature_image: signatureImageToUse,
-          attachments: attachments,
+          attachments: parsedAttachments,
           image_url: template.image_url,
           // Include SMTP settings if using SMTP
           smtp_settings: smtpSettings,

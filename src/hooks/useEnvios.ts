@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -127,6 +128,7 @@ export function useEnvios() {
         if (!processedContent && templateData) {
           const currentDate = new Date();
           const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+          const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
           
           processedContent = templateData.conteudo
             .replace(/\{\{nome\}\}/g, contatoNome || '')
@@ -134,20 +136,37 @@ export function useEnvios() {
             .replace(/\{\{telefone\}\}/g, "")
             .replace(/\{\{razao_social\}\}/g, "")
             .replace(/\{\{cliente\}\}/g, "")
-            .replace(/\{\{data\}\}/g, formattedDate);
+            .replace(/\{\{data\}\}/g, formattedDate)
+            .replace(/\{\{hora\}\}/g, formattedTime)
+            .replace(/\{\{empresa\}\}/g, "Empresa")
+            .replace(/\{\{cargo\}\}/g, "Cargo")
+            .replace(/\{\{produto\}\}/g, "Produto")
+            .replace(/\{\{valor\}\}/g, "Valor")
+            .replace(/\{\{vencimento\}\}/g, "Vencimento");
         }
         
         // Handle attachments more carefully
-        let attachmentsToSend = formData.attachments;
-        if (!attachmentsToSend && templateData && templateData.attachments) {
-          // Log detailed info about template attachments for debugging
-          console.log("Template attachments data:", {
-            type: typeof templateData.attachments,
-            isArray: Array.isArray(templateData.attachments),
-            value: templateData.attachments
-          });
-          
-          attachmentsToSend = templateData.attachments;
+        let parsedAttachments = formData.attachments;
+        if (!parsedAttachments && templateData && templateData.attachments) {
+          try {
+            // Log detailed info about template attachments for debugging
+            console.log("Template attachments data:", {
+              type: typeof templateData.attachments,
+              isArray: Array.isArray(templateData.attachments),
+              value: templateData.attachments
+            });
+            
+            if (typeof templateData.attachments === 'string') {
+              parsedAttachments = JSON.parse(templateData.attachments);
+            } else if (Array.isArray(templateData.attachments)) {
+              parsedAttachments = templateData.attachments;
+            } else {
+              parsedAttachments = [templateData.attachments];
+            }
+          } catch (e) {
+            console.error('Erro ao analisar anexos:', e);
+            parsedAttachments = [];
+          }
         }
         
         // Use signature from user settings or template
@@ -174,7 +193,7 @@ export function useEnvios() {
         // Prepare data to send to Edge Function
         const dataToSend = {
           to: contatoEmail,
-          attachments: attachmentsToSend || null,
+          attachments: parsedAttachments || null,
           contato_id: formData.contato_id,
           template_id: formData.template_id,
           agendamento_id: formData.agendamento_id,
@@ -190,7 +209,7 @@ export function useEnvios() {
           to: contatoEmail,
           template_id: formData.template_id,
           contato_id: formData.contato_id,
-          has_attachments: !!attachmentsToSend,
+          has_attachments: !!parsedAttachments,
           has_image: !!templateData?.image_url,
           subject: emailSubject,
           content_length: processedContent?.length,
@@ -302,25 +321,26 @@ export function useEnvios() {
         id: loadingToastId
       });
 
-      // Handle attachments
-      let attachmentsToSend = null;
+      // Parse attachments for proper handling
+      let parsedAttachments = null;
       if (templateData.attachments) {
-        if (typeof templateData.attachments === 'string' && templateData.attachments !== '[]') {
-          try {
-            attachmentsToSend = JSON.parse(templateData.attachments);
-          } catch (err) {
-            console.error('Erro ao analisar anexos:', err);
-            attachmentsToSend = templateData.attachments;
+        try {
+          if (typeof templateData.attachments === 'string' && templateData.attachments !== '[]') {
+            parsedAttachments = JSON.parse(templateData.attachments);
+          } else if (Array.isArray(templateData.attachments)) {
+            parsedAttachments = templateData.attachments;
+          } else {
+            parsedAttachments = [templateData.attachments];
           }
-        } else {
-          attachmentsToSend = templateData.attachments;
+        } catch (err) {
+          console.error('Erro ao analisar anexos:', err);
         }
       }
       
       const result = await sendEmail({
         contato_id: envio.contato_id,
         template_id: envio.template_id,
-        attachments: attachmentsToSend,
+        attachments: parsedAttachments,
         signature_image: userSettings?.signature_image || templateData.signature_image,
         // Always use template description as subject if available, otherwise use template name
         subject: templateData.descricao || templateData.nome

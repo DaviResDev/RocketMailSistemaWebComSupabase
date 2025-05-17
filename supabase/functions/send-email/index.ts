@@ -424,53 +424,47 @@ serve(async (req) => {
     const toAddress = contato_nome ? `"${contato_nome}" <${to}>` : to;
     
     try {
+      // Final payload for email sending function
+      const emailPayload = {
+        to: toAddress,
+        subject: subject || "Sem assunto",
+        html: finalContent,
+        attachments: emailAttachments
+      };
+      
       // Determine if we should use SMTP or Resend
       let result;
       if (smtp_settings && smtp_settings.from_email) {
-        console.log("Using SMTP for email delivery via email:", smtp_settings.from_email);
+        console.log("Using SMTP for email delivery");
         
         // Configure SMTP settings
         const smtpConfig = {
-          host: smtp_settings?.host || Deno.env.get('SMTP_HOST'),
-          port: parseInt(smtp_settings?.port) || 587,
-          secure: smtp_settings?.secure || false,
+          host: smtp_settings.host || "",
+          port: parseInt(smtp_settings.port) || 587,
+          secure: smtp_settings.secure || false,
           user: smtp_settings.from_email,
-          pass: smtp_settings?.password || Deno.env.get('SMTP_PASSWORD'),
-          name: smtp_settings.from_name || '',
+          pass: smtp_settings.password,
+          name: smtp_settings.from_name
         };
         
-        // Use sendEmail function to handle both SMTP and Resend
+        // Send email with SMTP with fallback to Resend
         result = await sendEmail(
-          {
-            to: toAddress,
-            cc: requestData.cc,
-            bcc: requestData.bcc,
-            subject: subject || "Email sem assunto",
-            html: finalContent,
-            attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
-          }, 
-          true, // Use SMTP
-          smtpConfig, 
-          apiKey, 
-          smtp_settings.from_name || "DisparoPro"
+          emailPayload,
+          true,
+          smtpConfig,
+          apiKey,
+          smtp_settings.from_name
         );
       } else {
         console.log("Using Resend for email delivery");
         
-        // Use sendEmail function with Resend
+        // Send email with Resend directly
         result = await sendEmail(
-          {
-            to: toAddress,
-            cc: requestData.cc,
-            bcc: requestData.bcc,
-            subject: subject || "Email sem assunto",
-            html: finalContent,
-            attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
-          }, 
-          false, // Don't use SMTP
+          emailPayload,
+          false,
           null,
-          apiKey, 
-          "DisparoPro"
+          apiKey,
+          null
         );
       }
       
@@ -480,20 +474,20 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           message: "Email sent successfully",
-          data: result
+          id: result.id,
+          provider: result.provider
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
         }
       );
-    } catch (emailError) {
-      console.error("Error sending email:", emailError);
-      
+    } catch (error) {
+      console.error("Failed to send email:", error);
       return new Response(
         JSON.stringify({
           success: false,
-          error: emailError.message || "Failed to send email"
+          error: error.message || "Unknown error occurred"
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -502,12 +496,11 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error("Error in send-email function:", error);
-    
+    console.error("Unhandled error in send-email function:", error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "An unexpected error occurred"
+        error: "Internal server error"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

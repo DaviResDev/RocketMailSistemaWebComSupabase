@@ -4,12 +4,17 @@ project_id = "czinoycvwsjjxuqbuxtm"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "storage", "graphql_public"]
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
 
 [db]
 port = 54322
 shadow_port = 54320
 major_version = 15
+
+[realtime]
+enabled = true
 
 [studio]
 enabled = true
@@ -22,6 +27,10 @@ port = 54324
 smtp_port = 54325
 pop3_port = 54326
 
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:5173"
@@ -30,27 +39,21 @@ jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
 
-[storage]
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[functions]
 enabled = true
-file_size_limit = "50MiB"
 
-[realtime]
-enabled = true
-
-[edge_functions]
-[edge_functions.send-email]
+[functions.test-smtp]
 verify_jwt = true
 
-[edge_functions.test-smtp]
+[functions.send-email]
 verify_jwt = true
-
-[edge_functions.process-scheduled-emails]
-verify_jwt = true
-
-[[edge_functions.import_map]]
-from = "nodemailer"
-to = "npm:nodemailer@6.9.12"
-
-[[edge_functions.import_map]]
-from = "resend"
-to = "npm:resend@2.0.0"
+import_map = "./supabase/functions/import_map.json"

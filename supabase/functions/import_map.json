@@ -1,0 +1,7 @@
+
+{
+  "imports": {
+    "npm:nodemailer": "npm:nodemailer@6.9.12",
+    "npm:resend": "npm:resend@2.0.0"
+  }
+}
