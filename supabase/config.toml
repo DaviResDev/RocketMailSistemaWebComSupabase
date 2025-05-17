@@ -39,10 +39,12 @@ enabled = true
 
 [edge_functions]
 [edge_functions.send-email]
-node_modules = true
 verify_jwt = true
+
 [edge_functions.test-smtp]
-node_modules = true
+verify_jwt = true
+
+[edge_functions.process-scheduled-emails]
 verify_jwt = true
 
 [[edge_functions.import_map]]

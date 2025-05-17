@@ -68,6 +68,16 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw new Error("Template não encontrado ou não carregado corretamente");
       }
       
+      // Ensure contact exists and has email
+      if (!schedule.contato || !schedule.contato.email) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Contato não encontrado ou email não disponível"
+        });
+        throw new Error("Contato não encontrado ou email não disponível");
+      }
+      
       // Get the full template details to include attachments
       const { data: template, error: templateError } = await supabase
         .from('templates')
@@ -88,7 +98,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       // Get the user settings to include signature
       const { data: userSettings, error: settingsError } = await supabase
         .from('configuracoes')
-        .select('signature_image')
+        .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_nome, smtp_seguranca, use_smtp')
         .single();
         
       if (settingsError && settingsError.code !== 'PGRST116') {
@@ -96,21 +106,21 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
       }
       
       // Process template content with contact data for placeholders
+      const currentDate = new Date();
+      const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+      const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
+      
       let processedContent = template.conteudo;
       
       if (schedule.contato) {
-        const currentDate = new Date();
-        const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
-        const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
-        
         processedContent = template.conteudo
           .replace(/\{\{nome\}\}/g, schedule.contato.nome || '')
           .replace(/\{\{email\}\}/g, schedule.contato.email || '')
           .replace(/\{\{telefone\}\}/g, schedule.contato.telefone || '')
           .replace(/\{\{razao_social\}\}/g, schedule.contato.razao_social || '')
           .replace(/\{\{cliente\}\}/g, schedule.contato.cliente || '')
-          .replace(/\{\{empresa\}\}/g, "Empresa Teste") 
-          .replace(/\{\{cargo\}\}/g, "Cargo Teste")
+          .replace(/\{\{empresa\}\}/g, schedule.contato.empresa || "Empresa Teste")
+          .replace(/\{\{cargo\}\}/g, schedule.contato.cargo || "Cargo Teste")
           .replace(/\{\{produto\}\}/g, "Produto Teste")
           .replace(/\{\{valor\}\}/g, "R$ 1.000,00")
           .replace(/\{\{vencimento\}\}/g, "01/01/2025")
@@ -149,6 +159,16 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         });
       }
       
+      // Prepare SMTP settings if user has configured them
+      const smtpSettings = userSettings?.use_smtp ? {
+        host: userSettings.email_smtp,
+        port: userSettings.email_porta,
+        secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+        password: userSettings.email_senha,
+        from_name: userSettings.smtp_nome || '',
+        from_email: userSettings.email_usuario || ''
+      } : null;
+      
       // Prepare data to send
       const envioData = {
         contato_id: schedule.contato_id,
@@ -156,25 +176,28 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         agendamento_id: schedule.id,
         // Pass the processed attachments
         attachments: attachmentsData,
-        // Pass these explictly to the edge function:
+        // Pass these explicitly to the edge function:
         subject: template.nome,
         content: processedContent,
         signature_image: signatureImageToUse,
         contato_nome: schedule.contato?.nome,
-        contato_email: schedule.contato?.email,
-        image_url: template.image_url
+        to: schedule.contato?.email, // Explicitly pass the email address
+        image_url: template.image_url,
+        smtp_settings: smtpSettings
       };
       
       // Log the data being sent
       console.log("Enviando email com os seguintes dados:", {
         contato: schedule.contato?.nome,
+        to: schedule.contato?.email,
         template: template.nome,
         content_length: processedContent.length,
         agendamento: schedule.id,
         temAnexos: !!attachmentsData && 
                   (Array.isArray(attachmentsData) ? attachmentsData.length > 0 : true),
         signature_image: !!signatureImageToUse,
-        image_url: !!template.image_url
+        image_url: !!template.image_url,
+        smtp_settings: !!smtpSettings
       });
       
       // Send email immediately using sendEmail

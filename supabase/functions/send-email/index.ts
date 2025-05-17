@@ -10,9 +10,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Email Sending Functions
-// ---------------------
-
 /**
  * Send email via SMTP using Nodemailer
  */
@@ -25,131 +22,136 @@ async function sendEmailViaSMTP(config, payload) {
     name: config.name || ''
   });
   
-  // Create transporter with timeouts to prevent hanging connections
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure || config.port === 465, // true for 465, false for other ports
-    auth: {
-      user: config.user,
-      pass: config.pass,
-    },
-    connectionTimeout: 15000, // 15 seconds
-    greetingTimeout: 15000, // 15 seconds
-    socketTimeout: 30000, // 30 seconds
-    logger: false, // Disable logging for cleaner operation
-    debug: false, // Disable debug for cleaner operation
-    tls: {
-      rejectUnauthorized: false // Accept self-signed certificates for better compatibility
-    },
-  });
-  
-  // Extract domain from email for proper DKIM setup
-  const emailDomain = config.user.split('@')[1];
-  
-  // Properly format the from field to ensure correct domain display
-  const fromName = config.name || config.user.split('@')[0];
-  const fromEmail = config.user; // Always use the configured email
-  const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
-  
-  // Prepare email data with improved structure for better MIME handling
-  const mailOptions = {
-    from: from,
-    to: payload.to,
-    subject: payload.subject,
-    html: payload.html,
-    headers: {
-      'MIME-Version': '1.0',
-      'Content-Type': 'text/html; charset=utf-8',
-      'X-Mailer': 'RocketMail',
-      'X-Priority': '3',
-    }
-  };
-
-  // Add CC if provided
-  if (payload.cc && payload.cc.length > 0) {
-    mailOptions.cc = payload.cc;
-  }
-  
-  // Add BCC if provided
-  if (payload.bcc && payload.bcc.length > 0) {
-    mailOptions.bcc = payload.bcc;
-  }
-  
-  // Improved attachment handling with better MIME type detection
-  if (payload.attachments && payload.attachments.length > 0) {
-    mailOptions.attachments = payload.attachments.map(attachment => {
-      console.log(`Processing attachment: ${JSON.stringify(attachment.filename || attachment.name || 'unnamed')}`);
-      
-      // For binary content (Uint8Array)
-      if (attachment.content instanceof Uint8Array) {
-        return {
-          filename: attachment.filename || attachment.name || 'attachment.file',
-          content: attachment.content,
-          contentType: attachment.contentType || attachment.type || undefined,
-          encoding: 'base64'
-        };
-      }
-      
-      // For base64 content
-      if (attachment.content && typeof attachment.content === 'string') {
-        // Remove the data URI prefix if present
-        const base64Content = attachment.content.includes('base64,') ? 
-          attachment.content.split('base64,')[1] : 
-          attachment.content;
-          
-        return {
-          filename: attachment.filename || attachment.name || 'attachment.file',
-          content: base64Content,
-          contentType: attachment.contentType || attachment.type || undefined,
-          encoding: 'base64'
-        };
-      }
-      
-      // If content is not provided but url is
-      if (attachment.url && !attachment.content) {
-        return {
-          path: attachment.url,
-          filename: attachment.filename || attachment.name || 'attachment.file',
-          contentType: attachment.contentType || attachment.type || undefined
-        };
-      }
-      
-      return attachment;
+  try {
+    // Create transporter with timeouts to prevent hanging connections
+    const transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure || config.port === 465, // true for 465, false for other ports
+      auth: {
+        user: config.user,
+        pass: config.pass,
+      },
+      connectionTimeout: 15000, // 15 seconds
+      greetingTimeout: 15000, // 15 seconds
+      socketTimeout: 30000, // 30 seconds
+      logger: false, // Disable logging for cleaner operation
+      debug: false, // Disable debug for cleaner operation
+      tls: {
+        rejectUnauthorized: false // Accept self-signed certificates for better compatibility
+      },
     });
     
-    console.log(`Adding ${mailOptions.attachments.length} attachments to email`);
-  }
-
-  console.log(`Sending email via SMTP: ${config.host}:${config.port}`);
-  console.log(`From: ${mailOptions.from} To: ${payload.to}`);
-  console.log(`Subject: ${payload.subject}`);
-  console.log(`HTML content length: ${payload.html?.length || 0} characters`);
-  
-  // Verify SMTP configuration before sending
-  try {
-    const verifyResult = await transporter.verify();
-    console.log("SMTP verification result:", verifyResult);
-  } catch (verifyError) {
-    console.error("SMTP verification failed:", verifyError);
-    throw new Error(`SMTP verification failed: ${verifyError.message}`);
-  }
-  
-  // Send mail with defined transport object
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully via SMTP:", info.messageId);
-    console.log("SMTP Response:", info.response);
-    return {
-      success: true,
-      id: info.messageId,
-      provider: "smtp",
+    // Extract domain from email for proper DKIM setup
+    const emailDomain = config.user.split('@')[1];
+    
+    // Properly format the from field to ensure correct domain display
+    const fromName = config.name || config.user.split('@')[0];
+    const fromEmail = config.user; // Always use the configured email
+    const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+    
+    // Prepare email data with improved structure for better MIME handling
+    const mailOptions = {
       from: from,
-      reply_to: fromEmail,
-      response: info.response
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
+      headers: {
+        'MIME-Version': '1.0',
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Mailer': 'RocketMail',
+        'X-Priority': '3',
+      }
     };
+
+    // Add CC if provided
+    if (payload.cc && payload.cc.length > 0) {
+      mailOptions.cc = payload.cc;
+    }
+    
+    // Add BCC if provided
+    if (payload.bcc && payload.bcc.length > 0) {
+      mailOptions.bcc = payload.bcc;
+    }
+    
+    // Improved attachment handling with better MIME type detection
+    if (payload.attachments && payload.attachments.length > 0) {
+      mailOptions.attachments = payload.attachments.map(attachment => {
+        console.log(`Processing attachment: ${JSON.stringify(attachment.filename || attachment.name || 'unnamed')}`);
+        
+        // For binary content (Uint8Array)
+        if (attachment.content instanceof Uint8Array) {
+          return {
+            filename: attachment.filename || attachment.name || 'attachment.file',
+            content: attachment.content,
+            contentType: attachment.contentType || attachment.type || undefined,
+            encoding: 'base64'
+          };
+        }
+        
+        // For base64 content
+        if (attachment.content && typeof attachment.content === 'string') {
+          // Remove the data URI prefix if present
+          const base64Content = attachment.content.includes('base64,') ? 
+            attachment.content.split('base64,')[1] : 
+            attachment.content;
+            
+          return {
+            filename: attachment.filename || attachment.name || 'attachment.file',
+            content: base64Content,
+            contentType: attachment.contentType || attachment.type || undefined,
+            encoding: 'base64'
+          };
+        }
+        
+        // If content is not provided but url is
+        if (attachment.url && !attachment.content) {
+          return {
+            path: attachment.url,
+            filename: attachment.filename || attachment.name || 'attachment.file',
+            contentType: attachment.contentType || attachment.type || undefined
+          };
+        }
+        
+        return attachment;
+      });
+      
+      console.log(`Adding ${mailOptions.attachments.length} attachments to email`);
+    }
+
+    console.log(`Sending email via SMTP: ${config.host}:${config.port}`);
+    console.log(`From: ${mailOptions.from} To: ${payload.to}`);
+    console.log(`Subject: ${payload.subject}`);
+    console.log(`HTML content length: ${payload.html?.length || 0} characters`);
+    
+    // Verify SMTP configuration before sending
+    try {
+      const verifyResult = await transporter.verify();
+      console.log("SMTP verification result:", verifyResult);
+    } catch (verifyError) {
+      console.error("SMTP verification failed:", verifyError);
+      throw new Error(`SMTP verification failed: ${verifyError.message}`);
+    }
+    
+    // Send mail with defined transport object
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log("Email sent successfully via SMTP:", info.messageId);
+      console.log("SMTP Response:", info.response);
+      return {
+        success: true,
+        id: info.messageId,
+        provider: "smtp",
+        from: from,
+        reply_to: fromEmail,
+        response: info.response
+      };
+    } catch (error) {
+      console.error("Failed to send email via SMTP:", error);
+      throw error;
+    }
   } catch (error) {
-    console.error("Failed to send email via SMTP:", error);
+    console.error("SMTP Error:", error);
     throw error;
   }
 }
@@ -158,69 +160,69 @@ async function sendEmailViaSMTP(config, payload) {
  * Send email via Resend API
  */
 async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
-  const resend = new Resend(resendApiKey);
-  
-  if (!resendApiKey) {
-    throw new Error("Missing Resend API key. Please configure it in your Supabase secrets.");
-  }
-  
-  // Create email data for Resend
-  const emailData = {
-    from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
-    to: [payload.to],
-    subject: payload.subject,
-    html: payload.html,
-  };
-  
-  // Add reply-to if provided
-  if (replyTo) {
-    emailData.reply_to = replyTo;
-  }
-  
-  // Add CC if provided
-  if (payload.cc && payload.cc.length > 0) {
-    emailData.cc = payload.cc;
-  }
-  
-  // Add BCC if provided
-  if (payload.bcc && payload.bcc.length > 0) {
-    emailData.bcc = payload.bcc;
-  }
-  
-  // Add attachments if provided - improved handling
-  if (payload.attachments && payload.attachments.length > 0) {
-    emailData.attachments = payload.attachments.map(attachment => {
-      console.log(`Processing Resend attachment: ${JSON.stringify(attachment.filename || attachment.name || 'unnamed')}`);
-      
-      // Return an object in the format Resend expects
-      let content = '';
-      
-      if (attachment.content instanceof Uint8Array) {
-        content = Buffer.from(attachment.content).toString('base64');
-      } else if (typeof attachment.content === 'string') {
-        content = attachment.content.includes('base64,') 
-          ? attachment.content.split('base64,')[1] 
-          : attachment.content;
-      } else {
-        content = attachment.content;
-      }
-      
-      return {
-        filename: attachment.filename || attachment.name || 'attachment.file',
-        content: content,
-        contentType: attachment.contentType || attachment.type || undefined
-      };
-    });
-    
-    console.log(`Adding ${emailData.attachments.length} attachments to email (Resend)`);
-  }
-  
-  console.log(`Sending email via Resend`);
-  console.log(`From: ${emailData.from} To: ${payload.to}`);
-  console.log(`Subject: ${payload.subject}`);
-  console.log(`HTML content length: ${payload.html?.length || 0} characters`);
-  
   try {
+    const resend = new Resend(resendApiKey);
+    
+    if (!resendApiKey) {
+      throw new Error("Missing Resend API key. Please configure it in your Supabase secrets.");
+    }
+    
+    // Create email data for Resend
+    const emailData = {
+      from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
+      to: [payload.to],
+      subject: payload.subject,
+      html: payload.html,
+    };
+    
+    // Add reply-to if provided
+    if (replyTo) {
+      emailData.reply_to = replyTo;
+    }
+    
+    // Add CC if provided
+    if (payload.cc && payload.cc.length > 0) {
+      emailData.cc = payload.cc;
+    }
+    
+    // Add BCC if provided
+    if (payload.bcc && payload.bcc.length > 0) {
+      emailData.bcc = payload.bcc;
+    }
+    
+    // Add attachments if provided - improved handling
+    if (payload.attachments && payload.attachments.length > 0) {
+      emailData.attachments = payload.attachments.map(attachment => {
+        console.log(`Processing Resend attachment: ${JSON.stringify(attachment.filename || attachment.name || 'unnamed')}`);
+        
+        // Return an object in the format Resend expects
+        let content = '';
+        
+        if (attachment.content instanceof Uint8Array) {
+          content = Buffer.from(attachment.content).toString('base64');
+        } else if (typeof attachment.content === 'string') {
+          content = attachment.content.includes('base64,') 
+            ? attachment.content.split('base64,')[1] 
+            : attachment.content;
+        } else {
+          content = attachment.content;
+        }
+        
+        return {
+          filename: attachment.filename || attachment.name || 'attachment.file',
+          content: content,
+          contentType: attachment.contentType || attachment.type || undefined
+        };
+      });
+      
+      console.log(`Adding ${emailData.attachments.length} attachments to email (Resend)`);
+    }
+    
+    console.log(`Sending email via Resend`);
+    console.log(`From: ${emailData.from} To: ${payload.to}`);
+    console.log(`Subject: ${payload.subject}`);
+    console.log(`HTML content length: ${payload.html?.length || 0} characters`);
+    
     const result = await resend.emails.send(emailData);
     
     if (result.error) {
@@ -280,22 +282,45 @@ async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
   return await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
 }
 
-// Main Server Function
-// -------------------
-
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
+    // Handle CORS preflight requests
+    if (req.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
+    
+    // Check for Resend API key
     const apiKey = Deno.env.get("RESEND_API_KEY");
     if (!apiKey) {
-      throw new Error("RESEND_API_KEY is not configured");
+      console.error("RESEND_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "RESEND_API_KEY is not configured"
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
     }
-
-    const requestData = await req.json();
+    
+    let requestData;
+    try {
+      requestData = await req.json();
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Invalid request data format"
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
+    }
     
     const { 
       to, 
@@ -380,9 +405,9 @@ serve(async (req) => {
             
             return {
               filename: attachment.name || attachment.file_name || 'attachment',
-              content: attachment.url || attachment.file_url || ''
+              url: attachment.url || attachment.file_url || ''
             };
-          }).filter(att => att.content); // Filter out attachments with empty URLs
+          }).filter(att => att.url); // Filter out attachments with empty URLs
         }
       } catch (error) {
         console.error("Error processing attachments:", error);
@@ -406,11 +431,11 @@ serve(async (req) => {
         
         // Configure SMTP settings
         const smtpConfig = {
-          host: requestData.smtp_settings?.host || Deno.env.get('SMTP_HOST'),
-          port: parseInt(requestData.smtp_settings?.port) || 587,
-          secure: requestData.smtp_settings?.secure || false,
+          host: smtp_settings?.host || Deno.env.get('SMTP_HOST'),
+          port: parseInt(smtp_settings?.port) || 587,
+          secure: smtp_settings?.secure || false,
           user: smtp_settings.from_email,
-          pass: requestData.smtp_settings?.password || Deno.env.get('SMTP_PASSWORD'),
+          pass: smtp_settings?.password || Deno.env.get('SMTP_PASSWORD'),
           name: smtp_settings.from_name || '',
         };
         
@@ -432,25 +457,21 @@ serve(async (req) => {
       } else {
         console.log("Using Resend for email delivery");
         
-        // Use direct Resend sendEmail function
-        const resend = new Resend(apiKey);
-        const { data, error } = await resend.emails.send({
-          from: "DisparoPro <onboarding@resend.dev>",
-          to: [toAddress],
-          subject: subject || "Email sem assunto",
-          html: finalContent,
-          attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
-        });
-        
-        if (error) {
-          throw error;
-        }
-        
-        result = { 
-          success: true, 
-          id: data?.id,
-          provider: "resend" 
-        };
+        // Use sendEmail function with Resend
+        result = await sendEmail(
+          {
+            to: toAddress,
+            cc: requestData.cc,
+            bcc: requestData.bcc,
+            subject: subject || "Email sem assunto",
+            html: finalContent,
+            attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
+          }, 
+          false, // Don't use SMTP
+          null,
+          apiKey, 
+          "DisparoPro"
+        );
       }
       
       console.log("Email sent successfully:", result);
@@ -486,7 +507,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message || "An unexpected error occurred"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

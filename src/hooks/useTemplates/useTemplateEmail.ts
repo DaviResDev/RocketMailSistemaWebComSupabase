@@ -106,10 +106,10 @@ export function useTemplateEmail() {
       
       if (response.error) {
         console.error("Edge function error:", response.error);
-        throw new Error(`Erro na função de envio: ${response.error.message}`);
+        throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
       }
       
-      // Verificar a resposta da função
+      // Check the response data
       const responseData = response.data;
       if (!responseData || !responseData.success) {
         console.error("Failed response from send-email:", responseData);

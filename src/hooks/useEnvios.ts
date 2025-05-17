@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -14,6 +13,7 @@ interface EnvioFormData {
   signature_image?: string;
   contato_nome?: string;
   contato_email?: string;
+  to?: string; // Explicit recipient email address
 }
 
 interface Envio {
@@ -72,21 +72,39 @@ export function useEnvios() {
     setSending(true);
     
     try {
-      // Get contato data for better feedback
-      const { data: contatoData, error: contatoError } = await supabase
-        .from('contatos')
-        .select('nome, email')
-        .eq('id', formData.contato_id)
-        .single();
+      // Check for direct recipient email in formData
+      const recipientEmail = formData.to;
       
-      if (contatoError) {
-        toast.error(`Não foi possível encontrar o contato: ${contatoError.message}`);
+      // If no direct recipient, get contato data for better feedback
+      let contatoEmail = recipientEmail;
+      let contatoNome = formData.contato_nome;
+      
+      if (!recipientEmail && formData.contato_id) {
+        const { data: contatoData, error: contatoError } = await supabase
+          .from('contatos')
+          .select('nome, email')
+          .eq('id', formData.contato_id)
+          .single();
+        
+        if (contatoError) {
+          toast.error(`Não foi possível encontrar o contato: ${contatoError.message}`);
+          setSending(false);
+          return false;
+        }
+        
+        contatoEmail = contatoData.email;
+        contatoNome = contatoData.nome;
+      }
+      
+      // Verify we have an email address to send to
+      if (!contatoEmail) {
+        toast.error('Email do destinatário não encontrado');
         setSending(false);
         return false;
       }
       
       // Show initial progress toast
-      const loadingToastId = toast.loading(`Iniciando envio para ${contatoData.nome}...`);
+      const loadingToastId = toast.loading(`Iniciando envio para ${contatoNome || contatoEmail}...`);
       
       try {
         // Get template data to include attachments and for content processing
@@ -106,22 +124,22 @@ export function useEnvios() {
 
         // Process template content with contact data for placeholders if not already provided
         let processedContent = formData.content;
-        if (!processedContent) {
+        if (!processedContent && templateData) {
           const currentDate = new Date();
           const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
           
           processedContent = templateData.conteudo
-            .replace(/{nome}/g, contatoData.nome || '')
-            .replace(/{email}/g, contatoData.email || '')
-            .replace(/{telefone}/g, "")
-            .replace(/{razao_social}/g, "")
-            .replace(/{cliente}/g, "")
-            .replace(/{dia}/g, formattedDate);
+            .replace(/\{\{nome\}\}/g, contatoNome || '')
+            .replace(/\{\{email\}\}/g, contatoEmail || '')
+            .replace(/\{\{telefone\}\}/g, "")
+            .replace(/\{\{razao_social\}\}/g, "")
+            .replace(/\{\{cliente\}\}/g, "")
+            .replace(/\{\{data\}\}/g, formattedDate);
         }
         
         // Handle attachments more carefully
         let attachmentsToSend = formData.attachments;
-        if (!attachmentsToSend && templateData.attachments) {
+        if (!attachmentsToSend && templateData && templateData.attachments) {
           // Log detailed info about template attachments for debugging
           console.log("Template attachments data:", {
             type: typeof templateData.attachments,
@@ -133,7 +151,7 @@ export function useEnvios() {
         }
         
         // Use signature from user settings or template
-        const signatureImage = userSettings?.signature_image || templateData.signature_image;
+        const signatureImage = formData.signature_image || userSettings?.signature_image || templateData.signature_image;
         
         // Prepare SMTP settings if user has configured them
         const smtpSettings = userSettings?.use_smtp ? {
@@ -145,48 +163,39 @@ export function useEnvios() {
           from_email: userSettings.email_usuario || ''
         } : null;
         
-        // Construct the final email body with image at top, content in middle, and signature at bottom
-        let finalContent = '';
+        // Update toast with processing status
+        toast.loading(`Processando envio para ${contatoNome || contatoEmail}...`, {
+          id: loadingToastId
+        });
         
-        // Add image if present
-        if (templateData.image_url) {
-          finalContent += `<div style="margin-bottom: 20px;"><img src="${templateData.image_url}" alt="Imagem do template" style="max-width: 100%; height: auto;" /></div>`;
-        }
+        // Ensure we have a subject
+        const emailSubject = formData.subject || templateData?.descricao || templateData?.nome || "Sem assunto";
         
-        // Add main content
-        finalContent += processedContent;
-        
-        // Include attachments from the template if they exist
+        // Prepare data to send to Edge Function
         const dataToSend = {
-          ...formData,
+          to: contatoEmail,
           attachments: attachmentsToSend || null,
-          contato_nome: contatoData.nome,
-          contato_email: contatoData.email,
-          // Always use template description as subject if available, otherwise use template name
-          subject: formData.subject || templateData.descricao || templateData.nome,
-          content: finalContent,
+          contato_id: formData.contato_id,
+          template_id: formData.template_id,
+          agendamento_id: formData.agendamento_id,
+          contato_nome: contatoNome,
+          subject: emailSubject,
+          content: processedContent,
           signature_image: signatureImage,
-          template_name: templateData.nome,
-          // Include SMTP settings if using SMTP
-          smtp_settings: smtpSettings,
-          image_url: templateData.image_url
+          image_url: templateData?.image_url,
+          smtp_settings: smtpSettings
         };
         
         console.log("Sending email with data:", { 
-          to: contatoData.email,
+          to: contatoEmail,
           template_id: formData.template_id,
           contato_id: formData.contato_id,
           has_attachments: !!attachmentsToSend,
-          has_image: !!templateData.image_url,
-          subject: dataToSend.subject,
-          content_length: dataToSend.content?.length,
-          signature_image: !!dataToSend.signature_image,
+          has_image: !!templateData?.image_url,
+          subject: emailSubject,
+          content_length: processedContent?.length,
+          signature_image: !!signatureImage,
           use_smtp: !!userSettings?.use_smtp
-        });
-        
-        // Update toast with processing status
-        toast.loading(`Processando envio para ${contatoData.nome}...`, {
-          id: loadingToastId
         });
         
         const response = await supabase.functions.invoke('send-email', {
@@ -195,12 +204,14 @@ export function useEnvios() {
         
         // Check function response
         if (response.error) {
-          throw new Error(`Erro na função de envio: ${response.error.message}`);
+          console.error("Edge function error:", response.error);
+          throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
         }
         
         // Check data response
         const responseData = response.data;
         if (!responseData || !responseData.success) {
+          console.error("Failed response from send-email:", responseData);
           throw new Error(responseData?.error || "Falha ao enviar email");
         }
         
@@ -208,7 +219,22 @@ export function useEnvios() {
         console.log('Email enviado com sucesso:', responseData);
         
         toast.dismiss(loadingToastId);
-        toast.success(`Email enviado com sucesso para ${contatoData.nome}!`);
+        toast.success(`Email enviado com sucesso para ${contatoNome || contatoEmail}!`);
+        
+        // Create entry in envios table
+        if (formData.contato_id && formData.template_id) {
+          try {
+            await supabase.from('envios').insert({
+              contato_id: formData.contato_id,
+              template_id: formData.template_id,
+              status: 'enviado',
+              agendamento_id: formData.agendamento_id
+            });
+          } catch (err) {
+            console.error("Error saving to envios table:", err);
+            // Don't fail the entire process if this fails
+          }
+        }
         
         await fetchEnvios();
         return true;
