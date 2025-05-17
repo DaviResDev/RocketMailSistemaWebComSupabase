@@ -101,7 +101,7 @@ export function useEnvios() {
         // Get user settings to include signature
         const { data: userSettings } = await supabase
           .from('configuracoes')
-          .select('signature_image')
+          .select('signature_image, email_usuario, smtp_nome, use_smtp')
           .single();
 
         // Process template content with contact data for placeholders if not already provided
@@ -156,7 +156,13 @@ export function useEnvios() {
           subject: formData.subject || templateData.descricao || templateData.nome,
           content: finalContent,
           signature_image: signatureImage,
-          template_name: templateData.nome
+          template_name: templateData.nome,
+          // Include SMTP settings if using SMTP
+          smtp_settings: userSettings?.use_smtp ? {
+            from_name: userSettings.smtp_nome || '',
+            from_email: userSettings.email_usuario || ''
+          } : null,
+          image_url: templateData.image_url
         };
         
         console.log("Sending email with data:", { 
@@ -167,7 +173,8 @@ export function useEnvios() {
           has_image: !!templateData.image_url,
           subject: dataToSend.subject,
           content_length: dataToSend.content?.length,
-          signature_image: !!dataToSend.signature_image
+          signature_image: !!dataToSend.signature_image,
+          use_smtp: !!userSettings?.use_smtp
         });
         
         // Update toast with processing status
@@ -237,6 +244,12 @@ export function useEnvios() {
         
       if (templateError) throw templateError;
       
+      // Get user settings
+      const { data: userSettings } = await supabase
+        .from('configuracoes')
+        .select('signature_image')
+        .single();
+      
       // Update toast with processing status
       toast.loading(`Processando reenvio para ${envio.contato.nome}...`, {
         id: loadingToastId
@@ -261,7 +274,7 @@ export function useEnvios() {
         contato_id: envio.contato_id,
         template_id: envio.template_id,
         attachments: attachmentsToSend,
-        signature_image: templateData.signature_image,
+        signature_image: userSettings?.signature_image || templateData.signature_image,
         // Always use template description as subject if available, otherwise use template name
         subject: templateData.descricao || templateData.nome
       });

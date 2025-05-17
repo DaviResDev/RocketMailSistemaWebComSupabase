@@ -15,7 +15,7 @@ export function useTemplateEmail() {
     }
 
     try {
-      toast.info('Enviando email de teste...');
+      const loadingToastId = toast.loading('Enviando email de teste...');
       
       // Get the template first
       const { data: template, error: templateError } = await supabase
@@ -25,6 +25,12 @@ export function useTemplateEmail() {
         .single();
       
       if (templateError) throw templateError;
+      
+      // Get user settings to include signature and SMTP settings
+      const { data: userSettings } = await supabase
+        .from('configuracoes')
+        .select('signature_image, email_usuario, smtp_nome, use_smtp')
+        .single();
       
       // Process template with sample data
       const currentDate = new Date();
@@ -74,11 +80,27 @@ export function useTemplateEmail() {
           isTest: true,
           signature_image: signatureImageToUse,
           attachments: attachments,
-          image_url: template.image_url
+          image_url: template.image_url,
+          // Include SMTP settings if using SMTP
+          smtp_settings: userSettings?.use_smtp ? {
+            from_name: userSettings.smtp_nome || '',
+            from_email: userSettings.email_usuario || ''
+          } : null,
+          contato_nome: "Usuário Teste"
         },
       });
       
-      if (response.error) throw new Error(response.error.message);
+      toast.dismiss(loadingToastId);
+      
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      
+      // Verificar a resposta da função
+      const responseData = response.data;
+      if (!responseData || !responseData.success) {
+        throw new Error(responseData?.error || "Falha ao enviar email de teste");
+      }
       
       toast.success(`Email de teste enviado para ${email}!`);
       return true;

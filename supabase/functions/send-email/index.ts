@@ -44,7 +44,16 @@ serve(async (req) => {
     });
     
     if (!to) {
-      throw new Error("Recipient email (to) is required");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Recipient email (to) is required"
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
     }
     
     // Process the content to include image and signature
