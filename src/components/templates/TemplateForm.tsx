@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -15,11 +16,10 @@ import { TemplateFormProps } from './TemplateFormProps';
 import { useEmailSignature } from '@/hooks/useEmailSignature';
 import { useSettings } from '@/hooks/useSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TemplateFileUpload } from './TemplateFileUpload';
 import { TemplatePreview } from './TemplatePreview';
 import { ImageUploader } from './ImageUploader';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { SaveIcon, Send, Paperclip, FileText, PencilIcon, Image } from "lucide-react";
+import { SaveIcon, Send, Image, PencilIcon } from "lucide-react";
 
 const templateSchema = z.object({
   nome: z.string().min(1, { message: 'Nome é obrigatório' }),
@@ -30,29 +30,19 @@ const templateSchema = z.object({
   assinatura: z.string(),
   signature_image: z.string().optional().nullable(),
   attachments: z.any().optional(),
-  template_file: z.any().optional(),
-  template_file_url: z.string().optional().nullable(),
-  template_file_name: z.string().optional().nullable(),
   image_url: z.string().optional().nullable()
 });
 
 export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) => {
   const { settings } = useSettings();
-  const [templateFile, setTemplateFile] = useState<File | null>(null);
-  const [templateFileName, setTemplateFileName] = useState<string | null>(null);
-  const [templateFileUrl, setTemplateFileUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
   
-  const signatureOptions = [
-    { value: settings?.signature_image || 'default_signature', label: 'Assinatura padrão' },
-    { value: 'no_signature', label: 'Sem assinatura' }
-  ];
-  
-  const [useSignature, setUseSignature] = useState(!!template?.assinatura && template?.assinatura !== 'não');
-  const [shouldUseSignature, setShouldUseSignature] = useState(!!template?.assinatura && template?.assinatura !== 'não');
+  // Always use signature from settings
+  const [useSignature, setUseSignature] = useState(true);
+  const [shouldUseSignature, setShouldUseSignature] = useState(true);
   const [editorInstance, setEditorInstance] = useState<any>(null);
 
   const form = useForm<TemplateFormData>({
@@ -63,12 +53,9 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       conteudo: template?.conteudo || '',
       canal: template?.canal || 'email',
       status: template?.status || 'ativo',
-      assinatura: template?.assinatura || 'não',
-      signature_image: template?.signature_image || settings?.signature_image || 'default_signature',
+      assinatura: 'sim', // Always use signature
+      signature_image: settings?.signature_image || 'default_signature', // Always use from settings
       attachments: template?.attachments || [],
-      template_file: null,
-      template_file_url: template?.template_file_url || null,
-      template_file_name: template?.template_file_name || null,
       image_url: template?.image_url || null,
     },
     mode: 'onChange'
@@ -82,12 +69,9 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         conteudo: template.conteudo,
         canal: template.canal || 'email',
         status: template.status || 'ativo',
-        assinatura: template.assinatura || 'não',
-        signature_image: template.signature_image || settings?.signature_image || 'default_signature',
+        assinatura: 'sim', // Always use signature
+        signature_image: settings?.signature_image || 'default_signature', // Always use signature from settings
         attachments: template.attachments || [],
-        template_file: null,
-        template_file_url: template.template_file_url || null,
-        template_file_name: template.template_file_name || null,
         image_url: template.image_url || null,
       });
       
@@ -103,36 +87,21 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         setAttachments([]);
       }
       
-      setTemplateFileUrl(template.template_file_url || null);
-      setTemplateFileName(template.template_file_name || null);
       setImageUrl(template.image_url || null);
-      setUseSignature(template.assinatura !== 'não');
-      setShouldUseSignature(template.assinatura !== 'não');
+      setUseSignature(true);
+      setShouldUseSignature(true);
     } else {
       form.reset();
       setAttachments([]);
-      setTemplateFileUrl(null);
-      setTemplateFileName(null);
       setImageUrl(null);
-      setUseSignature(false);
-      setShouldUseSignature(false);
+      setUseSignature(true);
+      setShouldUseSignature(true);
     }
   }, [template, form, settings]);
-
-  const handleTemplateFileChange = (file: File | null) => {
-    setTemplateFile(file);
-    form.setValue('template_file', file);
-  };
 
   const handleAttachmentChange = (newAttachments: any[]) => {
     setAttachments(newAttachments);
     form.setValue('attachments', newAttachments);
-  };
-
-  const handleSignatureChange = (value: boolean) => {
-    setUseSignature(value);
-    setShouldUseSignature(value);
-    form.setValue('assinatura', value ? 'sim' : 'não');
   };
 
   const handleImageUploaded = (url: string) => {
@@ -140,46 +109,11 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     form.setValue('image_url', url);
   };
 
-  const handleInsertImage = (url: string) => {
-    if (editorInstance) {
-      const imageHtml = `<img src="${url}" alt="Imagem do Template" style="max-width: 100%; height: auto;" />`;
-      const editorEl = document.getElementById('rich-text-editor');
-      if (editorEl) {
-        // Get current selection or move to the end
-        const selection = window.getSelection();
-        let range;
-        
-        if (selection && selection.rangeCount > 0) {
-          range = selection.getRangeAt(0);
-        } else {
-          range = document.createRange();
-          range.selectNodeContents(editorEl);
-          range.collapse(false);
-        }
-        
-        // Create a temporary div with the image HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = imageHtml;
-        
-        // Insert each child of the temp div
-        while (tempDiv.firstChild) {
-          range.insertNode(tempDiv.firstChild);
-        }
-        
-        // Update form value with new content
-        form.setValue('conteudo', editorEl.innerHTML);
-      }
-    }
-  };
-
   async function onSubmit(values: TemplateFormData) {
     try {
       values.attachments = attachments;
-      values.assinatura = useSignature ? 'sim' : 'não';
-      values.template_file = templateFile;
-      values.template_file_url = templateFileUrl;
-      values.template_file_name = templateFileName;
-      values.signature_image = shouldUseSignature ? values.signature_image : null;
+      values.assinatura = 'sim'; // Always use signature
+      values.signature_image = settings?.signature_image || 'default_signature'; // Always use signature from settings
       values.image_url = imageUrl;
       
       console.log('Enviando dados do formulário:', values);
@@ -189,12 +123,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       if (success) {
         form.reset();
         setAttachments([]);
-        setTemplateFile(null);
-        setTemplateFileUrl(null);
-        setTemplateFileName(null);
         setImageUrl(null);
-        setUseSignature(false);
-        setShouldUseSignature(false);
       }
       
       return success;
@@ -208,7 +137,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   const [previewTemplate, setPreviewTemplate] = useState<Partial<Template>>({
     nome: template?.nome || '',
     conteudo: template?.conteudo || '',
-    signature_image: template?.signature_image || settings?.signature_image || 'default_signature',
+    signature_image: settings?.signature_image || 'default_signature',
     attachments: template?.attachments || '[]',
     image_url: template?.image_url || null
   });
@@ -220,12 +149,10 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       ...previewTemplate,
       nome: formValues.nome,
       conteudo: formValues.conteudo,
-      signature_image: shouldUseSignature 
-        ? (formValues.signature_image || settings?.signature_image || 'default_signature') 
-        : null,
+      signature_image: settings?.signature_image || 'default_signature',
       image_url: imageUrl
     });
-  }, [form.watch('nome'), form.watch('conteudo'), shouldUseSignature, imageUrl]);
+  }, [form.watch('nome'), form.watch('conteudo'), imageUrl, settings]);
 
   return (
     <Form {...form}>
@@ -326,71 +253,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                   </FormItem>
                 )}
               />
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Signature configuration */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Configuração de Assinatura</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <FormField
-                control={form.control}
-                name="assinatura"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Usar assinatura?</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={shouldUseSignature}
-                        onCheckedChange={(checked) => {
-                          handleSignatureChange(checked);
-                          setShouldUseSignature(checked);
-                        }}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              {shouldUseSignature && (
-                <FormField
-                  control={form.control}
-                  name="signature_image"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Imagem da Assinatura</FormLabel>
-                      <Select
-                        disabled={!shouldUseSignature}
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setSignatureImage(value);
-                        }}
-                        defaultValue={form.getValues('signature_image') || settings?.signature_image || 'default_signature'}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione a assinatura" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {signatureOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
             </div>
           </CardContent>
         </Card>

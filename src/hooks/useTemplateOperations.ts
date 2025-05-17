@@ -46,38 +46,6 @@ export function useTemplateOperations() {
     }
   };
 
-  // Function to upload template file
-  const uploadTemplateFile = async (file: File) => {
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`;
-      
-      // Upload the file to Supabase storage
-      const { data, error } = await supabase.storage
-        .from('template_files')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-      
-      if (error) throw error;
-      
-      // Get the public URL for the file
-      const { data: { publicUrl } } = supabase.storage
-        .from('template_files')
-        .getPublicUrl(filePath);
-        
-      return {
-        url: publicUrl,
-        name: file.name
-      };
-    } catch (error) {
-      console.error('Error uploading template file:', error);
-      throw error;
-    }
-  };
-
   const createTemplate = async (formData: TemplateFormData) => {
     if (!user) {
       toast.error('Você precisa estar logado para criar templates');
@@ -91,8 +59,7 @@ export function useTemplateOperations() {
         canal: 'email', // Always set to email since it's the only option now
         user_id: user.id,
         status: formData.status || 'ativo', // Ensure status is set
-        // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
-        signature_image: formData.signature_image || (settings?.signature_image || null),
+        signature_image: settings?.signature_image || null, // Always use signature from settings
         image_url: formData.image_url || null // Ensure image_url is included
       };
       
@@ -169,8 +136,7 @@ export function useTemplateOperations() {
         ...formData, 
         canal: 'email',
         status: formData.status || 'ativo', // Ensure status is set
-        // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
-        signature_image: formData.signature_image || (settings?.signature_image || null),
+        signature_image: settings?.signature_image || null, // Always use signature from settings
         image_url: formData.image_url || null // Ensure image_url is included
       };
       

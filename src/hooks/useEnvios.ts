@@ -126,8 +126,22 @@ export function useEnvios() {
           attachmentsToSend = templateData.attachments;
         }
         
-        // Always use signature from template or default settings
-        const signatureImage = formData.signature_image || templateData.signature_image;
+        // Always use signature from template or user settings
+        const signatureImage = templateData.signature_image;
+        
+        // Construct the final email body with image at top, content in middle, and signature at bottom
+        let finalContent = '';
+        
+        // Add image if present
+        if (templateData.image_url) {
+          finalContent += `<div style="margin-bottom: 20px;"><img src="${templateData.image_url}" alt="Imagem do template" style="max-width: 100%; height: auto;" /></div>`;
+        }
+        
+        // Add main content
+        finalContent += processedContent;
+        
+        // Add signature separator and placeholder - the actual signature will be attached by the edge function
+        finalContent += `<br><br>--<br>`;
         
         // Include attachments from the template if they exist
         const dataToSend = {
@@ -137,7 +151,7 @@ export function useEnvios() {
           contato_email: contatoData.email,
           // Always use template description as subject if available, otherwise use template name
           subject: formData.subject || templateData.descricao || templateData.nome,
-          content: processedContent,
+          content: finalContent,
           signature_image: signatureImage,
           template_name: templateData.nome
         };
@@ -147,6 +161,7 @@ export function useEnvios() {
           template_id: formData.template_id,
           contato_id: formData.contato_id,
           has_attachments: !!attachmentsToSend,
+          has_image: !!templateData.image_url,
           subject: dataToSend.subject,
           content_length: dataToSend.content?.length,
           signature_image: !!dataToSend.signature_image

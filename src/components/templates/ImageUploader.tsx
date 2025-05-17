@@ -51,20 +51,29 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
       const fileName = `${uuidv4()}.${fileExt}`;
       const filePath = `${user?.id}/${fileName}`;
 
+      console.log('Starting upload to Supabase storage...');
+
       // Upload the file to Supabase storage
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError, data } = await supabase.storage
         .from('template-images')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful, getting public URL...');
 
       // Get the public URL for the file
       const { data: { publicUrl } } = supabase.storage
         .from('template-images')
         .getPublicUrl(filePath);
+
+      console.log('Public URL obtained:', publicUrl);
 
       setImageUrl(publicUrl);
       onImageUploaded(publicUrl);
@@ -86,6 +95,8 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
       const fileName = urlParts[urlParts.length - 1];
       const userId = user?.id;
       const filePath = `${userId}/${fileName}`;
+
+      console.log('Deleting file from storage:', filePath);
 
       // Delete file from storage
       const { error } = await supabase.storage
@@ -118,7 +129,7 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
             disabled={isUploading}
           />
           <label htmlFor="image-upload">
-            <Button variant="secondary" disabled={isUploading}>
+            <Button variant="secondary" disabled={isUploading} type="button" className="cursor-pointer">
               {isUploading ? 'Carregando...' : 'Selecionar imagem'}
             </Button>
           </label>
@@ -136,7 +147,7 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
             />
           </div>
           <div className="flex mt-4 space-x-2">
-            <Button variant="destructive" onClick={handleDeleteImage}>
+            <Button variant="destructive" onClick={handleDeleteImage} type="button">
               <Trash2 className="h-4 w-4 mr-2" /> Excluir imagem
             </Button>
           </div>

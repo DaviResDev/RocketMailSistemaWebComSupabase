@@ -40,14 +40,7 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
   const createPreviewContent = () => {
     let fullContent = '';
     
-    // Add image if present (above content)
-    if (template.image_url) {
-      fullContent += `<div class="mb-4">
-        <img src="${template.image_url}" alt="Imagem do template" style="max-width: 100%; height: auto;" />
-      </div>`;
-    }
-    
-    // Add main content
+    // Always add main content
     fullContent += template.conteudo ? processContent(template.conteudo) : '<p>Sem conteúdo</p>';
     
     return fullContent;
@@ -58,6 +51,18 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
       <div className="space-y-4">
         <h3 className="text-lg font-medium border-b pb-2">{template.nome || 'Preview do Template'}</h3>
         
+        {/* Display image at the top if present */}
+        {template.image_url && (
+          <div className="mb-4">
+            <img 
+              src={template.image_url} 
+              alt="Imagem do template" 
+              className="max-w-full h-auto rounded-md"
+            />
+          </div>
+        )}
+        
+        {/* Main content */}
         <div 
           className="prose max-w-none"
           dangerouslySetInnerHTML={{ 
