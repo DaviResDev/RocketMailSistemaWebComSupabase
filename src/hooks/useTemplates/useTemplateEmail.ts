@@ -59,6 +59,9 @@ export function useTemplateEmail() {
           console.error('Erro ao processar anexos:', error);
         }
       }
+
+      // Always use settings signature image if available, otherwise use template's
+      const signatureImageToUse = settings?.signature_image || template.signature_image;
       
       // Call our send-email edge function
       const response = await supabase.functions.invoke('send-email', {
@@ -67,7 +70,7 @@ export function useTemplateEmail() {
           subject: `[TESTE] ${template.nome}`,
           content: processedContent,
           isTest: true,
-          signature_image: settings?.signature_image || template.signature_image,
+          signature_image: signatureImageToUse,
           attachments: attachments,
           image_url: template.image_url
         },

@@ -46,7 +46,10 @@ serve(async (req) => {
           id, nome, email, telefone
         ),
         template:templates (
-          id, nome, conteudo, canal
+          id, nome, conteudo, canal, signature_image
+        ),
+        user:user_id (
+          id
         )
       `)
       .eq('status', 'pendente')
@@ -116,6 +119,27 @@ serve(async (req) => {
       console.log(`Processing scheduled email for ${agendamento.contato.email}`);
       
       try {
+        // Get user settings for signature
+        const { data: userSettings, error: settingsError } = await supabaseAdmin
+          .from('configuracoes')
+          .select('signature_image')
+          .eq('user_id', agendamento.user_id)
+          .single();
+          
+        if (settingsError) {
+          console.warn(`Could not fetch user settings: ${settingsError.message}`);
+        }
+        
+        // Use user settings signature or template signature
+        const signatureImage = userSettings?.signature_image || agendamento.template.signature_image;
+        
+        // Load attachments if any
+        const { data: attachments } = await supabaseAdmin
+          .from('templates')
+          .select('attachments')
+          .eq('id', agendamento.template_id)
+          .single();
+          
         // Chamar a Edge Function de envio de email com retry logic
         let attemptCount = 0;
         const maxAttempts = 2;
@@ -128,14 +152,29 @@ serve(async (req) => {
           try {
             console.log(`Attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
             
+            const currentDate = new Date();
+            const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+            const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
+            
+            // Process template with actual contato data
+            let processedContent = agendamento.template.conteudo
+              .replace(/\{\{nome\}\}/g, agendamento.contato.nome || "")
+              .replace(/\{\{email\}\}/g, agendamento.contato.email || "")
+              .replace(/\{\{telefone\}\}/g, agendamento.contato.telefone || "")
+              .replace(/\{\{data\}\}/g, formattedDate)
+              .replace(/\{\{hora\}\}/g, formattedTime);
+            
             const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
               body: {
                 to: agendamento.contato.email,
                 subject: agendamento.template.nome,
-                content: agendamento.template.conteudo,
+                content: processedContent,
                 contato_id: agendamento.contato_id,
+                contato_nome: agendamento.contato.nome,
                 template_id: agendamento.template_id,
                 user_id: agendamento.user_id,
+                signature_image: signatureImage,
+                attachments: attachments?.attachments
               },
             });
             

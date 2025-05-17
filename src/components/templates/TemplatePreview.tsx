@@ -29,14 +29,16 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
   };
   
   const getSignatureImage = () => {
+    // First try to use the settings signature image if available
+    if (settings?.signature_image) {
+      return settings.signature_image;
+    }
+    
     // If template has a specific signature image, use it
     if (template.signature_image && template.signature_image !== 'no_signature') {
-      // If it's the default signature, use the one from settings
-      if (template.signature_image === 'default_signature') {
-        return settings?.signature_image || null;
-      }
       return template.signature_image;
     }
+    
     return null;
   };
   

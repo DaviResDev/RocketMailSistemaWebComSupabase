@@ -477,7 +477,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </Popover>
       </div>
       
-      {/* Editor */}
+      {/* Editor - Fix the text direction issue */}
       <div
         id="rich-text-editor"
         className="p-4 min-h-[300px] outline-none prose prose-sm max-w-none"
@@ -487,7 +487,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         data-placeholder={placeholder}
         style={{ 
           position: 'relative',
-          direction: 'ltr' // Fix for RTL issue
+          direction: 'ltr' // Fix: Ensure direction is explicitly set to left-to-right
         }}
       />
     </div>

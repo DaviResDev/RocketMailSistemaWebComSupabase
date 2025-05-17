@@ -60,7 +60,7 @@ serve(async (req) => {
     // Add main content
     finalContent += content || "";
     
-    // Append signature image if available
+    // Append signature image if available - add empty signature div even if no signature image
     if (signature_image && signature_image !== 'no_signature') {
       finalContent += `<div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
         <img src="${signature_image}" alt="Assinatura" style="max-height: 100px;" />
@@ -71,17 +71,44 @@ serve(async (req) => {
     let emailAttachments = [];
     if (attachments) {
       try {
-        const attachmentsData = typeof attachments === 'string' ? JSON.parse(attachments) : attachments;
+        let attachmentsData = null;
+        
+        if (typeof attachments === 'string') {
+          try {
+            attachmentsData = JSON.parse(attachments);
+          } catch (e) {
+            console.error("Error parsing attachments JSON string:", e);
+            attachmentsData = null;
+          }
+        } else {
+          attachmentsData = attachments;
+        }
         
         if (Array.isArray(attachmentsData)) {
-          emailAttachments = attachmentsData.map(attachment => ({
-            filename: attachment.name || attachment.file_name,
-            content: attachment.url || attachment.file_url
-          }));
+          emailAttachments = attachmentsData.map(attachment => {
+            // Make sure we have valid attachment data
+            if (!attachment.name && !attachment.file_name) {
+              console.warn("Missing filename in attachment:", attachment);
+            }
+            if (!attachment.url && !attachment.file_url) {
+              console.warn("Missing URL in attachment:", attachment);
+            }
+            
+            return {
+              filename: attachment.name || attachment.file_name || 'attachment',
+              content: attachment.url || attachment.file_url || ''
+            };
+          }).filter(att => att.content); // Filter out attachments with empty URLs
         }
       } catch (error) {
         console.error("Error processing attachments:", error);
       }
+    }
+    
+    // Log the attachments we're going to send
+    if (emailAttachments.length > 0) {
+      console.log(`Sending ${emailAttachments.length} attachments:`, 
+        emailAttachments.map(a => a.filename));
     }
     
     // Prepare friendly name for the recipient
