@@ -1,38 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
-// Define types
-interface EnvioFormData {
-  contato_id: string;
-  template_id: string;
-  agendamento_id?: string;
-  attachments?: any;
-  subject?: string;
-  content?: string;
-  signature_image?: string;
-  contato_nome?: string;
-  contato_email?: string;
-  to?: string; // Explicit recipient email address
-}
-
-interface Envio {
-  id: string;
-  status: string;
-  data_envio: string;
-  contato?: {
-    nome: string;
-    email: string;
-  };
-  template?: {
-    nome: string;
-    canal?: string;
-    descricao?: string;
-  };
-  erro?: string;
-  attachments?: any[];
-}
+import { Envio, EnvioFormData, parseAttachments } from '@/types/envios';
 
 export function useEnvios() {
   const [envios, setEnvios] = useState<Envio[]>([]);
