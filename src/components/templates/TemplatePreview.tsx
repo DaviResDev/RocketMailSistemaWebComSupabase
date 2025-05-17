@@ -48,19 +48,6 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
           }} 
         />
         
-        {/* Display signature if present */}
-        {signatureImage && (
-          <div className="pt-4 border-t mt-6">
-            <p className="text-sm text-muted-foreground mb-2">Assinatura:</p>
-            <img 
-              src={signatureImage} 
-              alt="Assinatura" 
-              className="max-h-24" 
-              style={{ maxWidth: '100%' }}
-            />
-          </div>
-        )}
-
         {/* Display template image if present */}
         {template.image_url && (
           <div className="pt-4 mt-2">
@@ -70,6 +57,19 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
               alt="Imagem do template" 
               className="rounded-md border p-1" 
               style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }}
+            />
+          </div>
+        )}
+        
+        {/* Display signature if present - Always at the end */}
+        {signatureImage && (
+          <div className="pt-4 border-t mt-6">
+            <p className="text-sm text-muted-foreground mb-2">Assinatura:</p>
+            <img 
+              src={signatureImage} 
+              alt="Assinatura" 
+              className="max-h-24" 
+              style={{ maxWidth: '100%' }}
             />
           </div>
         )}
