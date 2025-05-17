@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -316,44 +317,45 @@ export function useTemplateOperations() {
 
   const deleteTemplate = async (id: string) => {
     try {
-      // First, check if the template is being referenced in scheduled tasks
-      const { data: agendamentos, error: checkError } = await supabase
-        .from('agendamentos')
-        .select('id, data_envio, contato:contatos(nome)')
-        .eq('template_id', id);
-        
-      if (checkError) throw checkError;
+      console.log('Tentando excluir template:', id);
       
-      // Se existirem agendamentos com este template, atualizar para NULL em vez de impedir a exclusão
-      if (agendamentos && agendamentos.length > 0) {
-        console.log(`Atualizando ${agendamentos.length} agendamentos para template_id NULL`);
-        const { error: updateError } = await supabase
-          .from('agendamentos')
-          .update({ template_id: null })
-          .eq('template_id', id);
-          
-        if (updateError) throw updateError;
-      }
-      
-      // Atualizar envios para que o template_id seja NULL ao excluir o template
-      const { error: enviosError } = await supabase
-        .from('envios')
-        .update({ template_id: null, status: 'template_deleted' })
-        .eq('template_id', id);
-        
-      if (enviosError) throw enviosError;
-      
-      // Get the template to access its attachments before deletion
+      // Check if the template exists first
       const { data: template, error: getError } = await supabase
         .from('templates')
         .select('*')
         .eq('id', id)
         .single();
         
-      if (getError) throw getError;
+      if (getError) {
+        console.error('Erro ao buscar template:', getError);
+        throw getError;
+      }
       
-      // Use type checking instead of direct property access
-      // Delete attached files from storage, if they exist
+      // Update references in agendamentos table
+      console.log('Atualizando agendamentos relacionados...');
+      const { error: agendamentosError } = await supabase
+        .from('agendamentos')
+        .update({ template_id: null })
+        .eq('template_id', id);
+        
+      if (agendamentosError) {
+        console.error('Erro ao atualizar agendamentos:', agendamentosError);
+        throw agendamentosError;
+      }
+      
+      // Update references in envios table
+      console.log('Atualizando envios relacionados...');
+      const { error: enviosError } = await supabase
+        .from('envios')
+        .update({ template_id: null, status: 'template_deleted' })
+        .eq('template_id', id);
+        
+      if (enviosError) {
+        console.error('Erro ao atualizar envios:', enviosError);
+        throw enviosError;
+      }
+      
+      // Delete attachment files if they exist
       if (template && template.attachments) {
         try {
           // Parse attachments and handle string and object formats
@@ -374,12 +376,12 @@ export function useTemplateOperations() {
           }
         } catch (e) {
           console.error('Erro ao analisar anexos:', e);
+          // Continue with deletion even if attachment cleanup fails
         }
       }
       
       // Delete template file if it exists
-      // Use optional chaining and type assertion for safer property access
-      const templateFileUrl = (template as any).template_file_url;
+      const templateFileUrl = template?.template_file_url;
       if (templateFileUrl) {
         try {
           // Extract filename from URL
@@ -392,23 +394,28 @@ export function useTemplateOperations() {
             .remove([filePath]);
         } catch (e) {
           console.error('Erro ao excluir arquivo de template:', e);
+          // Continue with deletion even if file cleanup fails
         }
       }
       
-      // Delete the template from the database
+      // Finally delete the template
+      console.log('Excluindo template...');
       const { error } = await supabase
         .from('templates')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro final ao excluir template:', error);
+        throw error;
+      }
       
       toast.success('Template excluído com sucesso!');
       await fetchTemplates();
       return true;
     } catch (error: any) {
       console.error('Erro ao excluir template:', error);
-      toast.error('Erro ao excluir template: ' + error.message);
+      toast.error('Erro ao excluir template: ' + (error.message || 'Falha na operação'));
       return false;
     }
   };

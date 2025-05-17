@@ -59,10 +59,15 @@ const Templates = () => {
 
   const handleDeleteTemplate = async (id: string) => {
     try {
+      console.log("Tentando excluir template com ID:", id);
       const success = await deleteTemplate(id);
+      if (success) {
+        toast.success("Template excluído com sucesso!");
+      }
       return success;
     } catch (error) {
-      console.error("Error deleting template:", error);
+      console.error("Erro ao excluir template:", error);
+      toast.error("Erro ao excluir template");
       return false;
     }
   };
@@ -72,6 +77,7 @@ const Templates = () => {
     setIsInitialized(false);
   };
 
+  // Wrap the sendTestEmail function to ensure correct parameters
   const handleSendTest = async (templateId: string) => {
     if (!templateId) return false;
     

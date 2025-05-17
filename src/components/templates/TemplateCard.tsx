@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -90,7 +89,11 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
       const success = await onDelete(template.id);
       if (success) {
         setIsDeleteDialogOpen(false);
+        toast.success('Template excluído com sucesso!');
       }
+    } catch (error) {
+      console.error('Erro ao excluir template:', error);
+      toast.error('Falha ao excluir template. Tente novamente.');
     } finally {
       setIsDeleting(false);
     }
@@ -192,8 +195,8 @@ export const TemplateCard = ({ template, onEdit, onDelete, onDuplicate }: Templa
               Tem certeza que deseja excluir o template "{template.nome}"?
               Esta ação não pode ser desfeita.
               <br /><br />
-              <strong>Nota:</strong> Templates usados em agendamentos não podem ser excluídos.
-              Você precisará cancelar os agendamentos primeiro.
+              Nota: Os envios e agendamentos que usavam este template serão mantidos, 
+              mas a referência ao template será removida.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

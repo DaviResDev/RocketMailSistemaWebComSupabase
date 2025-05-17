@@ -151,7 +151,7 @@ export type Database = {
           erro: string | null
           id: string
           status: string
-          template_id: string
+          template_id: string | null
           user_id: string
         }
         Insert: {
@@ -160,7 +160,7 @@ export type Database = {
           erro?: string | null
           id?: string
           status: string
-          template_id: string
+          template_id?: string | null
           user_id: string
         }
         Update: {
@@ -169,7 +169,7 @@ export type Database = {
           erro?: string | null
           id?: string
           status?: string
-          template_id?: string
+          template_id?: string | null
           user_id?: string
         }
         Relationships: [
