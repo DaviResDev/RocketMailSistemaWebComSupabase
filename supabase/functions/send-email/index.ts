@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.21.0';
@@ -165,11 +164,14 @@ serve(async (req: Request) => {
       }
     }
     
-    // Add signature at the end of the content if needed
+    // Add signature at the end of the content
     let htmlContent = content;
     
+    // Always ensure signature is added at the end, not inline
     if (signature_image && signature_image !== 'no_signature') {
-      // Always ensure signature is at the end with proper spacing
+      // Clear any existing signature markers if present
+      htmlContent = htmlContent.replace(/<br><br>--<br>.*?$/s, '');
+      // Add the signature at the end with proper spacing
       htmlContent += '<br><br>--<br>';
       htmlContent += `<img src="${signature_image}" alt="Assinatura" style="max-width: 100%; max-height: 100px;" />`;
     }

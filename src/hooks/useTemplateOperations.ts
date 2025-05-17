@@ -85,16 +85,6 @@ export function useTemplateOperations() {
     }
 
     try {
-      // Process template file if provided
-      let templateFileUrl = formData.template_file_url;
-      let templateFileName = formData.template_file_name;
-      
-      if (formData.template_file instanceof File) {
-        const templateFile = await uploadTemplateFile(formData.template_file);
-        templateFileUrl = templateFile.url;
-        templateFileName = templateFile.name;
-      }
-      
       // Set default value for email
       const templateData = {
         ...formData,
@@ -103,9 +93,7 @@ export function useTemplateOperations() {
         status: formData.status || 'ativo', // Ensure status is set
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
         signature_image: formData.signature_image || (settings?.signature_image || null),
-        template_file_url: templateFileUrl || null,
-        template_file_name: templateFileName || null,
-        image_url: formData.image_url || null // Add the image_url field
+        image_url: formData.image_url || null // Ensure image_url is included
       };
       
       // Ensure attachments is properly formatted and stored
@@ -156,7 +144,6 @@ export function useTemplateOperations() {
         attachments: templateData.attachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
-        template_file_url: templateData.template_file_url ? 'presente' : 'ausente',
         image_url: templateData.image_url ? 'presente' : 'ausente'
       });
       
@@ -177,16 +164,6 @@ export function useTemplateOperations() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
-      // Process template file if provided
-      let templateFileUrl = formData.template_file_url;
-      let templateFileName = formData.template_file_name;
-      
-      if (formData.template_file instanceof File) {
-        const templateFile = await uploadTemplateFile(formData.template_file);
-        templateFileUrl = templateFile.url;
-        templateFileName = templateFile.name;
-      }
-      
       // Always set to 'email' for backwards compatibility
       const templateData = {
         ...formData, 
@@ -194,9 +171,7 @@ export function useTemplateOperations() {
         status: formData.status || 'ativo', // Ensure status is set
         // Se não for definida uma assinatura custom, usar a das configurações (se disponível)
         signature_image: formData.signature_image || (settings?.signature_image || null),
-        template_file_url: templateFileUrl || null,
-        template_file_name: templateFileName || null,
-        image_url: formData.image_url || null // Add the image_url field
+        image_url: formData.image_url || null // Ensure image_url is included
       };
       
       // Ensure attachments is properly formatted and stored
@@ -247,7 +222,6 @@ export function useTemplateOperations() {
         attachments: templateData.attachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
-        template_file_url: templateData.template_file_url ? 'presente' : 'ausente',
         image_url: templateData.image_url ? 'presente' : 'ausente'
       });
       
@@ -282,17 +256,14 @@ export function useTemplateOperations() {
       const newTemplate = {
         nome: `${template.nome} (Cópia)`,
         conteudo: template.conteudo,
-        descricao: template.descricao || '', // Include description field with fallback
+        descricao: template.descricao || '', 
         canal: template.canal || 'email',
         assinatura: template.assinatura,
         signature_image: template.signature_image,
         attachments: template.attachments || JSON.stringify([]),
-        status: template.status || 'ativo', // Ensure the duplicated template has a status
+        status: template.status || 'ativo',
         user_id: user?.id,
-        // Use type assertion for template_file properties
-        template_file_url: (template as any).template_file_url || null,
-        template_file_name: (template as any).template_file_name || null,
-        image_url: (template as any).image_url || null // Add the image_url field
+        image_url: template.image_url || null // Include image URL when duplicating
       };
       
       console.log('Duplicando template:', {
@@ -300,7 +271,6 @@ export function useTemplateOperations() {
         status: newTemplate.status,
         attachments: newTemplate.attachments ? 'presente' : 'ausente',
         descricao: newTemplate.descricao || 'não definida',
-        template_file_url: newTemplate.template_file_url ? 'presente' : 'ausente',
         image_url: newTemplate.image_url ? 'presente' : 'ausente'
       });
       
@@ -429,6 +399,7 @@ export function useTemplateOperations() {
             .remove([filePath]);
         } catch (e) {
           console.error('Erro ao excluir imagem do template:', e);
+          // Continue with deletion even if file cleanup fails
         }
       }
       

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -294,185 +293,119 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
           </CardContent>
         </Card>
         
-        <Tabs defaultValue="editor" className="w-full">
-          <TabsList className="mb-4 w-full flex justify-center">
-            <TabsTrigger value="editor" className="flex-1"><PencilIcon className="w-4 h-4 mr-2" />Editor</TabsTrigger>
-            <TabsTrigger value="image" className="flex-1"><Image className="w-4 h-4 mr-2" />Imagem</TabsTrigger>
-            <TabsTrigger value="preview" className="flex-1"><FileText className="w-4 h-4 mr-2" />Visualização</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="editor" className="space-y-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium">Conteúdo do Template</CardTitle>
-              </CardHeader>
-              <CardContent>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Conteúdo do Template</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Image uploader component - above the content editor */}
+            <div className="mb-4">
+              <h3 className="text-sm font-medium mb-2">Imagem do Template</h3>
+              <ImageUploader 
+                initialImageUrl={imageUrl} 
+                onImageUploaded={handleImageUploaded} 
+              />
+            </div>
+            
+            {/* Rich text editor */}
+            <div>
+              <h3 className="text-sm font-medium mb-2">Conteúdo</h3>
+              <FormField
+                control={form.control}
+                name="conteudo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <RichTextEditor 
+                        value={field.value} 
+                        onChange={field.onChange} 
+                        onEditorInit={(editor) => setEditorInstance(editor)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Signature configuration */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Configuração de Assinatura</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="assinatura"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Usar assinatura?</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={shouldUseSignature}
+                        onCheckedChange={(checked) => {
+                          handleSignatureChange(checked);
+                          setShouldUseSignature(checked);
+                        }}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {shouldUseSignature && (
                 <FormField
                   control={form.control}
-                  name="conteudo"
+                  name="signature_image"
                   render={({ field }) => (
                     <FormItem>
-                      <FormControl>
-                        <RichTextEditor 
-                          value={field.value} 
-                          onChange={field.onChange} 
-                          onEditorInit={(editor) => setEditorInstance(editor)}
-                        />
-                      </FormControl>
+                      <FormLabel>Imagem da Assinatura</FormLabel>
+                      <Select
+                        disabled={!shouldUseSignature}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          setSignatureImage(value);
+                        }}
+                        defaultValue={form.getValues('signature_image') || settings?.signature_image || 'default_signature'}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a assinatura" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {signatureOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </CardContent>
-            </Card>
-            
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="attachments">
-                <AccordionTrigger className="py-3 px-4 bg-muted/50 rounded-t-md hover:no-underline">
-                  <div className="flex items-center">
-                    <Paperclip className="w-4 h-4 mr-2" />
-                    <span>Anexos</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="border border-t-0 rounded-b-md border-muted p-4 bg-background">
-                  <TemplateFileUpload
-                    attachments={attachments}
-                    onChange={handleAttachmentChange}
-                    onFileUploaded={(fileUrl, fileName) => {
-                      setTemplateFileUrl(fileUrl);
-                      setTemplateFileName(fileName);
-                    }}
-                  />
-                </AccordionContent>
-              </AccordionItem>
-              
-              <AccordionItem value="signature" className="mt-2">
-                <AccordionTrigger className="py-3 px-4 bg-muted/50 rounded-t-md hover:no-underline">
-                  <div className="flex items-center">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span>Configuração de Assinatura</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="border border-t-0 rounded-b-md border-muted p-4 bg-background">
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="assinatura"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Usar assinatura?</FormLabel>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              checked={shouldUseSignature}
-                              onCheckedChange={(checked) => {
-                                handleSignatureChange(checked);
-                                setShouldUseSignature(checked);
-                              }}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    {shouldUseSignature && (
-                      <FormField
-                        control={form.control}
-                        name="signature_image"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Imagem da Assinatura</FormLabel>
-                            <Select
-                              disabled={!shouldUseSignature}
-                              onValueChange={(value) => {
-                                field.onChange(value);
-                                setSignatureImage(value);
-                              }}
-                              defaultValue={form.getValues('signature_image') || settings?.signature_image || 'default_signature'}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione a assinatura" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {signatureOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-              
-              <AccordionItem value="templateFile" className="mt-2">
-                <AccordionTrigger className="py-3 px-4 bg-muted/50 rounded-t-md hover:no-underline">
-                  <div className="flex items-center">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span>Arquivo de Template</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="border border-t-0 rounded-b-md border-muted p-4 bg-background">
-                  <FormField
-                    control={form.control}
-                    name="template_file"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Arquivo de Template</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="file"
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files.length > 0) {
-                                const file = e.target.files[0];
-                                handleTemplateFileChange(file);
-                                setTemplateFileName(file.name);
-                                setTemplateFileUrl(URL.createObjectURL(file));
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        {templateFileName && (
-                          <p className="text-sm text-gray-500">
-                            Arquivo selecionado: {templateFileName}
-                          </p>
-                        )}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </TabsContent>
-          
-          <TabsContent value="image">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium">Anexar Imagem</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ImageUploader 
-                  onImageUploaded={handleImageUploaded} 
-                  onInsertImage={handleInsertImage}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="preview">
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Preview section */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Visualização</CardTitle>
+          </CardHeader>
+          <CardContent>
             <TemplatePreview template={previewTemplate} />
-          </TabsContent>
-        </Tabs>
+          </CardContent>
+        </Card>
 
+        {/* Action buttons */}
         <div className="flex justify-between pt-4">
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancelar

@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Upload, Image, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,17 +8,24 @@ import { useAuth } from '@/contexts/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ImageUploaderProps {
+  initialImageUrl?: string | null;
   onImageUploaded: (url: string) => void;
-  onInsertImage: (url: string) => void;
 }
 
-export const ImageUploader = ({ onImageUploaded, onInsertImage }: ImageUploaderProps) => {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploaderProps) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl || null);
   const [isUploading, setIsUploading] = useState(false);
   const { user } = useAuth();
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
   const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml'];
+
+  // Update local state when the initialImageUrl prop changes
+  useEffect(() => {
+    if (initialImageUrl) {
+      setImageUrl(initialImageUrl);
+    }
+  }, [initialImageUrl]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,13 +103,6 @@ export const ImageUploader = ({ onImageUploaded, onInsertImage }: ImageUploaderP
     }
   };
 
-  const handleInsertImage = () => {
-    if (imageUrl) {
-      onInsertImage(imageUrl);
-      toast.success('Imagem inserida no corpo do e-mail!');
-    }
-  };
-
   return (
     <div className="space-y-4">
       {!imageUrl ? (
@@ -136,9 +136,6 @@ export const ImageUploader = ({ onImageUploaded, onInsertImage }: ImageUploaderP
             />
           </div>
           <div className="flex mt-4 space-x-2">
-            <Button variant="default" onClick={handleInsertImage}>
-              <Image className="h-4 w-4 mr-2" /> Inserir no corpo do e-mail
-            </Button>
             <Button variant="destructive" onClick={handleDeleteImage}>
               <Trash2 className="h-4 w-4 mr-2" /> Excluir imagem
             </Button>

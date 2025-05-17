@@ -36,6 +36,23 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
   
   const signatureImage = getSignatureImage();
   
+  // Function to create full preview content
+  const createPreviewContent = () => {
+    let fullContent = '';
+    
+    // Add image if present (above content)
+    if (template.image_url) {
+      fullContent += `<div class="mb-4">
+        <img src="${template.image_url}" alt="Imagem do template" style="max-width: 100%; height: auto;" />
+      </div>`;
+    }
+    
+    // Add main content
+    fullContent += template.conteudo ? processContent(template.conteudo) : '<p>Sem conteúdo</p>';
+    
+    return fullContent;
+  };
+  
   return (
     <Card className="p-6">
       <div className="space-y-4">
@@ -44,22 +61,9 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
         <div 
           className="prose max-w-none"
           dangerouslySetInnerHTML={{ 
-            __html: template.conteudo ? processContent(template.conteudo) : '<p>Sem conteúdo</p>' 
+            __html: createPreviewContent()
           }} 
         />
-        
-        {/* Display template image if present */}
-        {template.image_url && (
-          <div className="pt-4 mt-2">
-            <p className="text-sm text-muted-foreground mb-2">Imagem anexada:</p>
-            <img 
-              src={template.image_url} 
-              alt="Imagem do template" 
-              className="rounded-md border p-1" 
-              style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }}
-            />
-          </div>
-        )}
         
         {/* Display signature if present - Always at the end */}
         {signatureImage && (
