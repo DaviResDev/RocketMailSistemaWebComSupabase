@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,7 +19,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplatePreview } from './TemplatePreview';
 import { ImageUploader } from './ImageUploader';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { SaveIcon, Send, Image, PencilIcon } from "lucide-react";
+import { SaveIcon, Send, Image, FileText, PencilIcon, Variable } from "lucide-react";
+import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { supabase } from '@/integrations/supabase/client';
 
 const templateSchema = z.object({
   nome: z.string().min(1, { message: 'Nome é obrigatório' }),
@@ -33,12 +36,27 @@ const templateSchema = z.object({
   image_url: z.string().optional().nullable()
 });
 
+const VARIABLES = [
+  { key: 'nome', label: 'Nome' },
+  { key: 'email', label: 'Email' },
+  { key: 'data', label: 'Data' },
+  { key: 'hora', label: 'Hora' },
+  { key: 'telefone', label: 'Telefone' },
+  { key: 'cliente', label: 'Cliente' },
+  { key: 'empresa', label: 'Empresa' },
+  { key: 'cargo', label: 'Cargo' },
+  { key: 'produto', label: 'Produto' },
+  { key: 'valor', label: 'Valor' },
+  { key: 'vencimento', label: 'Vencimento' }
+];
+
 export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) => {
   const { settings } = useSettings();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Always use signature from settings
   const [useSignature, setUseSignature] = useState(true);
@@ -104,9 +122,89 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     form.setValue('attachments', newAttachments);
   };
 
+  const handleAttachmentUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const newAttachments = [...attachments];
+    let hasErrors = false;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Check file size
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`O arquivo ${file.name} excede o tamanho máximo de 10MB`);
+        hasErrors = true;
+        continue;
+      }
+      
+      try {
+        toast.loading(`Fazendo upload de ${file.name}...`);
+        
+        // Upload file to Supabase
+        const { data, error } = await supabase.storage
+          .from('template_attachments')
+          .upload(`attachments/${Date.now()}-${file.name}`, file);
+        
+        if (error) throw error;
+        
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('template_attachments')
+          .getPublicUrl(data.path);
+        
+        newAttachments.push({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          url: publicUrl,
+          path: data.path
+        });
+        
+        toast.success(`Arquivo ${file.name} carregado com sucesso`);
+      } catch (error) {
+        console.error('Erro ao fazer upload do arquivo:', error);
+        toast.error(`Erro ao fazer upload do arquivo ${file.name}`);
+        hasErrors = true;
+      }
+    }
+    
+    if (!hasErrors) {
+      handleAttachmentChange(newAttachments);
+    }
+  };
+
+  const handleRemoveAttachment = async (index: number) => {
+    const attachmentToRemove = attachments[index];
+    const newAttachments = [...attachments];
+    
+    try {
+      // If the attachment has a path, remove it from storage
+      if (attachmentToRemove.path) {
+        await supabase.storage
+          .from('template_attachments')
+          .remove([attachmentToRemove.path]);
+      }
+      
+      newAttachments.splice(index, 1);
+      handleAttachmentChange(newAttachments);
+      toast.success('Anexo removido com sucesso');
+    } catch (error) {
+      console.error('Erro ao remover anexo:', error);
+      toast.error('Erro ao remover anexo');
+    }
+  };
+
   const handleImageUploaded = (url: string) => {
     setImageUrl(url);
     form.setValue('image_url', url);
+  };
+
+  const insertVariable = (variable: string) => {
+    if (editorInstance) {
+      editorInstance.insertContent(`{{${variable}}}`);
+    }
   };
 
   async function onSubmit(values: TemplateFormData) {
@@ -150,9 +248,10 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       nome: formValues.nome,
       conteudo: formValues.conteudo,
       signature_image: settings?.signature_image || 'default_signature',
-      image_url: imageUrl
+      image_url: imageUrl,
+      attachments: attachments.length > 0 ? JSON.stringify(attachments) : '[]'
     });
-  }, [form.watch('nome'), form.watch('conteudo'), imageUrl, settings]);
+  }, [form.watch('nome'), form.watch('conteudo'), imageUrl, settings, attachments]);
 
   return (
     <Form {...form}>
@@ -234,9 +333,57 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
               />
             </div>
             
-            {/* Rich text editor */}
-            <div>
-              <h3 className="text-sm font-medium mb-2">Conteúdo</h3>
+            {/* Rich text editor with variable insertion button */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium">Conteúdo</h3>
+                <div className="flex space-x-2">
+                  {/* Variables popover button */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="flex items-center">
+                        <Variable className="mr-1 h-4 w-4" />
+                        Inserir Variáveis
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2">
+                      <div className="space-y-1">
+                        {VARIABLES.map((variable) => (
+                          <Button 
+                            key={variable.key}
+                            variant="ghost" 
+                            size="sm"
+                            className="w-full justify-start" 
+                            onClick={() => insertVariable(variable.key)}
+                          >
+                            {variable.label}: {`{{${variable.key}}}`}
+                          </Button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  
+                  {/* File attachment button */}
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    className="flex items-center"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <FileText className="mr-1 h-4 w-4" />
+                    Anexar Arquivos
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleAttachmentUpload(e.target.files)}
+                  />
+                </div>
+              </div>
+              
+              {/* Editor */}
               <FormField
                 control={form.control}
                 name="conteudo"
@@ -246,7 +393,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                       <RichTextEditor 
                         value={field.value} 
                         onChange={field.onChange} 
-                        onEditorInit={(editor) => setEditorInstance(editor)}
+                        onEditorInit={setEditorInstance}
                       />
                     </FormControl>
                     <FormMessage />
@@ -254,6 +401,29 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                 )}
               />
             </div>
+            
+            {/* Attachment list */}
+            {attachments.length > 0 && (
+              <div className="p-4 border rounded-md bg-muted/50">
+                <h4 className="text-sm font-medium mb-2">Anexos ({attachments.length})</h4>
+                <ul className="space-y-2">
+                  {attachments.map((attachment, index) => (
+                    <li key={index} className="flex justify-between items-center">
+                      <span className="text-sm truncate flex-1">
+                        📎 {attachment.name || 'Arquivo'}
+                      </span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleRemoveAttachment(index)}
+                      >
+                        Remover
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
         

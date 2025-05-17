@@ -30,7 +30,8 @@ serve(async (req) => {
       content, 
       signature_image,
       attachments,
-      contato_nome
+      contato_nome,
+      image_url
     } = requestData;
     
     console.log("Received email request:", { 
@@ -38,7 +39,8 @@ serve(async (req) => {
       subject, 
       contentLength: content?.length,
       hasSignatureImage: !!signature_image,
-      hasAttachments: !!attachments
+      hasAttachments: !!attachments,
+      hasImageUrl: !!image_url
     });
     
     if (!to) {
@@ -46,11 +48,23 @@ serve(async (req) => {
     }
     
     // Process the content to include image and signature
-    let finalContent = content || "";
+    let finalContent = "";
+    
+    // Add image at the top if available
+    if (image_url) {
+      finalContent += `<div style="margin-bottom: 20px;">
+        <img src="${image_url}" alt="Template image" style="max-width: 100%; height: auto;" />
+      </div>`;
+    }
+    
+    // Add main content
+    finalContent += content || "";
     
     // Append signature image if available
     if (signature_image && signature_image !== 'no_signature') {
-      finalContent += `<img src="${signature_image}" alt="Assinatura" style="max-height: 100px; margin-top: 10px;" />`;
+      finalContent += `<div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+        <img src="${signature_image}" alt="Assinatura" style="max-height: 100px;" />
+      </div>`;
     }
     
     // Process attachments if available

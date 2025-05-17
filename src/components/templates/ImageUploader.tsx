@@ -45,6 +45,7 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
     }
 
     setIsUploading(true);
+    toast.loading('Fazendo upload da imagem...');
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -54,7 +55,7 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
       console.log('Starting upload to Supabase storage...');
 
       // Upload the file to Supabase storage
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('template-images')
         .upload(filePath, file, {
           cacheControl: '3600',
@@ -77,8 +78,10 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
 
       setImageUrl(publicUrl);
       onImageUploaded(publicUrl);
+      toast.dismiss();
       toast.success('Imagem carregada com sucesso!');
     } catch (error: any) {
+      toast.dismiss();
       console.error('Erro ao fazer upload da imagem:', error);
       toast.error(`Erro ao fazer upload da imagem: ${error.message}`);
     } finally {
@@ -117,8 +120,8 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
   return (
     <div className="space-y-4">
       {!imageUrl ? (
-        <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-10 bg-muted/50">
-          <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+        <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-6 bg-muted/50">
+          <Upload className="h-8 w-8 text-muted-foreground mb-2" />
           <p className="text-muted-foreground mb-4">Arraste uma imagem ou clique para fazer upload</p>
           <input
             type="file"
@@ -143,13 +146,27 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
             <img
               src={imageUrl}
               alt="Imagem do template"
-              className="rounded-md max-h-[300px] object-contain border p-2"
+              className="rounded-md max-h-[200px] object-contain border p-2"
             />
           </div>
           <div className="flex mt-4 space-x-2">
-            <Button variant="destructive" onClick={handleDeleteImage} type="button">
-              <Trash2 className="h-4 w-4 mr-2" /> Excluir imagem
+            <Button variant="outline" onClick={() => {
+              const input = document.getElementById('image-upload') as HTMLInputElement;
+              if (input) input.click();
+            }} type="button">
+              <Upload className="h-4 w-4 mr-2" /> Trocar imagem
             </Button>
+            <Button variant="destructive" onClick={handleDeleteImage} type="button">
+              <Trash2 className="h-4 w-4 mr-2" /> Remover
+            </Button>
+            <input
+              type="file"
+              id="image-upload"
+              className="hidden"
+              onChange={handleUpload}
+              accept=".png,.jpg,.jpeg,.gif,.webp,.svg"
+              disabled={isUploading}
+            />
           </div>
         </div>
       )}

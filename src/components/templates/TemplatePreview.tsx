@@ -14,12 +14,18 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
   // Replace template variables with sample values
   const processContent = (content: string) => {
     return content
-      .replace(/{nome}/g, "Nome do Cliente")
-      .replace(/{email}/g, "cliente@exemplo.com")
-      .replace(/{telefone}/g, "(00) 00000-0000")
-      .replace(/{razao_social}/g, "Empresa Exemplo")
-      .replace(/{cliente}/g, "Cliente Exemplo")
-      .replace(/{dia}/g, new Date().toLocaleDateString('pt-BR'));
+      .replace(/\{\{nome\}\}/g, "Nome do Cliente")
+      .replace(/\{\{email\}\}/g, "cliente@exemplo.com")
+      .replace(/\{\{telefone\}\}/g, "(00) 00000-0000")
+      .replace(/\{\{razao_social\}\}/g, "Empresa Exemplo")
+      .replace(/\{\{cliente\}\}/g, "Cliente Exemplo")
+      .replace(/\{\{empresa\}\}/g, "Empresa Exemplo")
+      .replace(/\{\{cargo\}\}/g, "Cargo Exemplo")
+      .replace(/\{\{produto\}\}/g, "Produto Exemplo")
+      .replace(/\{\{valor\}\}/g, "R$ 1.000,00")
+      .replace(/\{\{vencimento\}\}/g, "01/01/2025")
+      .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'))
+      .replace(/\{\{hora\}\}/g, new Date().toLocaleTimeString('pt-BR'));
   };
   
   const getSignatureImage = () => {
@@ -46,6 +52,41 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
     return fullContent;
   };
   
+  // Parse attachments if they exist
+  const renderAttachments = () => {
+    if (!template.attachments) return null;
+    
+    try {
+      let attachmentsList = [];
+      
+      if (typeof template.attachments === 'string') {
+        attachmentsList = JSON.parse(template.attachments);
+      } else if (Array.isArray(template.attachments)) {
+        attachmentsList = template.attachments;
+      }
+      
+      if (attachmentsList.length === 0) return null;
+      
+      return (
+        <div className="mt-4 pt-4 border-t">
+          <h4 className="text-sm font-medium mb-2">Anexos:</h4>
+          <ul className="space-y-1">
+            {attachmentsList.map((attachment: any, index: number) => (
+              <li key={index} className="flex items-center text-sm">
+                <span className="inline-flex items-center">
+                  📎 {attachment.name || attachment.file_name || 'Arquivo'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    } catch (e) {
+      console.error('Erro ao processar anexos:', e);
+      return null;
+    }
+  };
+  
   return (
     <Card className="p-6">
       <div className="space-y-4">
@@ -69,6 +110,9 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
             __html: createPreviewContent()
           }} 
         />
+        
+        {/* Display attachments if present */}
+        {renderAttachments()}
         
         {/* Display signature if present - Always at the end */}
         {signatureImage && (

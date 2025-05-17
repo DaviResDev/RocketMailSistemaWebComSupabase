@@ -2,9 +2,11 @@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/hooks/useSettings';
 
 export function useTemplateEmail() {
   const { user } = useAuth();
+  const { settings } = useSettings();
 
   const sendTestEmail = async (templateId: string, email: string) => {
     if (!user) {
@@ -27,28 +29,46 @@ export function useTemplateEmail() {
       // Process template with sample data
       const currentDate = new Date();
       const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+      const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
       
       let processedContent = template.conteudo
-        .replace(/{nome}/g, "Usuário Teste")
-        .replace(/{email}/g, email)
-        .replace(/{telefone}/g, "(00) 00000-0000")
-        .replace(/{razao_social}/g, "Empresa Teste")
-        .replace(/{cliente}/g, "Cliente Teste")
-        .replace(/{dia}/g, formattedDate);
-      
-      // Use template description as subject, or fallback to template name
-      const emailSubject = template.descricao || template.nome;
+        .replace(/\{\{nome\}\}/g, "Usuário Teste")
+        .replace(/\{\{email\}\}/g, email)
+        .replace(/\{\{telefone\}\}/g, "(00) 00000-0000")
+        .replace(/\{\{razao_social\}\}/g, "Empresa Teste")
+        .replace(/\{\{cliente\}\}/g, "Cliente Teste")
+        .replace(/\{\{empresa\}\}/g, "Empresa Teste")
+        .replace(/\{\{cargo\}\}/g, "Cargo Teste")
+        .replace(/\{\{produto\}\}/g, "Produto Teste")
+        .replace(/\{\{valor\}\}/g, "R$ 1.000,00")
+        .replace(/\{\{vencimento\}\}/g, "01/01/2025")
+        .replace(/\{\{data\}\}/g, formattedDate)
+        .replace(/\{\{hora\}\}/g, formattedTime);
+        
+      // Parse attachments if present
+      let attachments = [];
+      if (template.attachments) {
+        try {
+          if (typeof template.attachments === 'string') {
+            attachments = JSON.parse(template.attachments);
+          } else if (Array.isArray(template.attachments)) {
+            attachments = template.attachments;
+          }
+        } catch (error) {
+          console.error('Erro ao processar anexos:', error);
+        }
+      }
       
       // Call our send-email edge function
       const response = await supabase.functions.invoke('send-email', {
         body: {
           to: email,
-          subject: `[TESTE] ${emailSubject}`,
+          subject: `[TESTE] ${template.nome}`,
           content: processedContent,
           isTest: true,
-          signature_image: template.signature_image,
-          attachments: template.attachments,
-          description: template.descricao // Enviando a descrição para ser usada no email
+          signature_image: settings?.signature_image || template.signature_image,
+          attachments: attachments,
+          image_url: template.image_url
         },
       });
       
