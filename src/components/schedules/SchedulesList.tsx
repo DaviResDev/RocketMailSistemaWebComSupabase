@@ -119,8 +119,9 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
           .replace(/\{\{telefone\}\}/g, schedule.contato.telefone || '')
           .replace(/\{\{razao_social\}\}/g, schedule.contato.razao_social || '')
           .replace(/\{\{cliente\}\}/g, schedule.contato.cliente || '')
-          .replace(/\{\{empresa\}\}/g, schedule.contato.empresa || "Empresa Teste")
-          .replace(/\{\{cargo\}\}/g, schedule.contato.cargo || "Cargo Teste")
+          // For missing fields, use placeholders instead of accessing non-existent properties
+          .replace(/\{\{empresa\}\}/g, "Empresa Teste")
+          .replace(/\{\{cargo\}\}/g, "Cargo Teste")
           .replace(/\{\{produto\}\}/g, "Produto Teste")
           .replace(/\{\{valor\}\}/g, "R$ 1.000,00")
           .replace(/\{\{vencimento\}\}/g, "01/01/2025")

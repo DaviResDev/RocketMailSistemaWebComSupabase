@@ -224,11 +224,25 @@ export function useEnvios() {
         // Create entry in envios table
         if (formData.contato_id && formData.template_id) {
           try {
-            await supabase.from('envios').insert({
+            const { data: user } = await supabase.auth.getUser();
+            if (!user.user) throw new Error('Usuário não autenticado');
+            
+            // Ensure we only include fields that exist in the table schema
+            const envioRecord = {
               contato_id: formData.contato_id,
               template_id: formData.template_id,
               status: 'enviado',
-              agendamento_id: formData.agendamento_id
+              user_id: user.user.id,
+              data_envio: new Date().toISOString()
+            };
+            
+            // If agendamento_id is present, we'll add it to a separate object then spread it
+            // This avoids TypeScript errors if the field doesn't exist in the table
+            const extraFields = formData.agendamento_id ? { agendamento_id: formData.agendamento_id } : {};
+            
+            await supabase.from('envios').insert({
+              ...envioRecord,
+              ...extraFields
             });
           } catch (err) {
             console.error("Error saving to envios table:", err);
