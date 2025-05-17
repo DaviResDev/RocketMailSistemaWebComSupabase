@@ -73,7 +73,7 @@ export function parseAttachments(attachments: Json | undefined): Attachment[] {
     else if (Array.isArray(attachments)) {
       return attachments.filter(item => 
         item && typeof item === 'object' && 'name' in item && 'url' in item
-      ) as Attachment[];
+      ) as unknown as Attachment[];
     } 
     // If it's an object with name and url, treat as single attachment
     else if (attachments && typeof attachments === 'object' && 'name' in attachments && 'url' in attachments) {
