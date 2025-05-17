@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -82,20 +81,37 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         throw templateError;
       }
       
+      // Get the user settings to include signature
+      const { data: userSettings, error: settingsError } = await supabase
+        .from('configuracoes')
+        .select('signature_image')
+        .single();
+        
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        console.warn("Erro ao buscar configurações do usuário:", settingsError);
+      }
+      
       // Process template content with contact data for placeholders
       let processedContent = template.conteudo;
       
       if (schedule.contato) {
         const currentDate = new Date();
         const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+        const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
         
         processedContent = template.conteudo
-          .replace(/{nome}/g, schedule.contato.nome || '')
-          .replace(/{email}/g, schedule.contato.email || '')
-          .replace(/{telefone}/g, schedule.contato.telefone || '')
-          .replace(/{razao_social}/g, schedule.contato.razao_social || '')
-          .replace(/{cliente}/g, schedule.contato.cliente || '')
-          .replace(/{dia}/g, formattedDate);
+          .replace(/\{\{nome\}\}/g, schedule.contato.nome || '')
+          .replace(/\{\{email\}\}/g, schedule.contato.email || '')
+          .replace(/\{\{telefone\}\}/g, schedule.contato.telefone || '')
+          .replace(/\{\{razao_social\}\}/g, schedule.contato.razao_social || '')
+          .replace(/\{\{cliente\}\}/g, schedule.contato.cliente || '')
+          .replace(/\{\{empresa\}\}/g, "Empresa Teste") 
+          .replace(/\{\{cargo\}\}/g, "Cargo Teste")
+          .replace(/\{\{produto\}\}/g, "Produto Teste")
+          .replace(/\{\{valor\}\}/g, "R$ 1.000,00")
+          .replace(/\{\{vencimento\}\}/g, "01/01/2025")
+          .replace(/\{\{data\}\}/g, formattedDate)
+          .replace(/\{\{hora\}\}/g, formattedTime);
       }
       
       // Parse template attachments if they exist
@@ -115,8 +131,17 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         }
       }
       
+      // Determine which signature to use (user settings > template)
+      const signatureImageToUse = userSettings?.signature_image || template.signature_image;
+      
       console.log("Template attachments:", template.attachments);
       console.log("Parsed attachments data:", attachmentsData);
+      console.log("Using signature image:", signatureImageToUse);
+      
+      // Update toast with processing status
+      toast.loading(`Processando envio para ${schedule.contato?.nome}...`, {
+        id: loadingToastId
+      });
       
       // Prepare data to send
       const envioData = {
@@ -128,26 +153,29 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         // Pass these explictly to the edge function:
         subject: template.nome,
         content: processedContent,
-        signature_image: template.signature_image,
+        signature_image: signatureImageToUse,
         contato_nome: schedule.contato?.nome,
-        contato_email: schedule.contato?.email
+        contato_email: schedule.contato?.email,
+        image_url: template.image_url
       };
       
       // Log the data being sent
       console.log("Enviando email com os seguintes dados:", {
-        contato: schedule.contato,
+        contato: schedule.contato?.nome,
         template: template.nome,
         content_length: processedContent.length,
         agendamento: schedule.id,
         temAnexos: !!attachmentsData && 
                   (Array.isArray(attachmentsData) ? attachmentsData.length > 0 : true),
-        signature_image: !!template.signature_image
+        signature_image: !!signatureImageToUse,
+        image_url: !!template.image_url
       });
       
       // Send email immediately using sendEmail
       const result = await sendEmail(envioData);
       
       if (!result) {
+        toast.dismiss(loadingToastId);
         toast({
           variant: "destructive",
           title: "Erro",
@@ -162,6 +190,7 @@ export function SchedulesList({ schedules, onRefresh }: SchedulesListProps) {
         .update({ status: 'enviado' })
         .eq('id', schedule.id);
       
+      toast.dismiss(loadingToastId);
       toast({
         title: "Sucesso",
         description: `Email enviado com sucesso para ${schedule.contato?.nome}!`

@@ -42,13 +42,13 @@ serve(async (req) => {
       .from('agendamentos')
       .select(`
         *,
-        contato:contatos (
+        contato:contato_id(
           id, nome, email, telefone
         ),
-        template:templates (
-          id, nome, conteudo, canal, signature_image
+        template:template_id(
+          id, nome, conteudo, canal, signature_image, image_url, attachments
         ),
-        user:user_id (
+        user:user_id(
           id
         )
       `)
@@ -126,20 +126,27 @@ serve(async (req) => {
           .eq('user_id', agendamento.user_id)
           .single();
           
-        if (settingsError) {
+        if (settingsError && settingsError.code !== 'PGRST116') {
           console.warn(`Could not fetch user settings: ${settingsError.message}`);
         }
         
         // Use user settings signature or template signature
         const signatureImage = userSettings?.signature_image || agendamento.template.signature_image;
         
-        // Load attachments if any
-        const { data: attachments } = await supabaseAdmin
-          .from('templates')
-          .select('attachments')
-          .eq('id', agendamento.template_id)
-          .single();
-          
+        // Process attachments if present
+        let attachments = null;
+        if (agendamento.template.attachments) {
+          if (typeof agendamento.template.attachments === 'string') {
+            try {
+              attachments = JSON.parse(agendamento.template.attachments);
+            } catch (e) {
+              console.error("Error parsing attachments:", e);
+            }
+          } else {
+            attachments = agendamento.template.attachments;
+          }
+        }
+        
         // Chamar a Edge Function de envio de email com retry logic
         let attemptCount = 0;
         const maxAttempts = 2;
@@ -174,7 +181,8 @@ serve(async (req) => {
                 template_id: agendamento.template_id,
                 user_id: agendamento.user_id,
                 signature_image: signatureImage,
-                attachments: attachments?.attachments
+                attachments: attachments,
+                image_url: agendamento.template.image_url
               },
             });
             
@@ -218,6 +226,17 @@ serve(async (req) => {
             id: agendamento.id,
             status: 'enviado'
           });
+          
+          // Create entry in envios table
+          await supabaseAdmin
+            .from('envios')
+            .insert({
+              user_id: agendamento.user_id,
+              template_id: agendamento.template_id,
+              contato_id: agendamento.contato_id,
+              status: 'enviado',
+              data_envio: new Date().toISOString()
+            });
         } else {
           // Todas as tentativas falharam - atualizar status do agendamento para erro
           const errorMessage = lastError ? 

@@ -63,6 +63,8 @@ export function useTemplateEmail() {
       // Always use settings signature image if available, otherwise use template's
       const signatureImageToUse = settings?.signature_image || template.signature_image;
       
+      console.log("Using signature image:", signatureImageToUse);
+      
       // Call our send-email edge function
       const response = await supabase.functions.invoke('send-email', {
         body: {

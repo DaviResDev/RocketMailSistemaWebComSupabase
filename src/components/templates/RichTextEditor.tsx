@@ -487,7 +487,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         data-placeholder={placeholder}
         style={{ 
           position: 'relative',
-          direction: 'ltr' // Fix: Ensure direction is explicitly set to left-to-right
+          direction: 'ltr', /* Explicitly setting left-to-right text direction */
+          textAlign: 'left'  /* Ensuring text alignment is left */
         }}
       />
     </div>
