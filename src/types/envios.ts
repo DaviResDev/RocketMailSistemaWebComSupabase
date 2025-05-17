@@ -50,14 +50,39 @@ export function parseAttachments(attachments: Json | undefined): Attachment[] {
   if (!attachments) return [];
   
   try {
+    // If it's a string, try to parse it as JSON
     if (typeof attachments === 'string') {
-      return JSON.parse(attachments);
-    } else if (Array.isArray(attachments)) {
-      return attachments;
+      try {
+        const parsed = JSON.parse(attachments);
+        
+        // Ensure the parsed result is an array of valid Attachment objects
+        if (Array.isArray(parsed)) {
+          return parsed.filter(item => 
+            item && typeof item === 'object' && 'name' in item && 'url' in item
+          ) as Attachment[];
+        } else if (parsed && typeof parsed === 'object' && 'name' in parsed && 'url' in parsed) {
+          // Single attachment object
+          return [parsed as Attachment];
+        }
+      } catch (e) {
+        console.error('Error parsing attachments string:', e);
+        return [];
+      }
+    } 
+    // If it's already an array, filter for valid attachment objects
+    else if (Array.isArray(attachments)) {
+      return attachments.filter(item => 
+        item && typeof item === 'object' && 'name' in item && 'url' in item
+      ) as Attachment[];
+    } 
+    // If it's an object with name and url, treat as single attachment
+    else if (attachments && typeof attachments === 'object' && 'name' in attachments && 'url' in attachments) {
+      return [attachments as unknown as Attachment];
     }
-    return [attachments];
+    
+    return [];
   } catch (e) {
-    console.error('Error parsing attachments:', e);
+    console.error('Error handling attachments:', e);
     return [];
   }
 }
