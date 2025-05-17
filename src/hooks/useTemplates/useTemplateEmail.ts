@@ -29,7 +29,7 @@ export function useTemplateEmail() {
       // Get user settings to include signature and SMTP settings
       const { data: userSettings } = await supabase
         .from('configuracoes')
-        .select('signature_image, email_usuario, smtp_nome, use_smtp')
+        .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_nome, smtp_seguranca, use_smtp')
         .single();
       
       // Process template with sample data
@@ -71,6 +71,16 @@ export function useTemplateEmail() {
       
       console.log("Using signature image:", signatureImageToUse);
       
+      // Prepare SMTP settings if user has configured them
+      const smtpSettings = userSettings?.use_smtp ? {
+        host: userSettings.email_smtp,
+        port: userSettings.email_porta,
+        secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+        password: userSettings.email_senha,
+        from_name: userSettings.smtp_nome || '',
+        from_email: userSettings.email_usuario || ''
+      } : null;
+      
       // Call our send-email edge function
       const response = await supabase.functions.invoke('send-email', {
         body: {
@@ -82,10 +92,7 @@ export function useTemplateEmail() {
           attachments: attachments,
           image_url: template.image_url,
           // Include SMTP settings if using SMTP
-          smtp_settings: userSettings?.use_smtp ? {
-            from_name: userSettings.smtp_nome || '',
-            from_email: userSettings.email_usuario || ''
-          } : null,
+          smtp_settings: smtpSettings,
           contato_nome: "Usuário Teste"
         },
       });

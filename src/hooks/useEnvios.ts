@@ -101,7 +101,7 @@ export function useEnvios() {
         // Get user settings to include signature
         const { data: userSettings } = await supabase
           .from('configuracoes')
-          .select('signature_image, email_usuario, smtp_nome, use_smtp')
+          .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
           .single();
 
         // Process template content with contact data for placeholders if not already provided
@@ -135,6 +135,16 @@ export function useEnvios() {
         // Use signature from user settings or template
         const signatureImage = userSettings?.signature_image || templateData.signature_image;
         
+        // Prepare SMTP settings if user has configured them
+        const smtpSettings = userSettings?.use_smtp ? {
+          host: userSettings.email_smtp,
+          port: userSettings.email_porta,
+          secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+          password: userSettings.email_senha,
+          from_name: userSettings.smtp_nome || '',
+          from_email: userSettings.email_usuario || ''
+        } : null;
+        
         // Construct the final email body with image at top, content in middle, and signature at bottom
         let finalContent = '';
         
@@ -158,10 +168,7 @@ export function useEnvios() {
           signature_image: signatureImage,
           template_name: templateData.nome,
           // Include SMTP settings if using SMTP
-          smtp_settings: userSettings?.use_smtp ? {
-            from_name: userSettings.smtp_nome || '',
-            from_email: userSettings.email_usuario || ''
-          } : null,
+          smtp_settings: smtpSettings,
           image_url: templateData.image_url
         };
         
@@ -247,7 +254,7 @@ export function useEnvios() {
       // Get user settings
       const { data: userSettings } = await supabase
         .from('configuracoes')
-        .select('signature_image')
+        .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
         .single();
       
       // Update toast with processing status
