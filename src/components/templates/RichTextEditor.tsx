@@ -248,32 +248,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // Force LTR for all content in the editor
-  const forceLTRForEditor = useCallback(() => {
-    if (!editorRef.current) return;
-    
-    editorRef.current.setAttribute('dir', 'ltr');
-    editorRef.current.style.direction = 'ltr';
-    editorRef.current.style.textAlign = 'left';
-    editorRef.current.style.unicodeBidi = 'plaintext';
-    
-    // Apply to all child elements
-    const allElements = editorRef.current.querySelectorAll('*');
-    allElements.forEach(el => {
-      if (el instanceof HTMLElement) {
-        el.setAttribute('dir', 'ltr');
-        el.style.direction = 'ltr';
-        el.style.textAlign = 'left';
-        el.style.unicodeBidi = 'plaintext';
+  // Init content with proper direction
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.dir = 'ltr';
+      if (onEditorInit) {
+        onEditorInit(editorRef.current);
       }
-    });
-  }, []);
+    }
+  }, [onEditorInit]);
 
   // Synchronize editor content with state
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
-    // Force LTR direction
-    forceLTRForEditor();
-    
     const content = e.currentTarget.innerHTML;
     setEditorContent(content);
     onChange(content);
@@ -285,73 +271,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       setEditorContent(value);
     }
   }, [value]);
-  
-  // Add specific CSS rules to ensure LTR behavior
-  useEffect(() => {
-    const styleId = 'rich-text-editor-ltr-style';
-    let styleElement = document.getElementById(styleId) as HTMLStyleElement;
-    
-    if (!styleElement) {
-      styleElement = document.createElement('style');
-      styleElement.id = styleId;
-      document.head.appendChild(styleElement);
-    }
-    
-    styleElement.textContent = `
-      #rich-text-editor,
-      #rich-text-editor * {
-        direction: ltr !important;
-        unicode-bidi: plaintext !important;
-        text-align: left !important;
-      }
-    `;
-    
-    return () => {
-      if (styleElement && document.head.contains(styleElement)) {
-        document.head.removeChild(styleElement);
-      }
-    };
-  }, []);
-  
-  // Initialize editor with correct direction
-  useEffect(() => {
-    const editorEl = document.getElementById('rich-text-editor');
-    if (editorEl && onEditorInit) {
-      forceLTRForEditor();
-      onEditorInit(editorEl);
-    }
-  }, [onEditorInit, forceLTRForEditor]);
-  
-  // Set up mutation observer to ensure LTR is always maintained
-  useEffect(() => {
-    if (!editorRef.current) return;
-    
-    // Initial setup
-    forceLTRForEditor();
-    
-    const observer = new MutationObserver(() => {
-      forceLTRForEditor();
-    });
-    
-    observer.observe(editorRef.current, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['style', 'dir']
-    });
-    
-    return () => observer.disconnect();
-  }, [forceLTRForEditor]);
-  
-  // When editor gains focus, force LTR
-  const handleEditorFocus = () => {
-    forceLTRForEditor();
-  };
-  
-  // When any key is pressed, ensure LTR
-  const handleKeyDown = () => {
-    forceLTRForEditor();
-  };
   
   // Hidden file input for image upload
   const triggerImageUpload = () => {
@@ -561,7 +480,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </Popover>
       </div>
       
-      {/* Editor with enhanced LTR settings */}
+      {/* Editor with explicit LTR direction */}
       <div
         id="rich-text-editor"
         ref={editorRef}
@@ -569,13 +488,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         contentEditable="true"
         dangerouslySetInnerHTML={{ __html: editorContent }}
         onInput={handleEditorChange}
-        onFocus={handleEditorFocus}
-        onKeyDown={handleKeyDown}
         dir="ltr"
         style={{ 
           direction: 'ltr',
           textAlign: 'left',
-          unicodeBidi: 'plaintext',
         }}
       />
     </div>

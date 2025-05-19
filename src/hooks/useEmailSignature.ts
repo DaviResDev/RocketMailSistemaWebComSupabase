@@ -55,6 +55,7 @@ export const useEmailSignature = () => {
         
       if (updateError) {
         console.error('Error saving signature URL to settings:', updateError);
+        throw new Error('Erro ao salvar a URL da assinatura nas configurações');
       }
       
       toast.success('Imagem de assinatura enviada com sucesso!');
@@ -95,6 +96,7 @@ export const useEmailSignature = () => {
         
       if (updateError) {
         console.error('Error removing signature from settings:', updateError);
+        throw new Error('Erro ao remover a assinatura das configurações');
       }
 
       toast.success('Imagem de assinatura removida com sucesso');
