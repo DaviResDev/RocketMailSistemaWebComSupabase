@@ -1,4 +1,3 @@
-
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { 
   Bold, 
@@ -262,33 +261,74 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [value]);
   
-  // Initialize editor and pass reference to parent, also apply text direction
+  // Enhanced function to ensure LTR direction
   useEffect(() => {
     const editorEl = document.getElementById('rich-text-editor');
     if (editorEl) {
-      // Force LTR direction settings
+      // Force LTR direction settings across the entire editor content
       editorEl.dir = 'ltr';
       editorEl.style.direction = 'ltr';
       editorEl.style.textAlign = 'left';
-      editorEl.style.unicodeBidi = 'embed';
+      editorEl.style.unicodeBidi = 'isolate';
       
-      // Add specific CSS rules to force LTR behavior
-      const style = document.createElement('style');
+      // Add specific CSS rules to force LTR behavior for all child elements
+      const styleId = 'rich-text-editor-ltr-style';
+      let style = document.getElementById(styleId);
+      
+      // Remove any existing style to prevent duplication
+      if (style) {
+        document.head.removeChild(style);
+      }
+      
+      // Create new style element with stronger specificity
+      style = document.createElement('style');
+      style.id = styleId;
       style.innerHTML = `
-        #rich-text-editor, 
+        #rich-text-editor,
         #rich-text-editor * {
           direction: ltr !important;
-          text-align: left;
-          unicode-bidi: isolate;
+          text-align: left !important;
+          unicode-bidi: isolate !important;
+        }
+        
+        #rich-text-editor[contenteditable="true"] {
+          unicode-bidi: plaintext !important;
+        }
+        
+        #rich-text-editor div,
+        #rich-text-editor p,
+        #rich-text-editor span,
+        #rich-text-editor h1,
+        #rich-text-editor h2,
+        #rich-text-editor h3,
+        #rich-text-editor h4,
+        #rich-text-editor h5,
+        #rich-text-editor h6,
+        #rich-text-editor ul,
+        #rich-text-editor ol,
+        #rich-text-editor li {
+          direction: ltr !important;
+          text-align: left !important;
         }
       `;
       document.head.appendChild(style);
+      
+      // Fix for existing content
+      const allElements = editorEl.querySelectorAll('*');
+      allElements.forEach(el => {
+        if (el instanceof HTMLElement) {
+          el.dir = 'ltr';
+          el.style.direction = 'ltr';
+          el.style.textAlign = 'left';
+          el.style.unicodeBidi = 'isolate';
+        }
+      });
       
       if (onEditorInit) {
         onEditorInit(editorEl);
       }
     }
-  }, [onEditorInit]);
+  }, [onEditorInit, editorContent]); // Also run when content changes
   
   // When editor gains focus, ensure proper text direction is maintained
   const handleEditorFocus = () => {
@@ -297,9 +337,46 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       editorRef.current.dir = 'ltr';
       editorRef.current.style.direction = 'ltr';
       editorRef.current.style.textAlign = 'left';
-      editorRef.current.style.unicodeBidi = 'embed';
+      editorRef.current.style.unicodeBidi = 'plaintext';
+      
+      // Also override inline styles that might be interfering
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) {
+        document.execCommand('styleWithCSS', false, 'true');
+        document.execCommand('removeFormat', false, '');
+        document.execCommand('insertText', false, selection.toString());
+      }
     }
   };
+  
+  // Observe mutations to ensure LTR is always respected
+  useEffect(() => {
+    if (!editorRef.current) return;
+    
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (node instanceof HTMLElement) {
+              node.dir = 'ltr';
+              node.style.direction = 'ltr';
+              node.style.textAlign = 'left';
+              node.style.unicodeBidi = 'isolate';
+            }
+          });
+        }
+      });
+    });
+    
+    observer.observe(editorRef.current, { 
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'dir'] 
+    });
+    
+    return () => observer.disconnect();
+  }, []);
   
   // Hidden file input for image upload
   const triggerImageUpload = () => {
@@ -436,7 +513,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   className="w-5 h-5 rounded-sm border border-gray-200 cursor-pointer"
                   style={{ 
                     backgroundColor: color,
-                    backgroundImage: color === 'transparent' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : undefined,
+                    backgroundImage: color === 'transparent' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : undefined,
                     backgroundSize: color === 'transparent' ? '6px 6px' : undefined,
                     backgroundPosition: color === 'transparent' ? '0 0, 3px 3px' : undefined
                   }}
@@ -509,7 +586,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </Popover>
       </div>
       
-      {/* Editor - Enhanced LTR text direction fix */}
+      {/* Editor with enhanced LTR settings */}
       <div
         id="rich-text-editor"
         ref={editorRef}
@@ -518,13 +595,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         dangerouslySetInnerHTML={{ __html: editorContent }}
         onInput={handleEditorChange}
         onFocus={handleEditorFocus}
+        onKeyDown={(e) => {
+          // Force LTR on every keystroke
+          if (editorRef.current) {
+            editorRef.current.dir = 'ltr';
+            editorRef.current.style.direction = 'ltr';
+          }
+        }}
         data-placeholder={placeholder}
         dir="ltr"
         style={{ 
           position: 'relative',
           direction: 'ltr',
           textAlign: 'left',
-          unicodeBidi: 'embed',
+          unicodeBidi: 'plaintext', // More strict than 'embed'
           writingMode: 'horizontal-tb'
         }}
       />
