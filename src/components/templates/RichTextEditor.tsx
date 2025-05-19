@@ -1,3 +1,4 @@
+
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { 
   Bold, 
@@ -79,6 +80,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [imageUrl, setImageUrl] = useState('');
   const imageInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
+  const editorRef = useRef<HTMLDivElement>(null);
   
   // Function to apply basic formatting commands
   const execCommand = useCallback((command: string, value?: string) => {
@@ -260,13 +262,44 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [value]);
   
-  // Initialize editor and pass reference to parent
+  // Initialize editor and pass reference to parent, also apply text direction
   useEffect(() => {
     const editorEl = document.getElementById('rich-text-editor');
-    if (editorEl && onEditorInit) {
-      onEditorInit(editorEl);
+    if (editorEl) {
+      // Force LTR direction settings
+      editorEl.dir = 'ltr';
+      editorEl.style.direction = 'ltr';
+      editorEl.style.textAlign = 'left';
+      editorEl.style.unicodeBidi = 'embed';
+      
+      // Add specific CSS rules to force LTR behavior
+      const style = document.createElement('style');
+      style.innerHTML = `
+        #rich-text-editor, 
+        #rich-text-editor * {
+          direction: ltr !important;
+          text-align: left;
+          unicode-bidi: isolate;
+        }
+      `;
+      document.head.appendChild(style);
+      
+      if (onEditorInit) {
+        onEditorInit(editorEl);
+      }
     }
   }, [onEditorInit]);
+  
+  // When editor gains focus, ensure proper text direction is maintained
+  const handleEditorFocus = () => {
+    if (editorRef.current) {
+      // Reapply direction settings when editor gets focus
+      editorRef.current.dir = 'ltr';
+      editorRef.current.style.direction = 'ltr';
+      editorRef.current.style.textAlign = 'left';
+      editorRef.current.style.unicodeBidi = 'embed';
+    }
+  };
   
   // Hidden file input for image upload
   const triggerImageUpload = () => {
@@ -476,18 +509,23 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </Popover>
       </div>
       
-      {/* Editor - Fix the text direction issue */}
+      {/* Editor - Enhanced LTR text direction fix */}
       <div
         id="rich-text-editor"
+        ref={editorRef}
         className="p-4 min-h-[300px] outline-none prose prose-sm max-w-none"
         contentEditable="true"
         dangerouslySetInnerHTML={{ __html: editorContent }}
         onInput={handleEditorChange}
+        onFocus={handleEditorFocus}
         data-placeholder={placeholder}
+        dir="ltr"
         style={{ 
           position: 'relative',
-          direction: 'ltr', /* Explicitly setting left-to-right text direction */
-          textAlign: 'left'  /* Ensuring text alignment is left by default */
+          direction: 'ltr',
+          textAlign: 'left',
+          unicodeBidi: 'embed',
+          writingMode: 'horizontal-tb'
         }}
       />
     </div>
