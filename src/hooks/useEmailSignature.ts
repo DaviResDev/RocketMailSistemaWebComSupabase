@@ -47,6 +47,16 @@ export const useEmailSignature = () => {
         .from('signatures')
         .getPublicUrl(filePath);
       
+      // Save signature URL to user settings
+      const { error: updateError } = await supabase
+        .from('configuracoes')
+        .update({ signature_image: publicUrl })
+        .eq('user_id', user.id);
+        
+      if (updateError) {
+        console.error('Error saving signature URL to settings:', updateError);
+      }
+      
       toast.success('Imagem de assinatura enviada com sucesso!');
       return publicUrl;
     } catch (error: any) {
@@ -76,6 +86,16 @@ export const useEmailSignature = () => {
         .remove([fileName]);
 
       if (error) throw error;
+      
+      // Also remove from user settings
+      const { error: updateError } = await supabase
+        .from('configuracoes')
+        .update({ signature_image: null })
+        .eq('user_id', user.id);
+        
+      if (updateError) {
+        console.error('Error removing signature from settings:', updateError);
+      }
 
       toast.success('Imagem de assinatura removida com sucesso');
       return true;
