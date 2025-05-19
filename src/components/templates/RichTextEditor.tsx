@@ -269,7 +269,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       editorEl.dir = 'ltr';
       editorEl.style.direction = 'ltr';
       editorEl.style.textAlign = 'left';
-      editorEl.style.unicodeBidi = 'isolate';
+      editorEl.style.unicodeBidi = 'plaintext'; // Updated to plaintext for stronger LTR enforcement
       
       // Add specific CSS rules to force LTR behavior for all child elements
       const styleId = 'rich-text-editor-ltr-style';
@@ -288,7 +288,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         #rich-text-editor * {
           direction: ltr !important;
           text-align: left !important;
-          unicode-bidi: isolate !important;
+          unicode-bidi: plaintext !important;
         }
         
         #rich-text-editor[contenteditable="true"] {
@@ -320,7 +320,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           el.dir = 'ltr';
           el.style.direction = 'ltr';
           el.style.textAlign = 'left';
-          el.style.unicodeBidi = 'isolate';
+          el.style.unicodeBidi = 'plaintext';
         }
       });
       
@@ -361,7 +361,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               node.dir = 'ltr';
               node.style.direction = 'ltr';
               node.style.textAlign = 'left';
-              node.style.unicodeBidi = 'isolate';
+              node.style.unicodeBidi = 'plaintext';
             }
           });
         }
@@ -608,7 +608,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           position: 'relative',
           direction: 'ltr',
           textAlign: 'left',
-          unicodeBidi: 'plaintext', // More strict than 'embed'
+          unicodeBidi: 'plaintext', // Updated to plaintext for stronger LTR enforcement
           writingMode: 'horizontal-tb'
         }}
       />
