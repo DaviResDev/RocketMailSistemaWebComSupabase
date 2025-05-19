@@ -1,4 +1,3 @@
-
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { 
   Bold, 
@@ -488,7 +487,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         style={{ 
           position: 'relative',
           direction: 'ltr', /* Explicitly setting left-to-right text direction */
-          textAlign: 'left'  /* Ensuring text alignment is left */
+          textAlign: 'left'  /* Ensuring text alignment is left by default */
         }}
       />
     </div>
