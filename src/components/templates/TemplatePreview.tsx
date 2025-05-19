@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Template } from '@/types/template';
 import { useSettings } from '@/hooks/useSettings';
+import { useEmailSignature } from '@/hooks/useEmailSignature';
 
 interface TemplatePreviewProps {
   template: Partial<Template>;
@@ -10,6 +11,33 @@ interface TemplatePreviewProps {
 
 export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
   const { settings } = useSettings();
+  const { getSignatureUrl } = useEmailSignature();
+  const [signatureImage, setSignatureImage] = useState<string | null>(null);
+  
+  // Load signature image on component mount
+  useEffect(() => {
+    const loadSignatureImage = async () => {
+      // First try to use the settings signature image if available
+      if (settings?.signature_image) {
+        setSignatureImage(settings.signature_image);
+        return;
+      }
+      
+      // If template has a specific signature image, use it
+      if (template.signature_image && template.signature_image !== 'no_signature') {
+        setSignatureImage(template.signature_image);
+        return;
+      }
+      
+      // Try to fetch from Supabase if not available in settings
+      const signatureUrl = await getSignatureUrl();
+      if (signatureUrl) {
+        setSignatureImage(signatureUrl);
+      }
+    };
+    
+    loadSignatureImage();
+  }, [settings, template, getSignatureUrl]);
   
   // Replace template variables with sample values
   const processContent = (content: string) => {
@@ -27,22 +55,6 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
       .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'))
       .replace(/\{\{hora\}\}/g, new Date().toLocaleTimeString('pt-BR'));
   };
-  
-  const getSignatureImage = () => {
-    // First try to use the settings signature image if available
-    if (settings?.signature_image) {
-      return settings.signature_image;
-    }
-    
-    // If template has a specific signature image, use it
-    if (template.signature_image && template.signature_image !== 'no_signature') {
-      return template.signature_image;
-    }
-    
-    return null;
-  };
-  
-  const signatureImage = getSignatureImage();
   
   // Function to create full preview content
   const createPreviewContent = () => {

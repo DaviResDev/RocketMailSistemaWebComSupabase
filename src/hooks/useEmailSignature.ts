@@ -86,9 +86,29 @@ export const useEmailSignature = () => {
     }
   };
 
+  const getSignatureUrl = async () => {
+    if (!user) return null;
+    
+    try {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('signature_image')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) throw error;
+      
+      return data?.signature_image || null;
+    } catch (error) {
+      console.error('Error fetching signature URL:', error);
+      return null;
+    }
+  };
+
   return {
     uploadSignatureImage,
     deleteSignatureImage,
+    getSignatureUrl,
     uploading
   };
 };

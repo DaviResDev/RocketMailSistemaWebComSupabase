@@ -249,7 +249,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Synchronize editor content with state
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
-    // Force LTR direction on every keypress
+    // Force LTR direction on every keypress and character input
     if (editorRef.current) {
       editorRef.current.dir = 'ltr';
       editorRef.current.style.direction = 'ltr';
@@ -258,6 +258,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       
       // Apply to current selection region as well
       document.execCommand('styleWithCSS', false, 'true');
+      
+      // Force LTR on all child elements on each keystroke
+      const allChildElements = editorRef.current.querySelectorAll('*');
+      allChildElements.forEach(el => {
+        if (el instanceof HTMLElement) {
+          el.dir = 'ltr';
+          el.style.direction = 'ltr';
+          el.style.textAlign = 'left';
+          el.style.unicodeBidi = 'plaintext';
+        }
+      });
     }
     
     const content = e.currentTarget.innerHTML;
@@ -320,6 +331,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         #rich-text-editor li {
           direction: ltr !important;
           text-align: left !important;
+          unicode-bidi: plaintext !important;
         }
       `;
       document.head.appendChild(style);
@@ -366,7 +378,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.type === 'childList') {
+        if (mutation.type === 'childList' || mutation.type === 'attributes') {
+          // Apply LTR to any added nodes
           mutation.addedNodes.forEach((node) => {
             if (node instanceof HTMLElement) {
               node.dir = 'ltr';
@@ -375,6 +388,25 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               node.style.unicodeBidi = 'plaintext';
             }
           });
+          
+          // Also check the target element
+          if (mutation.target instanceof HTMLElement) {
+            mutation.target.dir = 'ltr';
+            mutation.target.style.direction = 'ltr';
+            mutation.target.style.textAlign = 'left';
+            mutation.target.style.unicodeBidi = 'plaintext';
+            
+            // Apply to all children too
+            const allChildElements = mutation.target.querySelectorAll('*');
+            allChildElements.forEach(el => {
+              if (el instanceof HTMLElement) {
+                el.dir = 'ltr';
+                el.style.direction = 'ltr';
+                el.style.textAlign = 'left';
+                el.style.unicodeBidi = 'plaintext';
+              }
+            });
+          }
         }
       });
     });
@@ -616,6 +648,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             
             // Apply to current selection region as well
             document.execCommand('styleWithCSS', false, 'true');
+            
+            // Force LTR on all child elements on each keystroke
+            const allChildElements = editorRef.current.querySelectorAll('*');
+            allChildElements.forEach(el => {
+              if (el instanceof HTMLElement) {
+                el.dir = 'ltr';
+                el.style.direction = 'ltr';
+                el.style.textAlign = 'left';
+                el.style.unicodeBidi = 'plaintext';
+              }
+            });
           }
         }}
         data-placeholder={placeholder}
