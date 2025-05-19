@@ -249,6 +249,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Synchronize editor content with state
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
+    // Force LTR direction on every keypress
+    if (editorRef.current) {
+      editorRef.current.dir = 'ltr';
+      editorRef.current.style.direction = 'ltr';
+      editorRef.current.style.textAlign = 'left';
+      editorRef.current.style.unicodeBidi = 'plaintext';
+      
+      // Apply to current selection region as well
+      document.execCommand('styleWithCSS', false, 'true');
+    }
+    
     const content = e.currentTarget.innerHTML;
     setEditorContent(content);
     onChange(content);
@@ -269,7 +280,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       editorEl.dir = 'ltr';
       editorEl.style.direction = 'ltr';
       editorEl.style.textAlign = 'left';
-      editorEl.style.unicodeBidi = 'plaintext'; // Updated to plaintext for stronger LTR enforcement
+      editorEl.style.unicodeBidi = 'plaintext';
       
       // Add specific CSS rules to force LTR behavior for all child elements
       const styleId = 'rich-text-editor-ltr-style';
@@ -600,6 +611,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           if (editorRef.current) {
             editorRef.current.dir = 'ltr';
             editorRef.current.style.direction = 'ltr';
+            editorRef.current.style.textAlign = 'left';
+            editorRef.current.style.unicodeBidi = 'plaintext';
+            
+            // Apply to current selection region as well
+            document.execCommand('styleWithCSS', false, 'true');
           }
         }}
         data-placeholder={placeholder}
@@ -608,7 +624,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           position: 'relative',
           direction: 'ltr',
           textAlign: 'left',
-          unicodeBidi: 'plaintext', // Updated to plaintext for stronger LTR enforcement
+          unicodeBidi: 'plaintext',
           writingMode: 'horizontal-tb'
         }}
       />
