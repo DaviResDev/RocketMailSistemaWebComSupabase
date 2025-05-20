@@ -19,12 +19,14 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
     const loadSignatureImage = async () => {
       // First try to use the settings signature image if available
       if (settings?.signature_image) {
+        console.log("Using signature from settings:", settings.signature_image);
         setSignatureImage(settings.signature_image);
         return;
       }
       
       // If template has a specific signature image, use it
       if (template.signature_image && template.signature_image !== 'no_signature') {
+        console.log("Using signature from template:", template.signature_image);
         setSignatureImage(template.signature_image);
         return;
       }
@@ -32,7 +34,10 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
       // Try to fetch from Supabase if not available in settings
       const signatureUrl = await getSignatureUrl();
       if (signatureUrl) {
+        console.log("Using signature from Supabase:", signatureUrl);
         setSignatureImage(signatureUrl);
+      } else {
+        console.log("No signature image available");
       }
     };
     
@@ -144,6 +149,11 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
               alt="Assinatura" 
               className="max-h-24" 
               style={{ maxWidth: '100%' }}
+              onError={(e) => {
+                console.error("Error loading signature image:", e);
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
             />
           </div>
         )}

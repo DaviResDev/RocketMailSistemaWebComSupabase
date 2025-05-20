@@ -35,42 +35,47 @@ export async function saveUserSettings(
   
   let result;
   
-  // Check if settings already exist for this user
-  if (currentSettings && currentSettings.id !== 'new') {
-    // Settings exist, update them
-    console.log("Updating existing settings with ID:", currentSettings.id);
-    result = await supabase
-      .from('configuracoes')
-      .update(settingsToSave)
-      .eq('id', currentSettings.id)
-      .eq('user_id', userId)
-      .select('*')
-      .single();
-  } else {
-    // No settings exist, insert new ones
-    console.log("Inserting new settings for user:", userId);
-    result = await supabase
-      .from('configuracoes')
-      .insert([{ ...settingsToSave, user_id: userId }])
-      .select('*')
-      .single();
+  try {
+    // Check if settings already exist for this user
+    if (currentSettings && currentSettings.id !== 'new') {
+      // Settings exist, update them
+      console.log("Updating existing settings with ID:", currentSettings.id);
+      result = await supabase
+        .from('configuracoes')
+        .update(settingsToSave)
+        .eq('id', currentSettings.id)
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+    } else {
+      // No settings exist, insert new ones
+      console.log("Inserting new settings for user:", userId);
+      result = await supabase
+        .from('configuracoes')
+        .insert([{ ...settingsToSave, user_id: userId }])
+        .select('*')
+        .single();
+    }
+    
+    const { data: newData, error: saveError } = result;
+    
+    if (saveError) {
+      console.error("Error saving settings:", saveError);
+      throw saveError;
+    }
+    
+    console.log("Settings saved successfully:", newData);
+    console.log("Signature image after save:", newData.signature_image);
+    
+    // Make sure to transform the data to match our Settings type
+    return {
+      ...newData,
+      use_smtp: Boolean(newData.use_smtp),
+      two_factor_enabled: Boolean(newData.two_factor_enabled),
+      signature_image: newData.signature_image // Garantir que signature_image seja retornado corretamente
+    } as Settings;
+  } catch (error) {
+    console.error("Error in saveUserSettings:", error);
+    throw error;
   }
-  
-  const { data: newData, error: saveError } = result;
-  
-  if (saveError) {
-    console.error("Error saving settings:", saveError);
-    throw saveError;
-  }
-  
-  console.log("Settings saved successfully:", newData);
-  console.log("Signature image after save:", newData.signature_image);
-  
-  // Make sure to transform the data to match our Settings type
-  return {
-    ...newData,
-    use_smtp: Boolean(newData.use_smtp),
-    two_factor_enabled: Boolean(newData.two_factor_enabled),
-    signature_image: newData.signature_image // Garantir que signature_image seja retornado corretamente
-  } as Settings;
 }

@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,6 +32,19 @@ export const useEmailSignature = () => {
       const fileName = `sig_${user.id}_${uuidv4()}.${fileExt}`;
       const filePath = `${fileName}`;
       
+      // Verificar se o bucket 'signatures' existe, se não, criar
+      const { data: buckets } = await supabase.storage.listBuckets();
+      if (!buckets?.find(bucket => bucket.name === 'signatures')) {
+        const { error: bucketError } = await supabase.storage.createBucket('signatures', {
+          public: true
+        });
+        
+        if (bucketError) {
+          console.error('Error creating signatures bucket:', bucketError);
+          throw new Error('Erro ao criar bucket para assinaturas');
+        }
+      }
+      
       // Fazer o upload para o bucket 'signatures'
       const { error: uploadError } = await supabase.storage
         .from('signatures')
@@ -47,15 +60,44 @@ export const useEmailSignature = () => {
         .from('signatures')
         .getPublicUrl(filePath);
       
+      console.log("Signature image uploaded successfully:", publicUrl);
+      
       // Save signature URL to user settings
-      const { error: updateError } = await supabase
+      const { data: settingsData, error: settingsError } = await supabase
         .from('configuracoes')
-        .update({ signature_image: publicUrl })
-        .eq('user_id', user.id);
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        console.error('Error checking existing settings:', settingsError);
+        throw new Error('Erro ao verificar configurações existentes');
+      }
         
-      if (updateError) {
-        console.error('Error saving signature URL to settings:', updateError);
-        throw new Error('Erro ao salvar a URL da assinatura nas configurações');
+      if (settingsData) {
+        // Update existing settings
+        const { error: updateError } = await supabase
+          .from('configuracoes')
+          .update({ signature_image: publicUrl })
+          .eq('id', settingsData.id);
+          
+        if (updateError) {
+          console.error('Error updating signature URL in settings:', updateError);
+          throw new Error('Erro ao salvar a URL da assinatura nas configurações');
+        }
+      } else {
+        // Create new settings entry
+        const { error: insertError } = await supabase
+          .from('configuracoes')
+          .insert({
+            user_id: user.id,
+            signature_image: publicUrl
+          });
+          
+        if (insertError) {
+          console.error('Error creating settings with signature URL:', insertError);
+          throw new Error('Erro ao criar configurações com a assinatura');
+        }
       }
       
       toast.success('Imagem de assinatura enviada com sucesso!');
@@ -108,7 +150,7 @@ export const useEmailSignature = () => {
     }
   };
 
-  const getSignatureUrl = async () => {
+  const getSignatureUrl = useCallback(async () => {
     if (!user) return null;
     
     try {
@@ -118,14 +160,22 @@ export const useEmailSignature = () => {
         .eq('user_id', user.id)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No settings found, which is fine
+          console.log("No settings found for user");
+          return null;
+        }
+        throw error;
+      }
       
+      console.log("Retrieved signature from settings:", data?.signature_image);
       return data?.signature_image || null;
     } catch (error) {
       console.error('Error fetching signature URL:', error);
       return null;
     }
-  };
+  }, [user]);
 
   return {
     uploadSignatureImage,
