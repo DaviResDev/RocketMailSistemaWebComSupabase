@@ -1,250 +1,228 @@
 
-import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { 
-  Bold, 
-  Italic, 
-  Underline, 
-  AlignLeft, 
-  AlignCenter, 
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
   AlignRight,
-  ListOrdered,
+  AlignJustify,
   List,
-  Link,
-  Image,
-  Paintbrush
+  ListOrdered,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  Unlink,
+  RotateCcw,
+  X,
+  Type
 } from 'lucide-react';
-import { 
-  Button
-} from "@/components/ui/button";
-import { 
-  ToggleGroup, 
-  ToggleGroupItem 
-} from "@/components/ui/toggle-group";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
+// Define action types for the formatting toolbar
+type ActionType = 
+  | 'bold' 
+  | 'italic' 
+  | 'underline' 
+  | 'heading' 
+  | 'align-left' 
+  | 'align-center' 
+  | 'align-right' 
+  | 'align-justify'
+  | 'list-unordered'
+  | 'list-ordered'
+  | 'image'
+  | 'link'
+  | 'unlink'
+  | 'undo';
 
 interface RichTextEditorProps {
-  value: string;
-  onChange: (value: string) => void;
+  id?: string;
+  initialValue?: string;
+  value?: string;
+  onChange: (content: string) => void;
+  onImageUpload?: (file: File) => Promise<string>;
+  onEditorInit?: (editor: HTMLElement) => void;
   placeholder?: string;
-  onEditorInit?: (editorElement: any) => void;
+  className?: string;
+  minHeight?: string;
 }
 
-const fontSizes = [
-  '10px', '12px', '14px', '16px', '18px', '20px', '24px', '28px', '32px', '36px', '48px', '64px'
-];
-
-const fontFamilies = [
-  'Arial', 'Helvetica', 'Times New Roman', 'Times', 'Courier New', 'Courier', 'Verdana', 'Georgia', 'Palatino', 'Garamond', 'Bookman', 'Tahoma', 'Trebuchet MS'
-];
-
-const textColors = [
-  '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#efefef', '#f3f3f3', '#ffffff',
-  '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
-  '#e6b8af', '#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#d0e0e3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc',
-];
-
-const bgColors = [
-  'transparent', '#ffffff', '#f3f3f3', '#efefef', '#d9d9d9', '#cccccc', '#b7b7b7', '#999999', '#666666', '#434343', '#000000',
-  '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
-];
-
-export const RichTextEditor: React.FC<RichTextEditorProps> = ({ 
-  value, 
-  onChange, 
-  placeholder,
-  onEditorInit 
-}: RichTextEditorProps) => {
-  const [editorContent, setEditorContent] = useState(value || '');
-  const [linkUrl, setLinkUrl] = useState('');
-  const [showLinkPopover, setShowLinkPopover] = useState(false);
-  const [imageUrl, setImageUrl] = useState('');
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuth();
+export function RichTextEditor({
+  id = 'rich-text-editor',
+  initialValue = '',
+  value,
+  onChange,
+  onImageUpload,
+  onEditorInit,
+  placeholder = 'Digite o conteúdo aqui...',
+  className = '',
+  minHeight = '200px'
+}: RichTextEditorProps) {
+  const [editorContent, setEditorContent] = useState(initialValue || '');
   const editorRef = useRef<HTMLDivElement>(null);
-  
-  // Function to apply basic formatting commands
-  const execCommand = useCallback((command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    const editorEl = document.getElementById('rich-text-editor');
-    if (editorEl) {
-      onChange(editorEl.innerHTML);
-      setEditorContent(editorEl.innerHTML);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkText, setLinkText] = useState('');
+  const [isLinkEdit, setIsLinkEdit] = useState(false);
+
+  // Format commands that can be applied to selected text
+  const formatText = (action: ActionType) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    switch (action) {
+      case 'bold':
+        document.execCommand('bold', false);
+        break;
+      case 'italic':
+        document.execCommand('italic', false);
+        break;
+      case 'underline':
+        document.execCommand('underline', false);
+        break;
+      case 'heading':
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const selectedText = range.toString();
+          
+          if (selectedText) {
+            document.execCommand('insertHTML', false, `<h3>${selectedText}</h3>`);
+          } else {
+            document.execCommand('insertHTML', false, '<h3>Título</h3>');
+          }
+        } else {
+          document.execCommand('insertHTML', false, '<h3>Título</h3>');
+        }
+        break;
+      case 'align-left':
+        document.execCommand('justifyLeft', false);
+        break;
+      case 'align-center':
+        document.execCommand('justifyCenter', false);
+        break;
+      case 'align-right':
+        document.execCommand('justifyRight', false);
+        break;
+      case 'align-justify':
+        document.execCommand('justifyFull', false);
+        break;
+      case 'list-unordered':
+        document.execCommand('insertUnorderedList', false);
+        break;
+      case 'list-ordered':
+        document.execCommand('insertOrderedList', false);
+        break;
+      case 'image':
+        if (onImageUpload) {
+          triggerImageUpload();
+        } else {
+          const imageUrl = prompt('Digite a URL da imagem:');
+          if (imageUrl) {
+            insertImage(imageUrl);
+          }
+        }
+        break;
+      case 'link':
+        const selection = window.getSelection();
+        if (selection && selection.toString()) {
+          setLinkText(selection.toString());
+          setLinkUrl('https://');
+          setIsLinkEdit(false);
+          setLinkPopoverOpen(true);
+        } else {
+          setLinkText('');
+          setLinkUrl('https://');
+          setIsLinkEdit(false);
+          setLinkPopoverOpen(true);
+        }
+        break;
+      case 'unlink':
+        document.execCommand('unlink', false);
+        break;
+      case 'undo':
+        document.execCommand('undo', false);
+        break;
     }
-  }, [onChange]);
-  
-  // Apply font family
-  const applyFontFamily = (fontFamily: string) => {
-    execCommand('fontName', fontFamily);
-  };
-  
-  // Apply font size
-  const applyFontSize = (fontSize: string) => {
-    const sizeMapping: { [key: string]: string } = {
-      '10px': '1', '12px': '2', '14px': '3', '16px': '4',
-      '18px': '5', '20px': '5', '24px': '6', '28px': '6',
-      '32px': '7', '36px': '7', '48px': '7', '64px': '7'
-    };
-    execCommand('fontSize', sizeMapping[fontSize] || '3');
-    
-    // Apply CSS for more precise sizing
-    const selection = window.getSelection();
-    if (selection && !selection.isCollapsed) {
-      const range = selection.getRangeAt(0);
-      const span = document.createElement('span');
-      span.style.fontSize = fontSize;
-      
-      try {
-        range.surroundContents(span);
-      } catch (e) {
-        console.error('Erro ao aplicar tamanho de fonte:', e);
-      }
-      
-      const editorEl = document.getElementById('rich-text-editor');
-      if (editorEl) {
-        onChange(editorEl.innerHTML);
-        setEditorContent(editorEl.innerHTML);
-      }
+
+    // After applying format, update state
+    if (editor) {
+      setEditorContent(editor.innerHTML);
+      onChange(editor.innerHTML);
     }
   };
-  
-  // Apply text color
-  const applyTextColor = (color: string) => {
-    execCommand('foreColor', color);
-  };
-  
-  // Apply background color
-  const applyBgColor = (color: string) => {
-    execCommand('hiliteColor', color);
-  };
-  
-  // Insert link
+
+  // Insert link using the URL from popover
   const insertLink = () => {
-    if (linkUrl) {
-      execCommand('createLink', linkUrl);
-      setLinkUrl('');
-      setShowLinkPopover(false);
-    }
-  };
-
-  // Handle image file upload
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !user) {
-      return;
-    }
-
-    const file = files[0];
-    const fileExt = file.name.split('.').pop();
-    const allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (!linkUrl.trim()) return;
     
-    if (!allowedTypes.includes(fileExt?.toLowerCase() || '')) {
-      toast.error('Tipo de arquivo não suportado. Use imagens: jpg, jpeg, png, gif ou webp');
-      return;
-    }
-
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      toast.error('A imagem é muito grande. O tamanho máximo é 5MB');
-      return;
-    }
-
-    toast.loading('Enviando imagem...');
+    const editor = editorRef.current;
+    if (!editor) return;
     
-    try {
-      const fileName = `${uuidv4()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-      
-      const { data, error } = await supabase.storage
-        .from('template-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
+    const selection = window.getSelection();
+    if (selection) {
+      // If no text is selected but link text is provided, insert new link
+      if ((!selection.toString() || selection.toString() === '') && linkText) {
+        document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkText}</a>`);
+      } 
+      // If text is selected, wrap it in link
+      else if (selection.toString()) {
+        document.execCommand('createLink', false, linkUrl);
+        const links = editor.querySelectorAll('a');
+        links.forEach(link => {
+          link.setAttribute('target', '_blank');
         });
-      
-      if (error) throw error;
-      
-      // Get the public URL for the file
-      const { data: { publicUrl } } = supabase.storage
-        .from('template-images')
-        .getPublicUrl(filePath);
-      
-      // Insert image at current cursor position
-      const imageHtml = `<img src="${publicUrl}" alt="Imagem" style="max-width: 100%; margin: 10px 0;" />`;
-      
-      // Insert at beginning of content if no selection
-      const editorEl = document.getElementById('rich-text-editor');
-      const sel = window.getSelection();
-      
-      if (editorEl) {
-        if (sel && !sel.isCollapsed) {
-          // Insert at current selection
-          execCommand('insertHTML', imageHtml);
-        } else {
-          // Insert at the beginning of the content
-          const oldContent = editorEl.innerHTML;
-          editorEl.innerHTML = imageHtml + oldContent;
-          onChange(editorEl.innerHTML);
-          setEditorContent(editorEl.innerHTML);
-        }
       }
-      
-      toast.dismiss();
-      toast.success('Imagem inserida com sucesso!');
-      
-      // Reset file input
-      if (imageInputRef.current) {
-        imageInputRef.current.value = '';
+      // No selection and no link text, just insert the URL as a link
+      else {
+        document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkUrl}</a>`);
       }
-    } catch (error: any) {
-      toast.dismiss();
-      toast.error(`Erro ao enviar imagem: ${error.message || 'Falha no upload'}`);
-      console.error('Erro ao enviar imagem:', error);
     }
+    
+    setLinkPopoverOpen(false);
+    setLinkUrl('');
+    setLinkText('');
+    
+    // Update state
+    setEditorContent(editor.innerHTML);
+    onChange(editor.innerHTML);
   };
 
-  // Insert image from URL
-  const insertImageFromUrl = () => {
-    if (imageUrl) {
-      const imageHtml = `<img src="${imageUrl}" alt="Imagem" style="max-width: 100%; margin: 10px 0;" />`;
-      
-      // Insert at beginning of content if no selection
-      const editorEl = document.getElementById('rich-text-editor');
-      const sel = window.getSelection();
-      
-      if (editorEl) {
-        if (sel && !sel.isCollapsed) {
-          // Insert at current selection
-          execCommand('insertHTML', imageHtml);
-        } else {
-          // Insert at the beginning of the content
-          const oldContent = editorEl.innerHTML;
-          editorEl.innerHTML = imageHtml + oldContent;
-          onChange(editorEl.innerHTML);
-          setEditorContent(editorEl.innerHTML);
-        }
+  // Insert image at cursor position
+  const insertImage = (url: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    
+    document.execCommand('insertHTML', false, `<img src="${url}" alt="Imagem" style="max-width: 100%; height: auto;" />`);
+    
+    // Update state
+    setEditorContent(editor.innerHTML);
+    onChange(editor.innerHTML);
+  };
+
+  // Inline image upload handling
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onImageUpload || !e.target.files || e.target.files.length === 0) return;
+
+    const file = e.target.files[0];
+    try {
+      const url = await onImageUpload(file);
+      if (url) {
+        insertImage(url);
       }
-      
-      setImageUrl('');
+    } catch (error) {
+      console.error('Erro ao enviar imagem:', error);
+      toast.error('Erro ao enviar imagem. Tente novamente.');
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -252,11 +230,30 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.dir = 'ltr';
+      
+      // Apply a global CSS style to ensure LTR
+      const styleEl = document.createElement('style');
+      styleEl.id = 'ltr-editor-style';
+      styleEl.textContent = `
+        #${id}, #${id} * {
+          direction: ltr !important;
+          text-align: start !important;
+        }
+      `;
+      document.head.appendChild(styleEl);
+      
       if (onEditorInit) {
         onEditorInit(editorRef.current);
       }
+      
+      return () => {
+        const styleToRemove = document.getElementById('ltr-editor-style');
+        if (styleToRemove) {
+          document.head.removeChild(styleToRemove);
+        }
+      };
     }
-  }, [onEditorInit]);
+  }, [id, onEditorInit]);
 
   // Synchronize editor content with state
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
@@ -264,238 +261,270 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     setEditorContent(content);
     onChange(content);
   };
-  
-  // Synchronize when external value changes
+
+  // Synchronize with external value change
   useEffect(() => {
-    if (value !== editorContent) {
+    if (value !== undefined && value !== editorContent) {
       setEditorContent(value);
     }
   }, [value]);
   
   // Hidden file input for image upload
   const triggerImageUpload = () => {
-    if (imageInputRef.current) {
-      imageInputRef.current.click();
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
   };
-  
+
+  // Focus editor when it's empty and receives focus
+  const handleEditorFocus = () => {
+    if (editorRef.current && editorRef.current.innerHTML === '') {
+      editorRef.current.innerHTML = '<p><br></p>';
+    }
+  };
+
+  // Handle paste to strip formatting
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    
+    const text = e.clipboardData.getData('text/plain');
+    if (document.queryCommandSupported('insertText')) {
+      document.execCommand('insertText', false, text);
+    } else {
+      document.execCommand('insertHTML', false, text);
+    }
+  };
+
   return (
-    <div className="border rounded-md">
-      {/* Hidden file input */}
-      <input 
-        type="file" 
-        ref={imageInputRef} 
-        className="hidden" 
-        accept="image/*" 
-        onChange={handleImageUpload}
-      />
-      
-      {/* Toolbar */}
-      <div className="border-b p-2 bg-muted/50 flex flex-wrap gap-1 items-center">
-        {/* Basic text styles */}
-        <ToggleGroup type="multiple" className="flex flex-wrap gap-1">
-          <ToggleGroupItem value="bold" aria-label="Negrito" onClick={() => execCommand('bold')}>
-            <Bold className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="italic" aria-label="Itálico" onClick={() => execCommand('italic')}>
-            <Italic className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="underline" aria-label="Sublinhado" onClick={() => execCommand('underline')}>
-            <Underline className="h-4 w-4" />
-          </ToggleGroupItem>
-        </ToggleGroup>
-
-        <div className="h-6 w-px bg-border mx-1" />
+    <div className={`border rounded-md bg-background ${className}`} style={{ direction: 'ltr' }}>
+      <div className="bg-muted/40 p-1 border-b flex flex-wrap items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('bold')}
+        >
+          <Bold className="h-4 w-4" />
+        </Button>
         
-        {/* Alignment */}
-        <ToggleGroup type="single" className="flex flex-wrap gap-1">
-          <ToggleGroupItem value="left" aria-label="Alinhar à esquerda" onClick={() => execCommand('justifyLeft')}>
-            <AlignLeft className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="center" aria-label="Centralizar" onClick={() => execCommand('justifyCenter')}>
-            <AlignCenter className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="right" aria-label="Alinhar à direita" onClick={() => execCommand('justifyRight')}>
-            <AlignRight className="h-4 w-4" />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('italic')}
+        >
+          <Italic className="h-4 w-4" />
+        </Button>
         
-        <div className="h-6 w-px bg-border mx-1" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('underline')}
+        >
+          <Underline className="h-4 w-4" />
+        </Button>
         
-        {/* Lists */}
-        <ToggleGroup type="single" className="flex flex-wrap gap-1">
-          <ToggleGroupItem value="ordered" aria-label="Lista ordenada" onClick={() => execCommand('insertOrderedList')}>
-            <ListOrdered className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="unordered" aria-label="Lista não ordenada" onClick={() => execCommand('insertUnorderedList')}>
-            <List className="h-4 w-4" />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('heading')}
+        >
+          <Type className="h-4 w-4" />
+        </Button>
         
-        <div className="h-6 w-px bg-border mx-1" />
+        <span className="w-px h-6 bg-border mx-1" />
         
-        {/* Font family */}
-        <Select onValueChange={applyFontFamily}>
-          <SelectTrigger className="w-[130px] h-8">
-            <SelectValue placeholder="Fonte" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Fontes</SelectLabel>
-              {fontFamilies.map((font) => (
-                <SelectItem key={font} value={font} style={{ fontFamily: font }}>
-                  {font}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('align-left')}
+        >
+          <AlignLeft className="h-4 w-4" />
+        </Button>
         
-        {/* Font size */}
-        <Select onValueChange={applyFontSize}>
-          <SelectTrigger className="w-[80px] h-8">
-            <SelectValue placeholder="Tamanho" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Tamanho</SelectLabel>
-              {fontSizes.map((size) => (
-                <SelectItem key={size} value={size}>
-                  {size}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('align-center')}
+        >
+          <AlignCenter className="h-4 w-4" />
+        </Button>
         
-        <div className="h-6 w-px bg-border mx-1" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('align-right')}
+        >
+          <AlignRight className="h-4 w-4" />
+        </Button>
         
-        {/* Text color */}
-        <Popover>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('align-justify')}
+        >
+          <AlignJustify className="h-4 w-4" />
+        </Button>
+        
+        <span className="w-px h-6 bg-border mx-1" />
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('list-unordered')}
+        >
+          <List className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('list-ordered')}
+        >
+          <ListOrdered className="h-4 w-4" />
+        </Button>
+        
+        <span className="w-px h-6 bg-border mx-1" />
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('image')}
+        >
+          <ImageIcon className="h-4 w-4" />
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleImageUpload}
+            accept="image/*"
+          />
+        </Button>
+        
+        <Popover open={linkPopoverOpen} onOpenChange={setLinkPopoverOpen}>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 px-2" title="Cor do texto">
-              <Paintbrush className="h-4 w-4" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => formatText('link')}
+            >
+              <LinkIcon className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-64 p-2">
-            <div className="grid grid-cols-10 gap-1">
-              {textColors.map((color) => (
-                <button
-                  key={color}
-                  className="w-5 h-5 rounded-sm border border-gray-200 cursor-pointer"
-                  style={{ backgroundColor: color }}
-                  onClick={() => applyTextColor(color)}
-                  title={color}
-                />
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-        
-        {/* Background color */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 px-2" title="Cor de fundo">
-              <Paintbrush className="h-4 w-4 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-2">
-            <div className="grid grid-cols-10 gap-1">
-              {bgColors.map((color) => (
-                <button
-                  key={color}
-                  className="w-5 h-5 rounded-sm border border-gray-200 cursor-pointer"
-                  style={{ 
-                    backgroundColor: color,
-                    backgroundImage: color === 'transparent' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : undefined,
-                    backgroundSize: color === 'transparent' ? '6px 6px' : undefined,
-                    backgroundPosition: color === 'transparent' ? '0 0, 3px 3px' : undefined
-                  }}
-                  onClick={() => applyBgColor(color)}
-                  title={color}
-                />
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-        
-        <div className="h-6 w-px bg-border mx-1" />
-        
-        {/* Link */}
-        <Popover open={showLinkPopover} onOpenChange={setShowLinkPopover}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 px-2" title="Inserir link">
-              <Link className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 p-2">
-            <div className="space-y-2">
-              <Label htmlFor="link-url">URL do Link</Label>
-              <div className="flex gap-2">
-                <Input 
-                  id="link-url" 
-                  value={linkUrl} 
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  placeholder="https://exemplo.com"
-                />
-                <Button onClick={insertLink}>Inserir</Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        {/* Image Insert Button */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 px-2" title="Inserir imagem">
-              <Image className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 p-2">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Upload de Imagem</Label>
-                <Button onClick={triggerImageUpload} className="w-full justify-center">
-                  Selecionar Imagem do Computador
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  Formatos: JPG, PNG, GIF, WEBP (máx: 5MB)
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="image-url">Ou Inserir URL da Imagem</Label>
-                <div className="flex gap-2">
-                  <Input 
-                    id="image-url" 
-                    placeholder="https://exemplo.com/imagem.jpg"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
+          
+          <PopoverContent className="w-80 p-4" align="start">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="link-text">Texto do Link</Label>
+                  <Input
+                    id="link-text"
+                    value={linkText}
+                    onChange={(e) => setLinkText(e.target.value)}
+                    placeholder="Texto a ser exibido"
                   />
-                  <Button onClick={insertImageFromUrl}>Inserir</Button>
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="link-url">URL do Link</Label>
+                  <Input
+                    id="link-url"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="https://exemplo.com"
+                  />
                 </div>
               </div>
+              
+              <div className="flex justify-between">
+                <Button type="button" variant="outline" onClick={() => setLinkPopoverOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" onClick={insertLink}>
+                  {isLinkEdit ? 'Atualizar' : 'Inserir'} Link
+                </Button>
+              </div>
             </div>
           </PopoverContent>
         </Popover>
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('unlink')}
+        >
+          <Unlink className="h-4 w-4" />
+        </Button>
+        
+        <span className="w-px h-6 bg-border mx-1" />
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => formatText('undo')}
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
       </div>
       
       {/* Editor with explicit LTR direction */}
       <div
-        id="rich-text-editor"
+        id={id}
         ref={editorRef}
-        className="p-4 min-h-[300px] outline-none prose prose-sm max-w-none"
+        className="p-4 focus:outline-none min-h-[200px]"
         contentEditable="true"
         dangerouslySetInnerHTML={{ __html: editorContent }}
         onInput={handleEditorChange}
+        onFocus={handleEditorFocus}
+        onPaste={handlePaste}
         dir="ltr"
         style={{ 
           direction: 'ltr',
           textAlign: 'left',
+          minHeight
         }}
       />
     </div>
   );
-};
+}
 
-export default RichTextEditor;
+type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>
+
+const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <label
+        ref={ref}
+        className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70`}
+        {...props}
+      />
+    )
+  }
+)
+Label.displayName = "Label"
