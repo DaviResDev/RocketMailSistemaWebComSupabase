@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Bold,
@@ -15,7 +14,6 @@ import {
   Link as LinkIcon,
   Unlink,
   RotateCcw,
-  X,
   Type
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -51,6 +49,7 @@ interface RichTextEditorProps {
   minHeight?: string;
 }
 
+// Export as a named export, not default export
 export function RichTextEditor({
   id = 'rich-text-editor',
   initialValue = '',
