@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -229,7 +230,10 @@ export function RichTextEditor({
   // Init content with proper direction
   useEffect(() => {
     if (editorRef.current) {
+      // Explicitly set direction to LTR and force text alignment to left
       editorRef.current.dir = 'ltr';
+      editorRef.current.style.direction = 'ltr';
+      editorRef.current.style.textAlign = 'left';
       
       // Apply a global CSS style to ensure LTR
       const styleEl = document.createElement('style');
@@ -237,7 +241,17 @@ export function RichTextEditor({
       styleEl.textContent = `
         #${id}, #${id} * {
           direction: ltr !important;
-          text-align: start !important;
+          text-align: left !important;
+        }
+        
+        #${id} p, #${id} div, #${id} span {
+          direction: ltr !important;
+          text-align: left !important;
+        }
+        
+        #${id}[contenteditable="true"] {
+          direction: ltr !important;
+          text-align: left !important;
         }
       `;
       document.head.appendChild(styleEl);
@@ -296,7 +310,7 @@ export function RichTextEditor({
   };
 
   return (
-    <div className={`border rounded-md bg-background ${className}`} style={{ direction: 'ltr' }}>
+    <div className={`border rounded-md bg-background ${className}`}>
       <div className="bg-muted/40 p-1 border-b flex flex-wrap items-center gap-1">
         <Button
           type="button"
@@ -507,7 +521,8 @@ export function RichTextEditor({
         style={{ 
           direction: 'ltr',
           textAlign: 'left',
-          minHeight
+          minHeight,
+          unicodeBidi: 'embed' // Add this property for better RTL/LTR handling
         }}
       />
     </div>

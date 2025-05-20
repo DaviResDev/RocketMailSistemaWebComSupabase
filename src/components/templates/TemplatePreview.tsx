@@ -129,9 +129,11 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
           </div>
         )}
         
-        {/* Main content */}
+        {/* Main content with explicit LTR direction */}
         <div 
           className="prose max-w-none"
+          dir="ltr"
+          style={{ direction: 'ltr', textAlign: 'left' }}
           dangerouslySetInnerHTML={{ 
             __html: createPreviewContent()
           }} 
