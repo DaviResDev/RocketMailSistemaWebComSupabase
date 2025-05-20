@@ -61,7 +61,7 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
       .replace(/\{\{hora\}\}/g, new Date().toLocaleTimeString('pt-BR'));
   };
   
-  // Function to create full preview content
+  // Create full preview content with proper HTML structure
   const createPreviewContent = () => {
     let fullContent = '';
     

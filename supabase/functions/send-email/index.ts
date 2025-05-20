@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 /**
- * Send email via SMTP using Nodemailer
+ * Send email via SMTP using Nodemailer with proper MIME structure
  */
 async function sendEmailViaSMTP(config, payload) {
   console.log("SMTP Configuration:", {
@@ -50,18 +50,19 @@ async function sendEmailViaSMTP(config, payload) {
     const fromEmail = config.user; // Always use the configured email
     const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
     
-    // Prepare email data with improved structure for better MIME handling
+    // Prepare email data with improved MIME structure
     const mailOptions = {
       from: from,
       to: payload.to,
       subject: payload.subject,
+      // Use alternative format for better client support
       html: payload.html,
+      text: stripHtml(payload.html),
       headers: {
         'MIME-Version': '1.0',
-        'Content-Type': 'text/html; charset=utf-8',
         'X-Mailer': 'RocketMail',
-        'X-Priority': '3',
       }
+      // nodemailer automatically sets up the correct Content-Type headers
     };
 
     // Add CC if provided
@@ -157,7 +158,7 @@ async function sendEmailViaSMTP(config, payload) {
 }
 
 /**
- * Send email via Resend API
+ * Send email via Resend API with proper MIME structure
  */
 async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   try {
@@ -173,6 +174,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
       to: [payload.to],
       subject: payload.subject,
       html: payload.html,
+      text: stripHtml(payload.html), // Add plain text version for better compatibility
     };
     
     // Add reply-to if provided
@@ -241,6 +243,28 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
     console.error("Failed to send email via Resend:", error);
     throw error;
   }
+}
+
+/**
+ * Simple HTML to plain text converter for multipart/alternative support
+ */
+function stripHtml(html) {
+  if (!html) return '';
+  
+  // Replace common HTML elements with their text equivalents
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<p.*?>/gi, '\n')
+    .replace(/<li.*?>/gi, '\n- ')
+    .replace(/<.*?>/g, '') // Remove all remaining HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n\s*\n/g, '\n\n') // Remove multiple blank lines
+    .trim();
 }
 
 /**
@@ -357,24 +381,45 @@ serve(async (req) => {
     }
     
     // Process the content to include image and signature
-    let finalContent = "";
+    // Using proper HTML structure for better email client compatibility
+    let finalContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject || "Email"}</title>
+</head>
+<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
+  <div style="max-width: 600px; margin: 0 auto;">`;
     
     // Add image at the top if available
     if (image_url) {
-      finalContent += `<div style="margin-bottom: 20px;">
-        <img src="${image_url}" alt="Template image" style="max-width: 100%; height: auto;" />
-      </div>`;
+      finalContent += `
+    <div style="margin-bottom: 20px;">
+      <img src="${image_url}" alt="Header image" style="max-width: 100%; height: auto;" />
+    </div>`;
     }
     
-    // Add main content
-    finalContent += content || "";
+    // Add main content with proper encoding
+    finalContent += `
+    <div style="margin-bottom: 20px;">
+      ${content || ""}
+    </div>`;
     
     // Append signature image if available - add empty signature div even if no signature image
     if (signature_image && signature_image !== 'no_signature') {
-      finalContent += `<div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
-        <img src="${signature_image}" alt="Assinatura" style="max-height: 100px;" />
-      </div>`;
+      finalContent += `
+    <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+      <img src="${signature_image}" alt="Assinatura" style="max-height: 100px;" />
+    </div>`;
     }
+    
+    // Close the HTML structure
+    finalContent += `
+  </div>
+</body>
+</html>`;
     
     // Process attachments if available
     let emailAttachments = [];
