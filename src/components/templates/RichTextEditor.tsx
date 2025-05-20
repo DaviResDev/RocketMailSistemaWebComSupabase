@@ -75,6 +75,9 @@ export function RichTextEditor({
     const editor = editorRef.current;
     if (!editor) return;
 
+    // Get the current selection - defined once at the top level of the function
+    const currentSelection = window.getSelection();
+    
     switch (action) {
       case 'bold':
         document.execCommand('bold', false);
@@ -86,9 +89,8 @@ export function RichTextEditor({
         document.execCommand('underline', false);
         break;
       case 'heading':
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
+        if (currentSelection && currentSelection.rangeCount > 0) {
+          const range = currentSelection.getRangeAt(0);
           const selectedText = range.toString();
           
           if (selectedText) {
@@ -129,9 +131,8 @@ export function RichTextEditor({
         }
         break;
       case 'link':
-        const selection = window.getSelection();
-        if (selection && selection.toString()) {
-          setLinkText(selection.toString());
+        if (currentSelection && currentSelection.toString()) {
+          setLinkText(currentSelection.toString());
           setLinkUrl('https://');
           setIsLinkEdit(false);
           setLinkPopoverOpen(true);
@@ -267,7 +268,7 @@ export function RichTextEditor({
     if (value !== undefined && value !== editorContent) {
       setEditorContent(value);
     }
-  }, [value]);
+  }, [value, editorContent]);
   
   // Hidden file input for image upload
   const triggerImageUpload = () => {
