@@ -234,6 +234,7 @@ export function RichTextEditor({
       editorRef.current.dir = 'ltr';
       editorRef.current.style.direction = 'ltr';
       editorRef.current.style.textAlign = 'left';
+      editorRef.current.style.unicodeBidi = 'isolate'; // Force isolated direction
       
       // Apply a global CSS style to ensure LTR
       const styleEl = document.createElement('style');
@@ -242,16 +243,26 @@ export function RichTextEditor({
         #${id}, #${id} * {
           direction: ltr !important;
           text-align: left !important;
+          unicode-bidi: isolate !important;
         }
         
         #${id} p, #${id} div, #${id} span {
           direction: ltr !important;
           text-align: left !important;
+          unicode-bidi: isolate !important;
         }
         
         #${id}[contenteditable="true"] {
           direction: ltr !important;
           text-align: left !important;
+          unicode-bidi: isolate !important;
+        }
+
+        /* Override any potentially conflicting styles */
+        [dir="rtl"] #${id}, [dir="rtl"] #${id} * {
+          direction: ltr !important;
+          text-align: left !important;
+          unicode-bidi: isolate !important;
         }
       `;
       document.head.appendChild(styleEl);
@@ -297,7 +308,7 @@ export function RichTextEditor({
     }
   };
 
-  // Handle paste to strip formatting
+  // Handle paste to strip formatting and maintain LTR direction
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     
@@ -522,7 +533,8 @@ export function RichTextEditor({
           direction: 'ltr',
           textAlign: 'left',
           minHeight,
-          unicodeBidi: 'embed' // Add this property for better RTL/LTR handling
+          unicodeBidi: 'isolate', // Force isolated direction for better text handling
+          writingMode: 'horizontal-tb' // Ensure horizontal writing mode
         }}
       />
     </div>
