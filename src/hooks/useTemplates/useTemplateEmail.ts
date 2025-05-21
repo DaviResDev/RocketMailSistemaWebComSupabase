@@ -31,12 +31,33 @@ export function useTemplateEmail() {
       '{{hora}}': formattedTime
     };
     
+    // Também suportar variáveis no formato {nome} para compatibilidade
+    const legacyReplacements: Record<string, string> = {
+      '{nome}': testData.nome || 'Usuário Teste',
+      '{email}': testData.email || 'email@teste.com',
+      '{telefone}': testData.telefone || '(00) 00000-0000',
+      '{razao_social}': testData.razao_social || 'Empresa Teste',
+      '{cliente}': testData.cliente || 'Cliente Teste',
+      '{empresa}': testData.empresa || 'Empresa Teste',
+      '{cargo}': testData.cargo || 'Cargo Teste',
+      '{produto}': testData.produto || 'Produto Teste',
+      '{valor}': testData.valor || 'R$ 1.000,00',
+      '{vencimento}': testData.vencimento || '01/01/2025',
+      '{data}': formattedDate,
+      '{hora}': formattedTime
+    };
+    
     // Substituir todas as ocorrências das variáveis no conteúdo
     let processedContent = content;
     
-    // Itera sobre cada chave no objeto de substituições
+    // Primeiro substituir o formato moderno {{nome}}
     Object.entries(replacements).forEach(([variable, value]) => {
-      // Criar uma expressão regular para substituir todas as ocorrências da variável
+      const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      processedContent = processedContent.replace(regex, value);
+    });
+    
+    // Depois substituir o formato legado {nome}
+    Object.entries(legacyReplacements).forEach(([variable, value]) => {
       const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       processedContent = processedContent.replace(regex, value);
     });

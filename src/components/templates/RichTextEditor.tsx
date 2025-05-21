@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -69,6 +68,37 @@ export function RichTextEditor({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
   const [isLinkEdit, setIsLinkEdit] = useState(false);
+
+  // Atualizado para inserir corretamente na posição do cursor
+  const insertContent = (content: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    
+    // Salvar a seleção atual
+    const selection = window.getSelection();
+    const range = selection?.getRangeAt(0);
+
+    if (selection && range) {
+      // Inserir o conteúdo no ponto de seleção
+      range.deleteContents();
+      const textNode = document.createTextNode(content);
+      range.insertNode(textNode);
+      
+      // Move cursor to end of inserted content
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      // Trigger input event to update state
+      const event = new Event('input', { bubbles: true });
+      editor.dispatchEvent(event);
+      
+      // Update state
+      setEditorContent(editor.innerHTML);
+      onChange(editor.innerHTML);
+    }
+  };
 
   // Format commands that can be applied to selected text
   const formatText = (action: ActionType) => {
@@ -319,6 +349,17 @@ export function RichTextEditor({
       document.execCommand('insertHTML', false, text);
     }
   };
+
+  // Método para expor a função insertContent para componentes externos
+  useEffect(() => {
+    if (editorRef.current && onEditorInit) {
+      const editorWithInsert = {
+        ...editorRef.current,
+        insertContent // Exposing our insertContent method
+      };
+      onEditorInit(editorWithInsert);
+    }
+  }, [onEditorInit]);
 
   return (
     <div className={`border rounded-md bg-background ${className}`}>

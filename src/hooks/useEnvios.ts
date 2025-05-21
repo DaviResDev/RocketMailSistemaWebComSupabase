@@ -54,20 +54,41 @@ export function useEnvios() {
       '{{razao_social}}': contatoData?.razao_social || '',
       '{{cliente}}': contatoData?.cliente || '',
       '{{empresa}}': contatoData?.razao_social || 'Empresa',
-      '{{cargo}}': 'Cargo', // Adicionar quando disponível no contato
-      '{{produto}}': 'Produto', // Adicionar quando disponível nos dados
-      '{{valor}}': 'Valor', // Adicionar quando disponível nos dados
-      '{{vencimento}}': 'Vencimento', // Adicionar quando disponível nos dados
+      '{{cargo}}': contatoData?.cargo || 'Cargo',
+      '{{produto}}': contatoData?.produto || 'Produto',
+      '{{valor}}': contatoData?.valor || 'Valor',
+      '{{vencimento}}': contatoData?.vencimento || 'Vencimento',
       '{{data}}': formattedDate,
       '{{hora}}': formattedTime
+    };
+    
+    // Também suportar variáveis no formato {nome} para compatibilidade
+    const legacyReplacements: Record<string, string> = {
+      '{nome}': contatoData?.nome || '',
+      '{email}': contatoData?.email || '',
+      '{telefone}': contatoData?.telefone || '',
+      '{razao_social}': contatoData?.razao_social || '',
+      '{cliente}': contatoData?.cliente || '',
+      '{empresa}': contatoData?.razao_social || 'Empresa',
+      '{cargo}': contatoData?.cargo || 'Cargo',
+      '{produto}': contatoData?.produto || 'Produto',
+      '{valor}': contatoData?.valor || 'Valor',
+      '{vencimento}': contatoData?.vencimento || 'Vencimento',
+      '{data}': formattedDate,
+      '{hora}': formattedTime
     };
     
     // Substituir todas as ocorrências das variáveis no conteúdo
     let processedContent = content;
     
-    // Itera sobre cada chave no objeto de substituições
+    // Primeiro substituir o formato moderno {{nome}}
     Object.entries(replacements).forEach(([variable, value]) => {
-      // Criar uma expressão regular para substituir todas as ocorrências da variável
+      const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      processedContent = processedContent.replace(regex, value);
+    });
+    
+    // Depois substituir o formato legado {nome}
+    Object.entries(legacyReplacements).forEach(([variable, value]) => {
       const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       processedContent = processedContent.replace(regex, value);
     });

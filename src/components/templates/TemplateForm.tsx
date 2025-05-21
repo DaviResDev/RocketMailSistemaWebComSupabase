@@ -192,7 +192,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   };
 
   const insertVariable = (variable: string) => {
-    if (editorInstance) {
+    if (editorInstance && typeof editorInstance.insertContent === 'function') {
       editorInstance.insertContent(`{{${variable}}}`);
     }
   };
