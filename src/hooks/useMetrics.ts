@@ -48,8 +48,17 @@ export function useMetrics() {
       if (statusResult.error) throw statusResult.error;
       if (canalResult.error) throw canalResult.error;
 
+      // Mapeia os status para termos consistentes
+      const normalizeStatus = (status: string) => {
+        if (status === 'enviado' || status === 'reenviado' || status === 'entregue') return 'entregue';
+        if (status === 'pendente') return 'pendente';
+        return 'falha'; // Inclui 'erro', 'com problemas', etc.
+      };
+
+      // Conta os status normalizados
       const statusCount = statusResult.data.reduce((acc: any, curr) => {
-        acc[curr.status] = (acc[curr.status] || 0) + 1;
+        const normalizedStatus = normalizeStatus(curr.status);
+        acc[normalizedStatus] = (acc[normalizedStatus] || 0) + 1;
         return acc;
       }, {});
 

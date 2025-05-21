@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -38,6 +39,42 @@ export function useEnvios() {
     }
   };
 
+  // Função para processar as variáveis no conteúdo do template
+  const processTemplateVariables = (content: string, contatoData: any) => {
+    // Obter dados atuais para variáveis de data e hora
+    const currentDate = new Date();
+    const formattedDate = currentDate.toLocaleDateString('pt-BR');
+    const formattedTime = currentDate.toLocaleTimeString('pt-BR');
+    
+    // Criar um objeto com todos os dados de substituição possíveis
+    const replacements: Record<string, string> = {
+      '{{nome}}': contatoData?.nome || '',
+      '{{email}}': contatoData?.email || '',
+      '{{telefone}}': contatoData?.telefone || '',
+      '{{razao_social}}': contatoData?.razao_social || '',
+      '{{cliente}}': contatoData?.cliente || '',
+      '{{empresa}}': contatoData?.razao_social || 'Empresa',
+      '{{cargo}}': 'Cargo', // Adicionar quando disponível no contato
+      '{{produto}}': 'Produto', // Adicionar quando disponível nos dados
+      '{{valor}}': 'Valor', // Adicionar quando disponível nos dados
+      '{{vencimento}}': 'Vencimento', // Adicionar quando disponível nos dados
+      '{{data}}': formattedDate,
+      '{{hora}}': formattedTime
+    };
+    
+    // Substituir todas as ocorrências das variáveis no conteúdo
+    let processedContent = content;
+    
+    // Itera sobre cada chave no objeto de substituições
+    Object.entries(replacements).forEach(([variable, value]) => {
+      // Criar uma expressão regular para substituir todas as ocorrências da variável
+      const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      processedContent = processedContent.replace(regex, value);
+    });
+    
+    return processedContent;
+  };
+
   const sendEmail = async (formData: EnvioFormData) => {
     setSending(true);
     
@@ -48,11 +85,12 @@ export function useEnvios() {
       // If no direct recipient, get contato data for better feedback
       let contatoEmail = recipientEmail;
       let contatoNome = formData.contato_nome;
+      let contatoData: any = null;
       
       if (!recipientEmail && formData.contato_id) {
-        const { data: contatoData, error: contatoError } = await supabase
+        const { data: fetchedContatoData, error: contatoError } = await supabase
           .from('contatos')
-          .select('nome, email')
+          .select('*')
           .eq('id', formData.contato_id)
           .single();
         
@@ -62,6 +100,7 @@ export function useEnvios() {
           return false;
         }
         
+        contatoData = fetchedContatoData;
         contatoEmail = contatoData.email;
         contatoNome = contatoData.nome;
       }
@@ -95,23 +134,8 @@ export function useEnvios() {
         // Process template content with contact data for placeholders if not already provided
         let processedContent = formData.content;
         if (!processedContent && templateData) {
-          const currentDate = new Date();
-          const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
-          const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
-          
-          processedContent = templateData.conteudo
-            .replace(/\{\{nome\}\}/g, contatoNome || '')
-            .replace(/\{\{email\}\}/g, contatoEmail || '')
-            .replace(/\{\{telefone\}\}/g, "")
-            .replace(/\{\{razao_social\}\}/g, "")
-            .replace(/\{\{cliente\}\}/g, "")
-            .replace(/\{\{data\}\}/g, formattedDate)
-            .replace(/\{\{hora\}\}/g, formattedTime)
-            .replace(/\{\{empresa\}\}/g, "Empresa")
-            .replace(/\{\{cargo\}\}/g, "Cargo")
-            .replace(/\{\{produto\}\}/g, "Produto")
-            .replace(/\{\{valor\}\}/g, "Valor")
-            .replace(/\{\{vencimento\}\}/g, "Vencimento");
+          // Usar a função de processamento de variáveis
+          processedContent = processTemplateVariables(templateData.conteudo, contatoData);
         }
         
         // Handle attachments more carefully
@@ -260,7 +284,7 @@ export function useEnvios() {
         .from('envios')
         .select(`
           *,
-          contato:contato_id(nome, email)
+          contato:contato_id(*)
         `)
         .eq('id', id)
         .single();
@@ -358,7 +382,8 @@ export function useEnvios() {
     sending,
     fetchEnvios,
     sendEmail,
-    resendEnvio
+    resendEnvio,
+    processTemplateVariables
   };
 }
 

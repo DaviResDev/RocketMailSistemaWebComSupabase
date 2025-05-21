@@ -82,6 +82,7 @@ export default function Dashboard() {
       setPendingSchedules(scheduleData || []);
 
       // Fetch recent envios - now showing all statuses including success
+      // Importante: Ordena por data_envio descendente para pegar os mais recentes
       const { data: envioData, error: enviosError } = await supabase
         .from('envios')
         .select(`
@@ -93,7 +94,25 @@ export default function Dashboard() {
         .limit(5);
 
       if (enviosError) throw enviosError;
-      setRecentEnvios(envioData || []);
+      
+      // Normaliza os status para exibição consistente
+      const normalizedEnvios = envioData?.map(envio => {
+        let normalizedStatus = envio.status;
+        
+        // Normaliza os diferentes status para exibição consistente
+        if (envio.status === 'enviado' || envio.status === 'reenviado') {
+          normalizedStatus = 'entregue';
+        } else if (envio.status === 'erro' || envio.status === 'com problemas') {
+          normalizedStatus = 'falha';
+        }
+        
+        return {
+          ...envio,
+          status: normalizedStatus
+        };
+      });
+      
+      setRecentEnvios(normalizedEnvios || []);
     } catch (error) {
       console.error('Erro ao carregar dados recentes:', error);
     }
@@ -149,6 +168,27 @@ export default function Dashboard() {
     if (status === 'Entregues') return "#22c55e";
     if (status === 'Pendentes') return "#f59e0b";
     return "#ef4444";
+  };
+
+  // Função para obter a cor do status de envio na lista de envios recentes
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'entregue':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+      case 'pendente':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+      case 'falha':
+      default:
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+    }
+  };
+
+  // Função para obter o ícone do status de envio
+  const getStatusIcon = (status: string) => {
+    if (status === 'entregue') {
+      return <CheckCircle className="h-3 w-3" />;
+    }
+    return <Clock className="h-3 w-3" />;
   };
 
   const emptyState = !stats.totalContatos && !stats.totalTemplates && !stats.totalEnvios && !stats.totalAgendamentos;
@@ -433,16 +473,11 @@ export default function Dashboard() {
                         {format(new Date(envio.data_envio), "dd/MM/yyyy", { locale: ptBR })}
                       </p>
                       <div className={`text-xs px-2 py-1 rounded-full inline-flex items-center gap-1 ${
-                        envio.status === 'entregue' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                        envio.status === 'pendente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 
-                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                        getStatusColor(envio.status)
                       }`}>
-                        {envio.status === 'entregue' ? (
-                          <CheckCircle className="h-3 w-3" />
-                        ) : (
-                          <Clock className="h-3 w-3" />
-                        )}
-                        {envio.status}
+                        {getStatusIcon(envio.status)}
+                        {envio.status === 'entregue' ? 'entregue' : 
+                         envio.status === 'pendente' ? 'pendente' : 'falha'}
                       </div>
                     </div>
                   </div>

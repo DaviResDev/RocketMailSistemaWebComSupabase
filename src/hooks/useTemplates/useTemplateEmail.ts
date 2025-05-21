@@ -8,6 +8,42 @@ export function useTemplateEmail() {
   const { user } = useAuth();
   const { settings } = useSettings();
 
+  // Função para processar as variáveis no conteúdo do template
+  const processTemplateVariables = (content: string, testData: any = {}) => {
+    // Obter dados atuais para variáveis de data e hora
+    const currentDate = new Date();
+    const formattedDate = currentDate.toLocaleDateString('pt-BR');
+    const formattedTime = currentDate.toLocaleTimeString('pt-BR');
+    
+    // Criar um objeto com todos os dados de substituição possíveis
+    const replacements: Record<string, string> = {
+      '{{nome}}': testData.nome || 'Usuário Teste',
+      '{{email}}': testData.email || 'email@teste.com',
+      '{{telefone}}': testData.telefone || '(00) 00000-0000',
+      '{{razao_social}}': testData.razao_social || 'Empresa Teste',
+      '{{cliente}}': testData.cliente || 'Cliente Teste',
+      '{{empresa}}': testData.empresa || 'Empresa Teste',
+      '{{cargo}}': testData.cargo || 'Cargo Teste',
+      '{{produto}}': testData.produto || 'Produto Teste',
+      '{{valor}}': testData.valor || 'R$ 1.000,00',
+      '{{vencimento}}': testData.vencimento || '01/01/2025',
+      '{{data}}': formattedDate,
+      '{{hora}}': formattedTime
+    };
+    
+    // Substituir todas as ocorrências das variáveis no conteúdo
+    let processedContent = content;
+    
+    // Itera sobre cada chave no objeto de substituições
+    Object.entries(replacements).forEach(([variable, value]) => {
+      // Criar uma expressão regular para substituir todas as ocorrências da variável
+      const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      processedContent = processedContent.replace(regex, value);
+    });
+    
+    return processedContent;
+  };
+
   const sendTestEmail = async (templateId: string, email: string) => {
     if (!user) {
       toast.error('Você precisa estar logado para enviar emails de teste');
@@ -37,26 +73,23 @@ export function useTemplateEmail() {
         console.error("Error fetching user settings:", settingsError);
       }
       
-      // Process template with sample data
-      const currentDate = new Date();
-      const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
-      const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
+      // Process template content with test data for all variables
+      const testData = {
+        nome: "Usuário Teste",
+        email: email,
+        telefone: "(00) 00000-0000",
+        razao_social: "Empresa Teste",
+        cliente: "Cliente Teste",
+        empresa: "Empresa Teste",
+        cargo: "Cargo Teste",
+        produto: "Produto Teste",
+        valor: "R$ 1.000,00",
+        vencimento: "01/01/2025"
+      };
       
-      // Make sure to replace variables in the proper order
-      let processedContent = template.conteudo
-        .replace(/\{\{nome\}\}/g, "Usuário Teste")
-        .replace(/\{\{email\}\}/g, email)
-        .replace(/\{\{telefone\}\}/g, "(00) 00000-0000")
-        .replace(/\{\{razao_social\}\}/g, "Empresa Teste")
-        .replace(/\{\{cliente\}\}/g, "Cliente Teste")
-        .replace(/\{\{empresa\}\}/g, "Empresa Teste")
-        .replace(/\{\{cargo\}\}/g, "Cargo Teste")
-        .replace(/\{\{produto\}\}/g, "Produto Teste")
-        .replace(/\{\{valor\}\}/g, "R$ 1.000,00")
-        .replace(/\{\{vencimento\}\}/g, "01/01/2025")
-        .replace(/\{\{data\}\}/g, formattedDate)
-        .replace(/\{\{hora\}\}/g, formattedTime);
-        
+      // Processar todas as variáveis utilizando a função de processamento
+      const processedContent = processTemplateVariables(template.conteudo, testData);
+      
       // Parse attachments if present
       let parsedAttachments = [];
       if (template.attachments) {
@@ -129,6 +162,7 @@ export function useTemplateEmail() {
   };
 
   return {
-    sendTestEmail
+    sendTestEmail,
+    processTemplateVariables
   };
 }
