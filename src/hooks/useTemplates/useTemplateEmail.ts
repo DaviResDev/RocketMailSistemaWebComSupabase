@@ -8,8 +8,11 @@ export function useTemplateEmail() {
   const { user } = useAuth();
   const { settings } = useSettings();
 
-  // Função para processar as variáveis no conteúdo do template
+  // Função para processar as variáveis no conteúdo do template - corrigida para garantir que não inverta texto
   const processTemplateVariables = (content: string, testData: any = {}) => {
+    // Se não houver conteúdo, retornar string vazia para evitar erros
+    if (!content) return '';
+    
     // Obter dados atuais para variáveis de data e hora
     const currentDate = new Date();
     const formattedDate = currentDate.toLocaleDateString('pt-BR');

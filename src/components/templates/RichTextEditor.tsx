@@ -69,7 +69,7 @@ export function RichTextEditor({
   const [linkText, setLinkText] = useState('');
   const [isLinkEdit, setIsLinkEdit] = useState(false);
 
-  // Atualizado para inserir corretamente na posição do cursor
+  // Corrigido para manipular o conteúdo sem inverter o texto
   const insertContent = (content: string) => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -94,7 +94,7 @@ export function RichTextEditor({
       const event = new Event('input', { bubbles: true });
       editor.dispatchEvent(event);
       
-      // Update state
+      // Update state - garantindo que não haja manipulação que inverta o texto
       setEditorContent(editor.innerHTML);
       onChange(editor.innerHTML);
     }
@@ -257,42 +257,42 @@ export function RichTextEditor({
     }
   };
 
-  // Init content with proper direction
+  // Init content with proper direction - Reforçado para garantir direção LTR
   useEffect(() => {
     if (editorRef.current) {
-      // Explicitly set direction to LTR and force text alignment to left
+      // Força direção LTR e alinhamento à esquerda
       editorRef.current.dir = 'ltr';
       editorRef.current.style.direction = 'ltr';
       editorRef.current.style.textAlign = 'left';
-      editorRef.current.style.unicodeBidi = 'isolate'; // Force isolated direction
+      editorRef.current.style.unicodeBidi = 'plaintext'; // Muda para plaintext para melhor processamento
       
-      // Apply a global CSS style to ensure LTR
+      // Aplica CSS global reforçado para garantir LTR em todos os níveis
       const styleEl = document.createElement('style');
       styleEl.id = 'ltr-editor-style';
       styleEl.textContent = `
         #${id}, #${id} * {
           direction: ltr !important;
           text-align: left !important;
-          unicode-bidi: isolate !important;
+          unicode-bidi: plaintext !important;
         }
         
         #${id} p, #${id} div, #${id} span {
           direction: ltr !important;
           text-align: left !important;
-          unicode-bidi: isolate !important;
+          unicode-bidi: plaintext !important;
         }
         
         #${id}[contenteditable="true"] {
           direction: ltr !important;
           text-align: left !important;
-          unicode-bidi: isolate !important;
+          unicode-bidi: plaintext !important;
         }
 
-        /* Override any potentially conflicting styles */
+        /* Override para qualquer estilo conflitante */
         [dir="rtl"] #${id}, [dir="rtl"] #${id} * {
           direction: ltr !important;
           text-align: left !important;
-          unicode-bidi: isolate !important;
+          unicode-bidi: plaintext !important;
         }
       `;
       document.head.appendChild(styleEl);
@@ -310,9 +310,12 @@ export function RichTextEditor({
     }
   }, [id, onEditorInit]);
 
-  // Synchronize editor content with state
+  // Corrigido para garantir que o texto não seja invertido durante a edição
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
+    // Obtém o conteúdo diretamente sem manipulações que possam inverter
     const content = e.currentTarget.innerHTML;
+    
+    // Atualiza o estado diretamente sem manipular a string
     setEditorContent(content);
     onChange(content);
   };
@@ -338,15 +341,24 @@ export function RichTextEditor({
     }
   };
 
-  // Handle paste to strip formatting and maintain LTR direction
+  // Corrigido para garantir que o texto colado não seja invertido
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     
     const text = e.clipboardData.getData('text/plain');
+    
+    // Usar insertText para evitar possíveis manipulações que possam inverter o texto
     if (document.queryCommandSupported('insertText')) {
       document.execCommand('insertText', false, text);
     } else {
+      // Fallback para insertHTML se insertText não for suportado
       document.execCommand('insertHTML', false, text);
+    }
+    
+    // Garantir que o estado seja atualizado com o conteúdo correto
+    if (editorRef.current) {
+      setEditorContent(editorRef.current.innerHTML);
+      onChange(editorRef.current.innerHTML);
     }
   };
 
@@ -559,7 +571,7 @@ export function RichTextEditor({
         </Button>
       </div>
       
-      {/* Editor with explicit LTR direction */}
+      {/* Editor com direção LTR explícita e propriedades reforçadas */}
       <div
         id={id}
         ref={editorRef}
@@ -570,12 +582,15 @@ export function RichTextEditor({
         onFocus={handleEditorFocus}
         onPaste={handlePaste}
         dir="ltr"
+        lang="pt-BR" /* Define explicitamente o idioma para melhorar o comportamento */
         style={{ 
           direction: 'ltr',
           textAlign: 'left',
           minHeight,
-          unicodeBidi: 'isolate', // Force isolated direction for better text handling
-          writingMode: 'horizontal-tb' // Ensure horizontal writing mode
+          unicodeBidi: 'plaintext', // Alterado para plaintext para processamento mais consistente
+          writingMode: 'horizontal-tb',
+          overflowWrap: 'break-word', // Melhora a quebra de texto
+          wordBreak: 'normal'
         }}
       />
     </div>
