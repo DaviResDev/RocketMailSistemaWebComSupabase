@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,11 +15,13 @@ import {
   Link as LinkIcon,
   Unlink,
   RotateCcw,
-  Type
+  Type,
+  ArrowLeftRight
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Toggle } from '@/components/ui/toggle';
 
 // Define action types for the formatting toolbar
 type ActionType = 
@@ -35,7 +38,8 @@ type ActionType =
   | 'image'
   | 'link'
   | 'unlink'
-  | 'undo';
+  | 'undo'
+  | 'toggle-direction';
 
 interface RichTextEditorProps {
   id?: string;
@@ -68,6 +72,8 @@ export function RichTextEditor({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
   const [isLinkEdit, setIsLinkEdit] = useState(false);
+  // Add state for text direction
+  const [textDirection, setTextDirection] = useState<'ltr' | 'rtl'>('ltr');
 
   // CORRIGIDO: Simplificado para eliminar qualquer manipulação que possa inverter o texto
   const insertContent = (content: string) => {
@@ -176,6 +182,12 @@ export function RichTextEditor({
       case 'undo':
         document.execCommand('undo', false);
         break;
+      case 'toggle-direction':
+        // Toggle text direction
+        const newDirection = textDirection === 'ltr' ? 'rtl' : 'ltr';
+        setTextDirection(newDirection);
+        updateEditorDirection(newDirection);
+        break;
     }
 
     // After applying format, update state
@@ -183,6 +195,28 @@ export function RichTextEditor({
       setEditorContent(editor.innerHTML);
       onChange(editor.innerHTML);
     }
+  };
+
+  // Function to update editor direction
+  const updateEditorDirection = (direction: 'ltr' | 'rtl') => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    
+    editor.dir = direction;
+    editor.style.direction = direction;
+    editor.style.textAlign = direction === 'ltr' ? 'left' : 'right';
+    
+    // Apply direction to all children
+    const children = editor.querySelectorAll('*');
+    children.forEach(child => {
+      if (child instanceof HTMLElement) {
+        child.dir = direction;
+        child.style.direction = direction;
+      }
+    });
+    
+    // Notify of change
+    toast.success(`Direção de texto alterada para ${direction === 'ltr' ? 'Esquerda para Direita' : 'Direita para Esquerda'}`);
   };
 
   // Insert link using the URL from popover
@@ -257,25 +291,25 @@ export function RichTextEditor({
   // Init content with proper direction - CORRIGIDO para garantir direção LTR
   useEffect(() => {
     if (editorRef.current) {
-      // Configuração completa para direção LTR
-      editorRef.current.dir = 'ltr';
-      editorRef.current.style.direction = 'ltr';
-      editorRef.current.style.textAlign = 'left';
+      // Initial setup with current direction
+      editorRef.current.dir = textDirection;
+      editorRef.current.style.direction = textDirection;
+      editorRef.current.style.textAlign = textDirection === 'ltr' ? 'left' : 'right';
       editorRef.current.style.unicodeBidi = 'plaintext'; 
       
-      // CSS global para forçar LTR em todos os níveis
+      // CSS global for all elements in editor
       const styleEl = document.createElement('style');
-      styleEl.id = 'ltr-editor-style';
+      styleEl.id = 'editor-direction-style';
       styleEl.textContent = `
         #${id}, #${id} * {
-          direction: ltr !important;
-          text-align: left !important;
+          direction: ${textDirection} !important;
+          text-align: ${textDirection === 'ltr' ? 'left' : 'right'} !important;
           unicode-bidi: plaintext !important;
         }
         
         [contenteditable="true"] {
-          direction: ltr !important;
-          text-align: left !important;
+          direction: ${textDirection} !important;
+          text-align: ${textDirection === 'ltr' ? 'left' : 'right'} !important;
           unicode-bidi: plaintext !important;
         }
       `;
@@ -286,13 +320,13 @@ export function RichTextEditor({
       }
       
       return () => {
-        const styleToRemove = document.getElementById('ltr-editor-style');
+        const styleToRemove = document.getElementById('editor-direction-style');
         if (styleToRemove) {
           document.head.removeChild(styleToRemove);
         }
       };
     }
-  }, [id, onEditorInit]);
+  }, [id, onEditorInit, textDirection]);
 
   // CORRIGIDO: Reescrito para evitar qualquer manipulação de string que possa causar inversão
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
@@ -543,23 +577,36 @@ export function RichTextEditor({
         >
           <RotateCcw className="h-4 w-4" />
         </Button>
+        
+        {/* Direction toggle button */}
+        <span className="w-px h-6 bg-border mx-1" />
+        
+        <Toggle 
+          pressed={textDirection === 'rtl'}
+          onPressedChange={() => formatText('toggle-direction')}
+          title={textDirection === 'ltr' ? "Mudar para direita para esquerda (RTL)" : "Mudar para esquerda para direita (LTR)"}
+          className="h-8 px-2"
+        >
+          <ArrowLeftRight className="h-4 w-4 mr-1" />
+          <span className="text-xs">{textDirection.toUpperCase()}</span>
+        </Toggle>
       </div>
       
-      {/* Editor com propriedades reforçadas para garantir LTR */}
+      {/* Editor com propriedades reforçadas para garantir direção correta */}
       <div
         id={id}
         ref={editorRef}
-        className="p-4 focus:outline-none min-h-[200px] ltr"
+        className="p-4 focus:outline-none min-h-[200px]"
         contentEditable="true"
         dangerouslySetInnerHTML={{ __html: editorContent }}
         onInput={handleEditorChange}
         onFocus={handleEditorFocus}
         onPaste={handlePaste}
-        dir="ltr"
+        dir={textDirection}
         lang="pt-BR"
         style={{ 
-          direction: 'ltr',
-          textAlign: 'left',
+          direction: textDirection,
+          textAlign: textDirection === 'ltr' ? 'left' : 'right',
           minHeight,
           unicodeBidi: 'plaintext',
           writingMode: 'horizontal-tb',

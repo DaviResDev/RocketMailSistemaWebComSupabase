@@ -65,6 +65,18 @@ export function useTemplateEmail() {
       processedContent = processedContent.replace(regex, value);
     });
     
+    // Preservar a direção do texto conforme definido no editor (dir e direction)
+    if (!processedContent.includes('dir=')) {
+      processedContent = processedContent.replace(/<body/i, '<body dir="ltr"');
+    }
+    
+    if (!processedContent.includes('direction:')) {
+      processedContent = processedContent.replace(/<body[^>]*>/i, match => {
+        return match + '<div style="direction:ltr;text-align:left;">';
+      });
+      processedContent = processedContent.replace(/<\/body>/i, '</div></body>');
+    }
+    
     return processedContent;
   };
 
