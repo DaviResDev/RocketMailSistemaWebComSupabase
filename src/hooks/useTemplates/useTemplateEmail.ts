@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +12,8 @@ export function useTemplateEmail() {
     // Se não houver conteúdo, retornar string vazia para evitar erros
     if (!content) return '';
     
+    let processedContent = content;
+
     // Obter dados atuais para variáveis de data e hora
     const currentDate = new Date();
     const formattedDate = currentDate.toLocaleDateString('pt-BR');
@@ -50,9 +51,6 @@ export function useTemplateEmail() {
       '{hora}': formattedTime
     };
     
-    // Clonar o conteúdo para evitar modificações acidentais
-    let processedContent = String(content);
-    
     // Primeiro substituir o formato moderno {{nome}} sem operações que possam inverter o texto
     Object.entries(replacements).forEach(([variable, value]) => {
       const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
@@ -65,37 +63,29 @@ export function useTemplateEmail() {
       processedContent = processedContent.replace(regex, value);
     });
     
-    // SEMPRE forçar a direção do texto para LTR, independente do que estiver no conteúdo original
-    // Remover qualquer dir="rtl" existente e substituir por dir="ltr"
-    processedContent = processedContent.replace(/dir\s*=\s*["']rtl["']/gi, 'dir="ltr"');
+    // Forçar a direção do texto para LTR
+    processedContent = processedContent
+      .replace(/dir\s*=\s*["']rtl["']/gi, 'dir="ltr"')
+      .replace(/direction\s*:\s*rtl/gi, 'direction: ltr');
     
     // Se não encontrar nenhum atributo dir, adicionar dir="ltr" ao body
     if (!processedContent.includes('dir=')) {
       processedContent = processedContent.replace(/<body/i, '<body dir="ltr"');
     }
     
-    // Forçar a propriedade CSS direction para ltr
-    if (!processedContent.includes('direction:')) {
-      processedContent = processedContent.replace(/<body[^>]*>/i, match => {
-        return match + '<div style="direction:ltr;text-align:left;">';
-      });
-      processedContent = processedContent.replace(/<\/body>/i, '</div></body>');
-    } else {
-      // Se encontrar direction: mas for rtl, alterar para ltr
-      processedContent = processedContent.replace(/direction\s*:\s*rtl/gi, 'direction:ltr');
-    }
-    
     // Adicionar style global para garantir que todos os elementos tenham direção LTR
     if (!processedContent.includes('<style id="email-direction-style">')) {
-      const styleTag = `<style id="email-direction-style">
-        * { direction: ltr !important; text-align: left !important; unicode-bidi: plaintext !important; }
-      </style>`;
-      processedContent = processedContent.replace(/<head>/i, '<head>' + styleTag);
+      const styleTag = `
+        <style id="email-direction-style">
+          * { direction: ltr !important; text-align: left !important; unicode-bidi: plaintext !important; }
+        </style>
+      `;
       
-      // Se não houver head, adicionar no início do body
-      if (!processedContent.includes('<style id="email-direction-style">')) {
-        processedContent = processedContent.replace(/<body[^>]*>/i, match => {
-          return match + styleTag;
+      if (processedContent.includes('<head>')) {
+        processedContent = processedContent.replace('<head>', `<head>${styleTag}`);
+      } else {
+        processedContent = processedContent.replace(/<body/i, match => {
+          return `${match}${styleTag}`;
         });
       }
     }
