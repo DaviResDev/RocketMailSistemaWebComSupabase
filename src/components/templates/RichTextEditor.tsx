@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -72,7 +71,7 @@ export function RichTextEditor({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
   const [isLinkEdit, setIsLinkEdit] = useState(false);
-  // Add state for text direction
+  // Força o estado inicial para sempre ser 'ltr', independente do que venha como valor padrão
   const [textDirection, setTextDirection] = useState<'ltr' | 'rtl'>('ltr');
 
   // CORRIGIDO: Simplificado para eliminar qualquer manipulação que possa inverter o texto
@@ -288,16 +287,17 @@ export function RichTextEditor({
     }
   };
 
-  // Init content with proper direction - CORRIGIDO para garantir direção LTR
+  // Init content with proper direction - Modificado para garantir direção LTR no início
   useEffect(() => {
     if (editorRef.current) {
-      // Initial setup with current direction
-      editorRef.current.dir = textDirection;
-      editorRef.current.style.direction = textDirection;
-      editorRef.current.style.textAlign = textDirection === 'ltr' ? 'left' : 'right';
+      // Forçar sempre LTR na inicialização do componente
+      const initialDirection = 'ltr';
+      editorRef.current.dir = initialDirection;
+      editorRef.current.style.direction = initialDirection;
+      editorRef.current.style.textAlign = 'left';
       editorRef.current.style.unicodeBidi = 'plaintext'; 
       
-      // CSS global for all elements in editor
+      // CSS global for all elements in editor - Forçando LTR no CSS também
       const styleEl = document.createElement('style');
       styleEl.id = 'editor-direction-style';
       styleEl.textContent = `
@@ -338,12 +338,20 @@ export function RichTextEditor({
     onChange(content);
   };
 
-  // Synchronize with external value change
+  // Synchronize with external value change - Modificado para garantir direção LTR
   useEffect(() => {
     if (value !== undefined && value !== editorContent) {
       setEditorContent(value);
+      
+      // Garantir que a direção do texto permaneça LTR após receber novo conteúdo
+      if (editorRef.current) {
+        const currentDirection = textDirection;
+        editorRef.current.dir = currentDirection;
+        editorRef.current.style.direction = currentDirection;
+        editorRef.current.style.textAlign = currentDirection === 'ltr' ? 'left' : 'right';
+      }
     }
-  }, [value, editorContent]);
+  }, [value, editorContent, textDirection]);
   
   // Hidden file input for image upload
   const triggerImageUpload = () => {

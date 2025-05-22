@@ -65,16 +65,39 @@ export function useTemplateEmail() {
       processedContent = processedContent.replace(regex, value);
     });
     
-    // Preservar a direção do texto conforme definido no editor (dir e direction)
+    // SEMPRE forçar a direção do texto para LTR, independente do que estiver no conteúdo original
+    // Remover qualquer dir="rtl" existente e substituir por dir="ltr"
+    processedContent = processedContent.replace(/dir\s*=\s*["']rtl["']/gi, 'dir="ltr"');
+    
+    // Se não encontrar nenhum atributo dir, adicionar dir="ltr" ao body
     if (!processedContent.includes('dir=')) {
       processedContent = processedContent.replace(/<body/i, '<body dir="ltr"');
     }
     
+    // Forçar a propriedade CSS direction para ltr
     if (!processedContent.includes('direction:')) {
       processedContent = processedContent.replace(/<body[^>]*>/i, match => {
         return match + '<div style="direction:ltr;text-align:left;">';
       });
       processedContent = processedContent.replace(/<\/body>/i, '</div></body>');
+    } else {
+      // Se encontrar direction: mas for rtl, alterar para ltr
+      processedContent = processedContent.replace(/direction\s*:\s*rtl/gi, 'direction:ltr');
+    }
+    
+    // Adicionar style global para garantir que todos os elementos tenham direção LTR
+    if (!processedContent.includes('<style id="email-direction-style">')) {
+      const styleTag = `<style id="email-direction-style">
+        * { direction: ltr !important; text-align: left !important; unicode-bidi: plaintext !important; }
+      </style>`;
+      processedContent = processedContent.replace(/<head>/i, '<head>' + styleTag);
+      
+      // Se não houver head, adicionar no início do body
+      if (!processedContent.includes('<style id="email-direction-style">')) {
+        processedContent = processedContent.replace(/<body[^>]*>/i, match => {
+          return match + styleTag;
+        });
+      }
     }
     
     return processedContent;
