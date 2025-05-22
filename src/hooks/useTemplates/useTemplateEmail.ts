@@ -8,7 +8,7 @@ export function useTemplateEmail() {
   const { user } = useAuth();
   const { settings } = useSettings();
 
-  // Função para processar as variáveis no conteúdo do template - corrigida para garantir que não inverta texto
+  // Função para processar as variáveis no conteúdo do template - reescrita para garantir processamento seguro
   const processTemplateVariables = (content: string, testData: any = {}) => {
     // Se não houver conteúdo, retornar string vazia para evitar erros
     if (!content) return '';
@@ -50,16 +50,16 @@ export function useTemplateEmail() {
       '{hora}': formattedTime
     };
     
-    // Substituir todas as ocorrências das variáveis no conteúdo
-    let processedContent = content;
+    // Clonar o conteúdo para evitar modificações acidentais
+    let processedContent = String(content);
     
-    // Primeiro substituir o formato moderno {{nome}}
+    // Primeiro substituir o formato moderno {{nome}} sem operações que possam inverter o texto
     Object.entries(replacements).forEach(([variable, value]) => {
       const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       processedContent = processedContent.replace(regex, value);
     });
     
-    // Depois substituir o formato legado {nome}
+    // Depois substituir o formato legado {nome} sem operações que possam inverter o texto
     Object.entries(legacyReplacements).forEach(([variable, value]) => {
       const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       processedContent = processedContent.replace(regex, value);
