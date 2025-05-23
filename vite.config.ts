@@ -25,7 +25,8 @@ export default defineConfig(({ mode }) => ({
       "@tiptap/pm/transform": "prosemirror-transform",
       "@tiptap/pm/keymap": "prosemirror-keymap",
       "@tiptap/pm/commands": "prosemirror-commands",
-      "@tiptap/pm/schema-list": "prosemirror-schema-list", // Add this new alias
+      "@tiptap/pm/schema-list": "prosemirror-schema-list",
+      "@tiptap/pm/gapcursor": "prosemirror-gapcursor", // Add this new alias
     },
   },
   optimizeDeps: {
@@ -43,7 +44,8 @@ export default defineConfig(({ mode }) => ({
       'prosemirror-transform',
       'prosemirror-keymap',
       'prosemirror-commands',
-      'prosemirror-schema-list', // Add this dependency to be included
+      'prosemirror-schema-list',
+      'prosemirror-gapcursor', // Add this dependency to be included
     ],
   },
 }));
