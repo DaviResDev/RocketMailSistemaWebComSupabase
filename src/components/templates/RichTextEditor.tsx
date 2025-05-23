@@ -8,11 +8,12 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
 import FontFamily from '@tiptap/extension-font-family';
 import FontSize from '@tiptap/extension-font-size';
+import Underline from '@tiptap/extension-underline';
 import { Button } from '@/components/ui/button';
 import {
   Bold,
   Italic,
-  Underline,
+  Underline as UnderlineIcon,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -30,6 +31,7 @@ import {
   Variable
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
@@ -100,6 +102,7 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       StarterKit,
+      Underline,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -118,14 +121,9 @@ export function RichTextEditor({
       }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
-        alignments: ['left', 'center', 'right', 'justify'],
       }),
-      FontFamily.configure({
-        types: ['textStyle'],
-      }),
-      FontSize.configure({
-        types: ['textStyle'],
-      })
+      FontFamily,
+      FontSize
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -287,7 +285,7 @@ export function RichTextEditor({
           className="h-8 w-8"
           onClick={() => editor.chain().focus().toggleUnderline().run()}
         >
-          <Underline className="h-4 w-4" />
+          <UnderlineIcon className="h-4 w-4" />
         </Button>
 
         {/* Dropdown de tamanho de fonte */}
@@ -561,23 +559,3 @@ export function RichTextEditor({
     </div>
   );
 }
-
-// Label component para manter compatibilidade
-type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>;
-
-const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
-  ({ className, ...props }, ref) => {
-    return (
-      <label
-        ref={ref}
-        className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`}
-        {...props}
-      />
-    );
-  }
-);
-Label.displayName = "Label";
-
-// Adicionar extensão Underline ao TipTap
-import { Extension } from '@tiptap/core';
-import '@tiptap/extension-underline';
