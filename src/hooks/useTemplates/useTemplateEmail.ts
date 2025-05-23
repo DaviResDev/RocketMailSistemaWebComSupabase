@@ -84,9 +84,7 @@ export function useTemplateEmail() {
       if (processedContent.includes('<head>')) {
         processedContent = processedContent.replace('<head>', `<head>${styleTag}`);
       } else {
-        processedContent = processedContent.replace(/<body/i, match => {
-          return `${match}${styleTag}`;
-        });
+        processedContent = processedContent.replace(/<body/i, `$&${styleTag}`);
       }
     }
     

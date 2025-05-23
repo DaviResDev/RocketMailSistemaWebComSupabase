@@ -75,27 +75,11 @@ export function RichTextEditor({
     const editor = editorRef.current;
     if (!editor) return;
     
-    // Salvar a seleção atual
-    const selection = window.getSelection();
-    const range = selection?.getRangeAt(0);
-
-    if (selection && range) {
-      // Inserir o conteúdo no ponto de seleção de forma direta
-      range.deleteContents();
-      const fragment = document.createDocumentFragment();
-      const textNode = document.createTextNode(content);
-      fragment.appendChild(textNode);
-      range.insertNode(fragment);
-      
-      // Move cursor to end of inserted content
-      range.setStartAfter(textNode);
-      range.setEndAfter(textNode);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      
-      // Notificar mudanças sem manipular strings
-      editor.dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    // Usar insertText que é mais seguro para direção do texto
+    document.execCommand('insertText', false, content);
+    
+    // Notificar mudanças
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
   // Format commands that can be applied to selected text
@@ -287,7 +271,7 @@ export function RichTextEditor({
       editor.style.unicodeBidi = 'plaintext';
       
       if (onEditorInit) {
-        onEditorInit(editorRef.current);
+        onEditorInit(editor);
       }
     }
   }, [id, onEditorInit]);
@@ -312,6 +296,7 @@ export function RichTextEditor({
         editorRef.current.dir = 'ltr';
         editorRef.current.style.direction = 'ltr';
         editorRef.current.style.textAlign = 'left';
+        editorRef.current.style.unicodeBidi = 'plaintext';
       }
     }
   }, [value, editorContent]);
@@ -501,6 +486,7 @@ export function RichTextEditor({
                     value={linkText}
                     onChange={(e) => setLinkText(e.target.value)}
                     placeholder="Texto a ser exibido"
+                    dir="ltr"
                   />
                 </div>
                 
@@ -511,6 +497,7 @@ export function RichTextEditor({
                     value={linkUrl}
                     onChange={(e) => setLinkUrl(e.target.value)}
                     placeholder="https://exemplo.com"
+                    dir="ltr"
                   />
                 </div>
               </div>
