@@ -230,14 +230,14 @@ export function RichTextEditor({
   // Função para aplicar uma família de fonte
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
-      editor.chain().focus().setFontFamily(fontFamily).run();
+      editor.commands.setFontFamily(fontFamily);
     }
   };
 
   // Função para aplicar um tamanho de fonte
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      editor.chain().focus().setFontSize(fontSize).run();
+      editor.commands.setFontSize(fontSize);
     }
   };
 
@@ -283,7 +283,7 @@ export function RichTextEditor({
           variant={editor.isActive('underline') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          onClick={() => editor.commands.toggleUnderline()}
         >
           <UnderlineIcon className="h-4 w-4" />
         </Button>
@@ -337,7 +337,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'left' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          onClick={() => editor.commands.setTextAlign('left')}
         >
           <AlignLeft className="h-4 w-4" />
         </Button>
@@ -347,7 +347,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'center' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          onClick={() => editor.commands.setTextAlign('center')}
         >
           <AlignCenter className="h-4 w-4" />
         </Button>
@@ -357,7 +357,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'right' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          onClick={() => editor.commands.setTextAlign('right')}
         >
           <AlignRight className="h-4 w-4" />
         </Button>
@@ -367,7 +367,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'justify' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+          onClick={() => editor.commands.setTextAlign('justify')}
         >
           <AlignJustify className="h-4 w-4" />
         </Button>
