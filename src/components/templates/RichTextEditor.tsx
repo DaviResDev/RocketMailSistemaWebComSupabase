@@ -6,8 +6,6 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
-import FontFamily from '@tiptap/extension-font-family';
-import FontSize from '@tiptap/extension-font-size';
 import Underline from '@tiptap/extension-underline';
 import { Button } from '@/components/ui/button';
 import {
@@ -122,8 +120,6 @@ export function RichTextEditor({
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
-      FontFamily,
-      FontSize
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -230,14 +226,16 @@ export function RichTextEditor({
   // Função para aplicar uma família de fonte
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
-      editor.commands.setFontFamily(fontFamily);
+      // Use inline styles for font family instead of the extension
+      editor.chain().focus().setMark('textStyle', { fontFamily }).run();
     }
   };
 
   // Função para aplicar um tamanho de fonte
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      editor.commands.setFontSize(fontSize);
+      // Use inline styles for font size instead of the extension
+      editor.chain().focus().setMark('textStyle', { fontSize }).run();
     }
   };
 
@@ -283,7 +281,7 @@ export function RichTextEditor({
           variant={editor.isActive('underline') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.commands.toggleUnderline()}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
         >
           <UnderlineIcon className="h-4 w-4" />
         </Button>
@@ -337,7 +335,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'left' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.commands.setTextAlign('left')}
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
         >
           <AlignLeft className="h-4 w-4" />
         </Button>
@@ -347,7 +345,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'center' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.commands.setTextAlign('center')}
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
         >
           <AlignCenter className="h-4 w-4" />
         </Button>
@@ -357,7 +355,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'right' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.commands.setTextAlign('right')}
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
         >
           <AlignRight className="h-4 w-4" />
         </Button>
@@ -367,7 +365,7 @@ export function RichTextEditor({
           variant={editor.isActive({ textAlign: 'justify' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.commands.setTextAlign('justify')}
+          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
         >
           <AlignJustify className="h-4 w-4" />
         </Button>
