@@ -37,6 +37,7 @@ export function RichTextEditor({
   onImageUpload
 }: RichTextEditorProps) {
   const [editorContent, setEditorContent] = useState(value || '');
+  const [isEmpty, setIsEmpty] = useState(!value || value === '');
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
@@ -109,6 +110,7 @@ export function RichTextEditor({
     // After applying format, update state
     if (editor) {
       setEditorContent(editor.innerHTML);
+      checkIfEmpty(editor.innerHTML);
       onChange(editor.innerHTML);
     }
   };
@@ -146,6 +148,7 @@ export function RichTextEditor({
     
     // Update state
     setEditorContent(editor.innerHTML);
+    checkIfEmpty(editor.innerHTML);
     onChange(editor.innerHTML);
   };
 
@@ -162,6 +165,7 @@ export function RichTextEditor({
         // Update state
         if (editorRef.current) {
           setEditorContent(editorRef.current.innerHTML);
+          setIsEmpty(false);
           onChange(editorRef.current.innerHTML);
         }
       }
@@ -186,13 +190,25 @@ export function RichTextEditor({
   const handleEditorFocus = () => {
     if (editorRef.current && editorRef.current.innerHTML === '') {
       editorRef.current.innerHTML = '<p><br></p>';
+      setIsEmpty(false);
     }
+  };
+
+  // Check if the editor content is empty
+  const checkIfEmpty = (content: string) => {
+    const isContentEmpty = !content || 
+                          content === '' || 
+                          content === '<p></p>' || 
+                          content === '<p><br></p>' || 
+                          content === '<br>';
+    setIsEmpty(isContentEmpty);
   };
 
   // Handle changes in the editor content
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
     const content = e.currentTarget.innerHTML;
     setEditorContent(content);
+    checkIfEmpty(content);
     onChange(content);
   };
 
@@ -207,8 +223,14 @@ export function RichTextEditor({
   useEffect(() => {
     if (value !== undefined && value !== editorContent) {
       setEditorContent(value);
+      checkIfEmpty(value);
     }
   }, [value]);
+
+  // Initial check for empty content
+  useEffect(() => {
+    checkIfEmpty(editorContent);
+  }, []);
 
   return (
     <div className={`border rounded-md bg-background ${className}`}>
@@ -396,22 +418,32 @@ export function RichTextEditor({
         </Button>
       </div>
       
-      <div
-        ref={editorRef}
-        className="p-4 focus:outline-none"
-        contentEditable="true"
-        dangerouslySetInnerHTML={{ __html: editorContent }}
-        onInput={handleEditorChange}
-        onFocus={handleEditorFocus}
-        onPaste={handlePaste}
-        style={{ 
-          minHeight, 
-          direction: 'ltr',
-          textAlign: 'left'
-        }}
-        dir="ltr"
-        placeholder={placeholder}
-      />
+      <div className="relative">
+        <div
+          ref={editorRef}
+          className="p-4 focus:outline-none"
+          contentEditable="true"
+          dangerouslySetInnerHTML={{ __html: editorContent }}
+          onInput={handleEditorChange}
+          onFocus={handleEditorFocus}
+          onPaste={handlePaste}
+          style={{ 
+            minHeight, 
+            direction: 'ltr',
+            textAlign: 'left'
+          }}
+          dir="ltr"
+          data-placeholder={placeholder}
+        />
+        {isEmpty && (
+          <div 
+            className="absolute top-0 left-0 p-4 pointer-events-none text-muted-foreground"
+            style={{ minHeight }}
+          >
+            {placeholder}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
