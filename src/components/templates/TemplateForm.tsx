@@ -191,12 +191,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     }
   };
 
-  const insertVariable = (variable: string) => {
-    if (editorInstance) {
-      editorInstance.chain().focus().insertContent(`{{${variable}}}`).run();
-    }
-  };
-
   const handleImageUpload = async (file: File): Promise<string> => {
     try {
       const fileExt = file.name.split('.').pop();

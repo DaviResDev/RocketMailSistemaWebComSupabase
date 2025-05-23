@@ -1,4 +1,13 @@
+
 import React, { useState, useRef, useEffect } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
+import Placeholder from '@tiptap/extension-placeholder';
+import TextAlign from '@tiptap/extension-text-align';
+import FontFamily from '@tiptap/extension-font-family';
+import FontSize from '@tiptap/extension-font-size';
 import { Button } from '@/components/ui/button';
 import {
   Bold,
@@ -14,295 +23,193 @@ import {
   Link as LinkIcon,
   Unlink,
   RotateCcw,
-  Type
+  RotateCw,
+  Type,
+  Trash2,
+  ChevronDown,
+  Variable
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 
-// Define action types for the formatting toolbar
-type ActionType = 
-  | 'bold' 
-  | 'italic' 
-  | 'underline' 
-  | 'heading' 
-  | 'align-left' 
-  | 'align-center' 
-  | 'align-right' 
-  | 'align-justify'
-  | 'list-unordered'
-  | 'list-ordered'
-  | 'image'
-  | 'link'
-  | 'unlink'
-  | 'undo';
+// Define o tipo para as variáveis do template
+const VARIABLES = [
+  { key: 'nome', label: 'Nome' },
+  { key: 'email', label: 'Email' },
+  { key: 'data', label: 'Data' },
+  { key: 'hora', label: 'Hora' },
+  { key: 'telefone', label: 'Telefone' },
+  { key: 'cliente', label: 'Cliente' },
+  { key: 'empresa', label: 'Empresa' },
+  { key: 'cargo', label: 'Cargo' },
+  { key: 'produto', label: 'Produto' },
+  { key: 'valor', label: 'Valor' },
+  { key: 'vencimento', label: 'Vencimento' }
+];
+
+// Define as opções de fonte
+const FONT_FAMILIES = [
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", serif' },
+  { label: 'Roboto', value: 'Roboto, sans-serif' },
+  { label: 'Helvetica', value: 'Helvetica, sans-serif' },
+  { label: 'Georgia', value: 'Georgia, serif' }
+];
+
+// Define tamanhos de fonte
+const FONT_SIZES = [
+  { label: 'Pequeno', value: '12px' },
+  { label: 'Normal', value: '16px' },
+  { label: 'Médio', value: '20px' },
+  { label: 'Grande', value: '24px' },
+  { label: 'Enorme', value: '30px' }
+];
 
 interface RichTextEditorProps {
-  id?: string;
-  initialValue?: string;
   value?: string;
   onChange: (content: string) => void;
   onImageUpload?: (file: File) => Promise<string>;
-  onEditorInit?: (editor: HTMLElement) => void;
+  onEditorInit?: (editor: any) => void;
   placeholder?: string;
   className?: string;
   minHeight?: string;
 }
 
-// Export as a named export, not default export
 export function RichTextEditor({
-  id = 'rich-text-editor',
-  initialValue = '',
   value,
   onChange,
   onImageUpload,
   onEditorInit,
-  placeholder = 'Digite o conteúdo aqui...',
+  placeholder = 'Digite o conteúdo do template aqui...',
   className = '',
-  minHeight = '200px'
+  minHeight = '300px'
 }: RichTextEditorProps) {
-  const [editorContent, setEditorContent] = useState(initialValue || '');
-  const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
-  const [linkUrl, setLinkUrl] = useState('');
+  const [linkUrl, setLinkUrl] = useState('https://');
   const [linkText, setLinkText] = useState('');
-  const [isLinkEdit, setIsLinkEdit] = useState(false);
-  
-  // Controle de passos para ordenação do conteúdo
-  const [currentStep, setCurrentStep] = useState(1);
-  const [lastStepCompleted, setLastStepCompleted] = useState(0);
-  
-  // Função para validar se o passo está na ordem correta
-  const validateStepOrder = (step: number): boolean => {
-    // Não permite pular passos ou voltar
-    if (step !== lastStepCompleted + 1) {
-      toast.error(`Por favor, complete a etapa ${lastStepCompleted + 1} antes de prosseguir.`);
-      return false;
-    }
-    
-    // Atualiza o último passo completado
-    setLastStepCompleted(step);
-    setCurrentStep(step + 1);
-    return true;
-  };
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Função para inserir conteúdo na ordem correta
-  const insertContentInOrder = (htmlContent: string, step: number): boolean => {
-    const editor = editorRef.current;
-    if (!editor) return false;
-    
-    // Valida se está seguindo a ordem correta dos passos
-    if (!validateStepOrder(step)) {
-      return false;
-    }
-    
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return false;
-    
-    const range = sel.getRangeAt(0);
-    range.deleteContents();
-    
-    // Cria um fragmento com o conteúdo a ser inserido
-    const el = document.createElement("div");
-    el.innerHTML = htmlContent;
-    el.setAttribute('data-step', step.toString());
-    
-    const frag = document.createDocumentFragment();
-    let node, lastNode;
-    while ((node = el.firstChild)) {
-      lastNode = frag.appendChild(node);
-    }
-    
-    range.insertNode(frag);
-    
-    // Ajusta o cursor para ficar após o conteúdo inserido
-    if (lastNode) {
-      range.setStartAfter(lastNode);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-    
-    // Atualiza o conteúdo do editor
-    setEditorContent(editor.innerHTML);
-    onChange(editor.innerHTML);
-    
-    return true;
-  };
+  // Configurar o editor TipTap com todas as extensões necessárias
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        },
+      }),
+      Image.configure({
+        HTMLAttributes: {
+          class: 'max-w-full h-auto',
+        },
+      }),
+      Placeholder.configure({
+        placeholder,
+        emptyEditorClass: 'is-editor-empty',
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+        alignments: ['left', 'center', 'right', 'justify'],
+      }),
+      FontFamily.configure({
+        types: ['textStyle'],
+      }),
+      FontSize.configure({
+        types: ['textStyle'],
+      })
+    ],
+    content: value,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
+    autofocus: false,
+  });
 
-  // Modificada para usar o novo sistema de controle de ordem
-  const insertContent = (content: string) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    
-    insertContentInOrder(content, currentStep);
-  };
-
-  // Format commands that can be applied to selected text
-  const formatText = (action: ActionType) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-
-    // Get the current selection - defined once at the top level of the function
-    const currentSelection = window.getSelection();
-    
-    // Verificar se está no passo correto para formatação
-    if (lastStepCompleted < 1) {
-      toast.warning("Por favor, insira primeiro o template antes de formatar o texto.");
-      return;
+  // Sincronização do valor externo
+  useEffect(() => {
+    if (editor && value !== undefined && editor.getHTML() !== value) {
+      editor.commands.setContent(value);
     }
-    
-    switch (action) {
-      case 'bold':
-        document.execCommand('bold', false);
-        break;
-      case 'italic':
-        document.execCommand('italic', false);
-        break;
-      case 'underline':
-        document.execCommand('underline', false);
-        break;
-      case 'heading':
-        if (currentSelection && currentSelection.rangeCount > 0) {
-          const range = currentSelection.getRangeAt(0);
-          const selectedText = range.toString();
-          
-          if (selectedText) {
-            document.execCommand('insertHTML', false, `<h3>${selectedText}</h3>`);
-          } else {
-            document.execCommand('insertHTML', false, '<h3>Título</h3>');
-          }
-        } else {
-          document.execCommand('insertHTML', false, '<h3>Título</h3>');
-        }
-        break;
-      case 'align-left':
-        document.execCommand('justifyLeft', false);
-        break;
-      case 'align-center':
-        document.execCommand('justifyCenter', false);
-        break;
-      case 'align-right':
-        document.execCommand('justifyRight', false);
-        break;
-      case 'align-justify':
-        document.execCommand('justifyFull', false);
-        break;
-      case 'list-unordered':
-        document.execCommand('insertUnorderedList', false);
-        break;
-      case 'list-ordered':
-        document.execCommand('insertOrderedList', false);
-        break;
-      case 'image':
-        if (lastStepCompleted < 2) {
-          toast.warning("Por favor, complete a inserção do conteúdo do template antes de adicionar imagens.");
-          return;
-        }
-        if (onImageUpload) {
-          triggerImageUpload();
-        } else {
-          const imageUrl = prompt('Digite a URL da imagem:');
-          if (imageUrl) {
-            insertImage(imageUrl);
-          }
-        }
-        break;
-      case 'link':
-        if (lastStepCompleted < 2) {
-          toast.warning("Por favor, complete a inserção do conteúdo do template antes de adicionar links.");
-          return;
-        }
-        if (currentSelection && currentSelection.toString()) {
-          setLinkText(currentSelection.toString());
-          setLinkUrl('https://');
-          setIsLinkEdit(false);
-          setLinkPopoverOpen(true);
-        } else {
-          setLinkText('');
-          setLinkUrl('https://');
-          setIsLinkEdit(false);
-          setLinkPopoverOpen(true);
-        }
-        break;
-      case 'unlink':
-        document.execCommand('unlink', false);
-        break;
-      case 'undo':
-        document.execCommand('undo', false);
-        break;
-    }
+  }, [value, editor]);
 
-    // After applying format, update state
+  // Expor o editor para o componente pai
+  useEffect(() => {
+    if (editor && onEditorInit) {
+      onEditorInit(editor);
+    }
+  }, [editor, onEditorInit]);
+
+  // Função para inserir uma variável no editor
+  const insertVariable = (variableKey: string) => {
     if (editor) {
-      setEditorContent(editor.innerHTML);
-      onChange(editor.innerHTML);
+      editor.chain().focus().insertContent(`{{${variableKey}}}`).run();
     }
   };
 
-  // Insert link using the URL from popover
+  // Função para inserir um link
   const insertLink = () => {
     if (!linkUrl.trim()) return;
     
-    const editor = editorRef.current;
-    if (!editor) return;
-    
-    const selection = window.getSelection();
-    if (selection) {
-      // If no text is selected but link text is provided, insert new link
-      if ((!selection.toString() || selection.toString() === '') && linkText) {
-        document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkText}</a>`);
+    if (editor) {
+      // Se houver texto selecionado, aplique o link a ele
+      if (editor.state.selection.content().size > 0) {
+        editor
+          .chain()
+          .focus()
+          .extendMarkRange('link')
+          .setLink({ href: linkUrl, target: '_blank' })
+          .run();
       } 
-      // If text is selected, wrap it in link
-      else if (selection.toString()) {
-        document.execCommand('createLink', false, linkUrl);
-        const links = editor.querySelectorAll('a');
-        links.forEach(link => {
-          link.setAttribute('target', '_blank');
-        });
+      // Se não houver texto selecionado mas houver texto de link definido
+      else if (linkText.trim()) {
+        editor
+          .chain()
+          .focus()
+          .insertContent(`<a href="${linkUrl}" target="_blank">${linkText}</a>`)
+          .run();
       }
-      // No selection and no link text, just insert the URL as a link
+      // Caso não haja nem texto selecionado nem definido, use a URL como texto
       else {
-        document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkUrl}</a>`);
+        editor
+          .chain()
+          .focus()
+          .insertContent(`<a href="${linkUrl}" target="_blank">${linkUrl}</a>`)
+          .run();
       }
     }
     
     setLinkPopoverOpen(false);
-    setLinkUrl('');
+    setLinkUrl('https://');
     setLinkText('');
-    
-    // Update state
-    setEditorContent(editor.innerHTML);
-    onChange(editor.innerHTML);
   };
 
-  // Insert image at cursor position - modificada para respeitar a ordem
-  const insertImage = (url: string) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    
-    if (lastStepCompleted < 2) {
-      toast.warning("Por favor, complete a inserção do conteúdo do template antes de adicionar imagens.");
-      return;
+  // Função para remover um link
+  const removeLink = () => {
+    if (editor) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
     }
-    
-    document.execCommand('insertHTML', false, `<img src="${url}" alt="Imagem" style="max-width: 100%; height: auto;" />`);
-    
-    // Update state
-    setEditorContent(editor.innerHTML);
-    onChange(editor.innerHTML);
   };
 
-  // Inline image upload handling - sem alterações
+  // Função para lidar com o upload de imagens
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!onImageUpload || !e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
     try {
+      toast.loading('Enviando imagem...');
       const url = await onImageUpload(file);
-      if (url) {
-        insertImage(url);
+      if (url && editor) {
+        editor.chain().focus().setImage({ src: url, alt: 'Imagem do template' }).run();
+        toast.success('Imagem enviada com sucesso!');
       }
     } catch (error) {
       console.error('Erro ao enviar imagem:', error);
@@ -315,277 +222,190 @@ export function RichTextEditor({
     }
   };
 
-  // Init content with proper direction - Modificado para garantir direção LTR no início
-  useEffect(() => {
-    if (editorRef.current) {
-      const editor = editorRef.current;
-      
-      // Remove estilo anterior
-      const oldStyle = document.getElementById('editor-direction-style');
-      if (oldStyle) oldStyle.remove();
-      
-      // Adiciona estilo LTR fixo
-      const styleTag = document.createElement('style');
-      styleTag.id = 'editor-direction-style';
-      styleTag.textContent = `
-        #${id}, #${id} * {
-          direction: ltr !important;
-          text-align: left !important;
-          unicode-bidi: plaintext !important;
-        }
-        [contenteditable="true"] {
-          direction: ltr !important;
-          text-align: left !important;
-          unicode-bidi: plaintext !important;
-        }
-      `;
-      document.head.appendChild(styleTag);
-      
-      editor.dir = 'ltr';
-      editor.style.direction = 'ltr';
-      editor.style.textAlign = 'left';
-      editor.style.unicodeBidi = 'plaintext';
-      
-      if (onEditorInit) {
-        onEditorInit(editor);
-      }
-    }
-  }, [id, onEditorInit]);
-
-  // Verificador de edição para controlar onde o usuário está editando
-  const isEditingAllowedInCurrentLocation = (e: React.KeyboardEvent) => {
-    if (lastStepCompleted === 0) {
-      // Se ainda não inseriu o template, não permite edição
-      toast.warning("Por favor, insira o template primeiro.");
-      e.preventDefault();
-      return false;
-    }
-    
-    // Mais verificações podem ser adicionadas aqui com base nos requisitos
-    
-    return true;
-  };
-
-  // Handler de teclas para controlar digitação
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Verifica se a edição é permitida na posição atual do cursor
-    if (!isEditingAllowedInCurrentLocation(e)) {
-      e.preventDefault();
-      return;
-    }
-  };
-
-  // CORRIGIDO: Reescrito para evitar qualquer manipulação de string que possa causar inversão
-  const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
-    // Obter o conteúdo HTML diretamente do elemento, sem manipulações
-    const content = e.currentTarget.innerHTML;
-    
-    // Atualizar estado sem processamento adicional
-    setEditorContent(content);
-    onChange(content);
-  };
-
-  // Synchronize with external value change - Modificado para garantir direção LTR
-  useEffect(() => {
-    if (value !== undefined && value !== editorContent) {
-      setEditorContent(value);
-      
-      // Garantir que a direção do texto permaneça LTR após receber novo conteúdo
-      if (editorRef.current) {
-        editorRef.current.dir = 'ltr';
-        editorRef.current.style.direction = 'ltr';
-        editorRef.current.style.textAlign = 'left';
-        editorRef.current.style.unicodeBidi = 'plaintext';
-      }
-    }
-  }, [value, editorContent]);
-  
-  // Hidden file input for image upload
+  // Função para iniciar o processo de upload de imagem
   const triggerImageUpload = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
-  // Focus editor when it's empty and receives focus
-  const handleEditorFocus = () => {
-    if (editorRef.current && editorRef.current.innerHTML === '') {
-      editorRef.current.innerHTML = '<p><br></p>';
+  // Função para aplicar uma família de fonte
+  const applyFontFamily = (fontFamily: string) => {
+    if (editor) {
+      editor.chain().focus().setFontFamily(fontFamily).run();
     }
   };
 
-  // CORRIGIDO: Reescrito para evitar manipulação que possa inverter o texto
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    
-    if (lastStepCompleted === 0) {
-      toast.warning("Por favor, insira o template primeiro antes de colar conteúdo.");
-      return;
+  // Função para aplicar um tamanho de fonte
+  const applyFontSize = (fontSize: string) => {
+    if (editor) {
+      editor.chain().focus().setFontSize(fontSize).run();
     }
-    
-    // Obter o texto sem formatação
-    const text = e.clipboardData.getData('text/plain');
-    
-    // Inserir texto sem processamentos extras
-    document.execCommand('insertText', false, text);
   };
 
-  // Método para expor a função insertContent para componentes externos
-  useEffect(() => {
-    if (editorRef.current && onEditorInit) {
-      const editorWithInsert = {
-        ...editorRef.current,
-        insertContent // Exposing our insertContent method
-      };
-      onEditorInit(editorWithInsert);
+  // Função para limpar toda a formatação
+  const clearFormatting = () => {
+    if (editor) {
+      editor.chain().focus().clearNodes().unsetAllMarks().run();
     }
-  }, [onEditorInit]);
-
-  // Função pública para inserir template (passo 1)
-  const insertTemplate = (templateHtml: string) => {
-    return insertContentInOrder(`<div class="template-container">${templateHtml}</div>`, 1);
-  };
-  
-  // Função pública para inserir conteúdo do template (passo 2)
-  const insertTemplateContent = (contentHtml: string) => {
-    return insertContentInOrder(`<div class="template-content">${contentHtml}</div>`, 2);
-  };
-  
-  // Função pública para inserir conteúdo final (passo 3)
-  const insertFinalContent = (finalHtml: string) => {
-    return insertContentInOrder(`<div class="final-content">${finalHtml}</div>`, 3);
   };
 
-  // Exponha as funções de controle de passos se onEditorInit for fornecido
-  useEffect(() => {
-    if (editorRef.current && onEditorInit) {
-      const editorWithStepControl = {
-        ...editorRef.current,
-        insertTemplate,
-        insertTemplateContent,
-        insertFinalContent,
-        getCurrentStep: () => currentStep,
-        validateStep: validateStepOrder
-      };
-      onEditorInit(editorWithStepControl);
-    }
-  }, [onEditorInit, currentStep]);
+  // Se o editor não estiver inicializado, não renderize nada
+  if (!editor) {
+    return null;
+  }
 
   return (
     <div className={`border rounded-md bg-background ${className}`}>
+      {/* Barra de ferramentas */}
       <div className="bg-muted/40 p-1 border-b flex flex-wrap items-center gap-1">
+        {/* Formatação de texto básica */}
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('bold')}
+          onClick={() => editor.chain().focus().toggleBold().run()}
         >
           <Bold className="h-4 w-4" />
         </Button>
         
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('italic')}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
         >
           <Italic className="h-4 w-4" />
         </Button>
         
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('underline') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('underline')}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
         >
           <Underline className="h-4 w-4" />
         </Button>
+
+        {/* Dropdown de tamanho de fonte */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8">
+              <Type className="h-4 w-4 mr-1" />
+              <span className="text-xs">Tamanho</span>
+              <ChevronDown className="h-3 w-3 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {FONT_SIZES.map((size) => (
+              <DropdownMenuItem 
+                key={size.value}
+                onClick={() => applyFontSize(size.value)}
+              >
+                <span style={{ fontSize: size.value }}>{size.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('heading')}
-        >
-          <Type className="h-4 w-4" />
-        </Button>
+        {/* Dropdown de família de fonte */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8">
+              <span className="text-xs">Fonte</span>
+              <ChevronDown className="h-3 w-3 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {FONT_FAMILIES.map((font) => (
+              <DropdownMenuItem 
+                key={font.value}
+                onClick={() => applyFontFamily(font.value)}
+              >
+                <span style={{ fontFamily: font.value }}>{font.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         
         <span className="w-px h-6 bg-border mx-1" />
         
+        {/* Alinhamento */}
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive({ textAlign: 'left' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('align-left')}
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
         >
           <AlignLeft className="h-4 w-4" />
         </Button>
         
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive({ textAlign: 'center' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('align-center')}
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
         >
           <AlignCenter className="h-4 w-4" />
         </Button>
         
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive({ textAlign: 'right' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('align-right')}
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
         >
           <AlignRight className="h-4 w-4" />
         </Button>
         
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive({ textAlign: 'justify' }) ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('align-justify')}
+          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
         >
           <AlignJustify className="h-4 w-4" />
         </Button>
         
         <span className="w-px h-6 bg-border mx-1" />
         
+        {/* Listas */}
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('list-unordered')}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
         >
           <List className="h-4 w-4" />
         </Button>
         
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('list-ordered')}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
         >
           <ListOrdered className="h-4 w-4" />
         </Button>
         
         <span className="w-px h-6 bg-border mx-1" />
         
+        {/* Imagem e Links */}
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('image')}
+          onClick={triggerImageUpload}
         >
           <ImageIcon className="h-4 w-4" />
           <input
@@ -601,10 +421,20 @@ export function RichTextEditor({
           <PopoverTrigger asChild>
             <Button
               type="button"
-              variant="ghost"
+              variant={editor.isActive('link') ? 'secondary' : 'ghost'}
               size="icon"
               className="h-8 w-8"
-              onClick={() => formatText('link')}
+              onClick={() => {
+                if (editor.isActive('link')) {
+                  removeLink();
+                } else {
+                  setLinkUrl('https://');
+                  setLinkText(editor.state.selection.content().content?.size 
+                    ? '' 
+                    : '');
+                  setLinkPopoverOpen(true);
+                }
+              }}
             >
               <LinkIcon className="h-4 w-4" />
             </Button>
@@ -620,7 +450,6 @@ export function RichTextEditor({
                     value={linkText}
                     onChange={(e) => setLinkText(e.target.value)}
                     placeholder="Texto a ser exibido"
-                    dir="ltr"
                   />
                 </div>
                 
@@ -631,7 +460,6 @@ export function RichTextEditor({
                     value={linkUrl}
                     onChange={(e) => setLinkUrl(e.target.value)}
                     placeholder="https://exemplo.com"
-                    dir="ltr"
                   />
                 </div>
               </div>
@@ -641,7 +469,7 @@ export function RichTextEditor({
                   Cancelar
                 </Button>
                 <Button type="button" onClick={insertLink}>
-                  {isLinkEdit ? 'Atualizar' : 'Inserir'} Link
+                  Inserir Link
                 </Button>
               </div>
             </div>
@@ -653,68 +481,103 @@ export function RichTextEditor({
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('unlink')}
+          onClick={removeLink}
+          disabled={!editor.isActive('link')}
         >
           <Unlink className="h-4 w-4" />
         </Button>
         
         <span className="w-px h-6 bg-border mx-1" />
         
+        {/* Desfazer / Refazer / Limpar Formatação */}
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => formatText('undo')}
+          onClick={() => editor.chain().focus().undo().run()}
+          disabled={!editor.can().undo()}
         >
           <RotateCcw className="h-4 w-4" />
         </Button>
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => editor.chain().focus().redo().run()}
+          disabled={!editor.can().redo()}
+        >
+          <RotateCw className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={clearFormatting}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+        
+        <span className="w-px h-6 bg-border mx-1" />
+        
+        {/* Dropdown de variáveis */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8">
+              <Variable className="h-4 w-4 mr-1" />
+              <span className="text-xs">Variáveis</span>
+              <ChevronDown className="h-3 w-3 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {VARIABLES.map((variable) => (
+              <DropdownMenuItem 
+                key={variable.key}
+                onClick={() => insertVariable(variable.key)}
+              >
+                {variable.label} <code className="ml-2 text-xs">{{"{{"}{variable.key}{"}}"}}}</code>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       
-      {/* Editor com propriedades reforçadas para garantir direção correta e controle de passos */}
-      <div
-        id={id}
-        ref={editorRef}
-        className="p-4 focus:outline-none min-h-[200px]"
-        contentEditable="true"
-        dangerouslySetInnerHTML={{ __html: editorContent }}
-        onInput={handleEditorChange}
-        onFocus={handleEditorFocus}
-        onPaste={handlePaste}
-        onKeyDown={handleKeyDown}
-        dir="ltr"
-        lang="pt-BR"
-        style={{ 
-          direction: 'ltr',
-          textAlign: 'left',
-          minHeight,
-          unicodeBidi: 'plaintext',
-          writingMode: 'horizontal-tb',
-          overflowWrap: 'break-word',
-          wordBreak: 'normal'
-        }}
-        translate="no"
-      />
-      
-      {/* Indicador do passo atual (opcional) */}
-      <div className="px-4 py-2 border-t text-xs text-muted-foreground">
-        Etapa atual: {currentStep > 3 ? "Edição completa" : `${currentStep}/3`}
+      {/* Área do Editor */}
+      <div className="relative" style={{ minHeight }}>
+        <EditorContent 
+          editor={editor} 
+          className="p-4 focus:outline-none min-h-[200px]" 
+        />
+        {editor && editor.isEmpty && (
+          <div className="absolute top-0 left-0 p-4 text-muted-foreground pointer-events-none">
+            {placeholder}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>
+// Label component para manter compatibilidade
+type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>;
 
 const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
   ({ className, ...props }, ref) => {
     return (
       <label
         ref={ref}
-        className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70`}
+        className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`}
         {...props}
       />
-    )
+    );
   }
-)
-Label.displayName = "Label"
+);
+Label.displayName = "Label";
+
+// Adicionar extensão Underline ao TipTap
+import { Extension } from '@tiptap/core';
+import '@tiptap/extension-underline';

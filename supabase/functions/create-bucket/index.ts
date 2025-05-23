@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -49,6 +48,16 @@ serve(async (req) => {
       }
       
       console.log('Created template_attachments bucket:', newBucket);
+      
+      // Create a folder for template images
+      const { error: folderError } = await supabaseAdmin
+        .storage
+        .from('template_attachments')
+        .upload('template-images/.gitkeep', new Blob(['']));
+        
+      if (folderError && !folderError.message.includes('already exists')) {
+        console.error('Error creating template-images folder:', folderError);
+      }
     }
     
     return new Response(
