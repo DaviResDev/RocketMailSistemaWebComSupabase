@@ -192,8 +192,34 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   };
 
   const insertVariable = (variable: string) => {
-    if (editorInstance && typeof editorInstance.insertContent === 'function') {
-      editorInstance.insertContent(`{{${variable}}}`);
+    if (editorInstance) {
+      editorInstance.chain().focus().insertContent(`{{${variable}}}`).run();
+    }
+  };
+
+  const handleImageUpload = async (file: File): Promise<string> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `template-images/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('template_attachments')
+        .upload(filePath, file);
+        
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      const { data } = supabase.storage
+        .from('template_attachments')
+        .getPublicUrl(filePath);
+        
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Erro ao fazer upload da imagem:', error);
+      toast.error('Erro ao fazer upload da imagem');
+      throw error;
     }
   };
 
@@ -318,31 +344,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-medium">Conteúdo</h3>
                 <div className="flex space-x-2">
-                  {/* Variables popover button */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="flex items-center">
-                        <Variable className="mr-1 h-4 w-4" />
-                        Inserir Variáveis
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 p-2">
-                      <div className="space-y-1">
-                        {VARIABLES.map((variable) => (
-                          <Button 
-                            key={variable.key}
-                            variant="ghost" 
-                            size="sm"
-                            className="w-full justify-start" 
-                            onClick={() => insertVariable(variable.key)}
-                          >
-                            {variable.label}: {`{{${variable.key}}}`}
-                          </Button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  
                   {/* File attachment button */}
                   <Button
                     variant="outline" 
@@ -363,7 +364,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                 </div>
               </div>
               
-              {/* Editor */}
+              {/* New TipTap Editor */}
               <FormField
                 control={form.control}
                 name="conteudo"
@@ -372,8 +373,11 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                     <FormControl>
                       <RichTextEditor 
                         value={field.value} 
-                        onChange={field.onChange} 
+                        onChange={field.onChange}
                         onEditorInit={setEditorInstance}
+                        onImageUpload={handleImageUpload}
+                        placeholder="Digite o conteúdo do template aqui..."
+                        minHeight="300px"
                       />
                     </FormControl>
                     <FormMessage />
