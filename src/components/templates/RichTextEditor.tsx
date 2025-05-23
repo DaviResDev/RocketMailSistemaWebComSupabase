@@ -539,7 +539,7 @@ export function RichTextEditor({
                 key={variable.key}
                 onClick={() => insertVariable(variable.key)}
               >
-                {variable.label} <code className="ml-2 text-xs">{{"{{"}{variable.key}{"}}"}}}</code>
+                {variable.label} <code className="ml-2 text-xs">{`{{${variable.key}}}`}</code>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
