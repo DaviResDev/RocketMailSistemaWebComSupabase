@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -222,18 +223,18 @@ export function RichTextEditor({
     }
   };
 
-  // Função para aplicar uma família de fonte
+  // Função para aplicar uma família de fonte - usando marca de estilo de texto
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
-      // Use inline styles for font family instead of the extension
+      // Use inline styles for font family
       editor.chain().focus().setMark('textStyle', { fontFamily }).run();
     }
   };
 
-  // Função para aplicar um tamanho de fonte
+  // Função para aplicar um tamanho de fonte - usando marca de estilo de texto
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      // Use inline styles for font size instead of the extension
+      // Use inline styles for font size
       editor.chain().focus().setMark('textStyle', { fontSize }).run();
     }
   };
