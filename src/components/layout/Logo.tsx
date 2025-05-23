@@ -17,12 +17,12 @@ export const Logo: React.FC<LogoProps> = ({
   const getSizeClasses = () => {
     switch (size) {
       case 'small':
-        return 'h-7';
+        return 'h-8';
       case 'large':
-        return 'h-20';
+        return 'h-24';
       case 'medium':
       default:
-        return 'h-14';
+        return 'h-16';
     }
   };
 
