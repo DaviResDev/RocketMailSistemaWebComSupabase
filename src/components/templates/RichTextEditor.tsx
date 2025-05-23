@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -69,17 +68,75 @@ export function RichTextEditor({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
   const [isLinkEdit, setIsLinkEdit] = useState(false);
+  
+  // Controle de passos para ordenação do conteúdo
+  const [currentStep, setCurrentStep] = useState(1);
+  const [lastStepCompleted, setLastStepCompleted] = useState(0);
+  
+  // Função para validar se o passo está na ordem correta
+  const validateStepOrder = (step: number): boolean => {
+    // Não permite pular passos ou voltar
+    if (step !== lastStepCompleted + 1) {
+      toast.error(`Por favor, complete a etapa ${lastStepCompleted + 1} antes de prosseguir.`);
+      return false;
+    }
+    
+    // Atualiza o último passo completado
+    setLastStepCompleted(step);
+    setCurrentStep(step + 1);
+    return true;
+  };
 
-  // CORRIGIDO: Simplificado para eliminar qualquer manipulação que possa inverter o texto
+  // Função para inserir conteúdo na ordem correta
+  const insertContentInOrder = (htmlContent: string, step: number): boolean => {
+    const editor = editorRef.current;
+    if (!editor) return false;
+    
+    // Valida se está seguindo a ordem correta dos passos
+    if (!validateStepOrder(step)) {
+      return false;
+    }
+    
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return false;
+    
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    
+    // Cria um fragmento com o conteúdo a ser inserido
+    const el = document.createElement("div");
+    el.innerHTML = htmlContent;
+    el.setAttribute('data-step', step.toString());
+    
+    const frag = document.createDocumentFragment();
+    let node, lastNode;
+    while ((node = el.firstChild)) {
+      lastNode = frag.appendChild(node);
+    }
+    
+    range.insertNode(frag);
+    
+    // Ajusta o cursor para ficar após o conteúdo inserido
+    if (lastNode) {
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    
+    // Atualiza o conteúdo do editor
+    setEditorContent(editor.innerHTML);
+    onChange(editor.innerHTML);
+    
+    return true;
+  };
+
+  // Modificada para usar o novo sistema de controle de ordem
   const insertContent = (content: string) => {
     const editor = editorRef.current;
     if (!editor) return;
     
-    // Usar insertText que é mais seguro para direção do texto
-    document.execCommand('insertText', false, content);
-    
-    // Notificar mudanças
-    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    insertContentInOrder(content, currentStep);
   };
 
   // Format commands that can be applied to selected text
@@ -89,6 +146,12 @@ export function RichTextEditor({
 
     // Get the current selection - defined once at the top level of the function
     const currentSelection = window.getSelection();
+    
+    // Verificar se está no passo correto para formatação
+    if (lastStepCompleted < 1) {
+      toast.warning("Por favor, insira primeiro o template antes de formatar o texto.");
+      return;
+    }
     
     switch (action) {
       case 'bold':
@@ -133,6 +196,10 @@ export function RichTextEditor({
         document.execCommand('insertOrderedList', false);
         break;
       case 'image':
+        if (lastStepCompleted < 2) {
+          toast.warning("Por favor, complete a inserção do conteúdo do template antes de adicionar imagens.");
+          return;
+        }
         if (onImageUpload) {
           triggerImageUpload();
         } else {
@@ -143,6 +210,10 @@ export function RichTextEditor({
         }
         break;
       case 'link':
+        if (lastStepCompleted < 2) {
+          toast.warning("Por favor, complete a inserção do conteúdo do template antes de adicionar links.");
+          return;
+        }
         if (currentSelection && currentSelection.toString()) {
           setLinkText(currentSelection.toString());
           setLinkUrl('https://');
@@ -206,10 +277,15 @@ export function RichTextEditor({
     onChange(editor.innerHTML);
   };
 
-  // Insert image at cursor position
+  // Insert image at cursor position - modificada para respeitar a ordem
   const insertImage = (url: string) => {
     const editor = editorRef.current;
     if (!editor) return;
+    
+    if (lastStepCompleted < 2) {
+      toast.warning("Por favor, complete a inserção do conteúdo do template antes de adicionar imagens.");
+      return;
+    }
     
     document.execCommand('insertHTML', false, `<img src="${url}" alt="Imagem" style="max-width: 100%; height: auto;" />`);
     
@@ -218,7 +294,7 @@ export function RichTextEditor({
     onChange(editor.innerHTML);
   };
 
-  // Inline image upload handling
+  // Inline image upload handling - sem alterações
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!onImageUpload || !e.target.files || e.target.files.length === 0) return;
 
@@ -276,6 +352,29 @@ export function RichTextEditor({
     }
   }, [id, onEditorInit]);
 
+  // Verificador de edição para controlar onde o usuário está editando
+  const isEditingAllowedInCurrentLocation = (e: React.KeyboardEvent) => {
+    if (lastStepCompleted === 0) {
+      // Se ainda não inseriu o template, não permite edição
+      toast.warning("Por favor, insira o template primeiro.");
+      e.preventDefault();
+      return false;
+    }
+    
+    // Mais verificações podem ser adicionadas aqui com base nos requisitos
+    
+    return true;
+  };
+
+  // Handler de teclas para controlar digitação
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Verifica se a edição é permitida na posição atual do cursor
+    if (!isEditingAllowedInCurrentLocation(e)) {
+      e.preventDefault();
+      return;
+    }
+  };
+
   // CORRIGIDO: Reescrito para evitar qualquer manipulação de string que possa causar inversão
   const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
     // Obter o conteúdo HTML diretamente do elemento, sem manipulações
@@ -319,6 +418,11 @@ export function RichTextEditor({
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     
+    if (lastStepCompleted === 0) {
+      toast.warning("Por favor, insira o template primeiro antes de colar conteúdo.");
+      return;
+    }
+    
     // Obter o texto sem formatação
     const text = e.clipboardData.getData('text/plain');
     
@@ -336,6 +440,36 @@ export function RichTextEditor({
       onEditorInit(editorWithInsert);
     }
   }, [onEditorInit]);
+
+  // Função pública para inserir template (passo 1)
+  const insertTemplate = (templateHtml: string) => {
+    return insertContentInOrder(`<div class="template-container">${templateHtml}</div>`, 1);
+  };
+  
+  // Função pública para inserir conteúdo do template (passo 2)
+  const insertTemplateContent = (contentHtml: string) => {
+    return insertContentInOrder(`<div class="template-content">${contentHtml}</div>`, 2);
+  };
+  
+  // Função pública para inserir conteúdo final (passo 3)
+  const insertFinalContent = (finalHtml: string) => {
+    return insertContentInOrder(`<div class="final-content">${finalHtml}</div>`, 3);
+  };
+
+  // Exponha as funções de controle de passos se onEditorInit for fornecido
+  useEffect(() => {
+    if (editorRef.current && onEditorInit) {
+      const editorWithStepControl = {
+        ...editorRef.current,
+        insertTemplate,
+        insertTemplateContent,
+        insertFinalContent,
+        getCurrentStep: () => currentStep,
+        validateStep: validateStepOrder
+      };
+      onEditorInit(editorWithStepControl);
+    }
+  }, [onEditorInit, currentStep]);
 
   return (
     <div className={`border rounded-md bg-background ${className}`}>
@@ -537,7 +671,7 @@ export function RichTextEditor({
         </Button>
       </div>
       
-      {/* Editor com propriedades reforçadas para garantir direção correta */}
+      {/* Editor com propriedades reforçadas para garantir direção correta e controle de passos */}
       <div
         id={id}
         ref={editorRef}
@@ -547,6 +681,7 @@ export function RichTextEditor({
         onInput={handleEditorChange}
         onFocus={handleEditorFocus}
         onPaste={handlePaste}
+        onKeyDown={handleKeyDown}
         dir="ltr"
         lang="pt-BR"
         style={{ 
@@ -560,6 +695,11 @@ export function RichTextEditor({
         }}
         translate="no"
       />
+      
+      {/* Indicador do passo atual (opcional) */}
+      <div className="px-4 py-2 border-t text-xs text-muted-foreground">
+        Etapa atual: {currentStep > 3 ? "Edição completa" : `${currentStep}/3`}
+      </div>
     </div>
   );
 }
