@@ -7,6 +7,8 @@ import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
+import TextStyle from '@tiptap/extension-text-style';
+import FontFamily from '@tiptap/extension-font-family';
 import { Button } from '@/components/ui/button';
 import {
   Bold,
@@ -101,6 +103,10 @@ export function RichTextEditor({
     extensions: [
       StarterKit,
       Underline,
+      TextStyle,
+      FontFamily.configure({
+        types: ['textStyle'],
+      }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -223,18 +229,16 @@ export function RichTextEditor({
     }
   };
 
-  // Função para aplicar uma família de fonte - usando marca de estilo de texto
+  // Função para aplicar uma família de fonte
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
-      // Use inline styles for font family
-      editor.chain().focus().setMark('textStyle', { fontFamily }).run();
+      editor.chain().focus().setFontFamily(fontFamily).run();
     }
   };
 
-  // Função para aplicar um tamanho de fonte - usando marca de estilo de texto
+  // Função para aplicar um tamanho de fonte usando CSS
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      // Use inline styles for font size
       editor.chain().focus().setMark('textStyle', { fontSize }).run();
     }
   };
@@ -546,7 +550,7 @@ export function RichTextEditor({
       <div className="relative" style={{ minHeight }}>
         <EditorContent 
           editor={editor} 
-          className="p-4 focus:outline-none min-h-[200px]" 
+          className="p-4 focus:outline-none min-h-[200px] prose prose-sm max-w-none" 
         />
         {editor && editor.isEmpty && (
           <div className="absolute top-0 left-0 p-4 text-muted-foreground pointer-events-none">

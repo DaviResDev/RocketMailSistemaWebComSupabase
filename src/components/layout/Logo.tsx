@@ -32,14 +32,14 @@ export const Logo: React.FC<LogoProps> = ({
   const getIconSize = () => {
     switch (size) {
       case 'small':
-        return 'w-8 h-8';
-      case 'large':
-        return 'w-12 h-12';
-      case 'auto':
         return 'w-10 h-10';
+      case 'large':
+        return 'w-16 h-16';
+      case 'auto':
+        return 'w-12 h-12';
       case 'medium':
       default:
-        return 'w-10 h-10';
+        return 'w-12 h-12';
     }
   };
 
@@ -53,7 +53,7 @@ export const Logo: React.FC<LogoProps> = ({
         return 'text-base';
       case 'medium':
       default:
-        return 'text-base';
+        return 'text-lg';
     }
   };
 
@@ -67,24 +67,28 @@ export const Logo: React.FC<LogoProps> = ({
     >
       <Link 
         to="/dashboard" 
-        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+        className="flex items-center gap-3 hover:opacity-80 transition-all duration-200 group"
       >
-        {/* Logo Icon - Stylized M */}
+        {/* Logo Icon - Professional RM */}
         <div className={cn(
-          'relative rounded-lg overflow-hidden flex-shrink-0',
+          'relative rounded-xl overflow-hidden flex-shrink-0 shadow-lg group-hover:shadow-xl transition-shadow duration-200',
           getIconSize()
         )}>
           {/* Background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-blue-600"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-orange-500"></div>
           
-          {/* Letter M */}
+          {/* RM Letters */}
           <div className="relative w-full h-full flex items-center justify-center">
             <svg
-              viewBox="0 0 24 24"
-              className="w-6 h-6 text-white"
+              viewBox="0 0 48 48"
+              className="w-8 h-8 text-white font-bold"
               fill="currentColor"
             >
-              <path d="M3 3h4l3 9 3-9h4v18h-3V9l-2.5 7h-3L6 9v12H3V3z"/>
+              {/* Letter R */}
+              <path d="M6 6h12c3.3 0 6 2.7 6 6v2c0 2.2-1.2 4.1-3 5.2L24 24h-4l-2.5-4H10v4H6V6zm4 4v4h8c1.1 0 2-.9 2-2s-.9-2-2-2h-8z"/>
+              
+              {/* Letter M */}
+              <path d="M26 6h4l4 12 4-12h4v18h-3V12l-3 9h-2l-3-9v12h-3V6z"/>
             </svg>
           </div>
         </div>
@@ -92,17 +96,17 @@ export const Logo: React.FC<LogoProps> = ({
         {/* Logo Text */}
         <div className="flex flex-col">
           <span className={cn(
-            'font-bold leading-tight',
+            'font-bold leading-tight tracking-tight',
             getTextSize(),
-            theme === 'dark' ? 'text-white' : 'text-black'
+            theme === 'dark' ? 'text-white' : 'text-gray-900'
           )}>
             Rocket Mail
           </span>
           <span className={cn(
-            'text-xs font-medium leading-tight',
+            'text-xs font-semibold leading-tight tracking-wider uppercase',
             theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
           )}>
-            SYSTEM
+            System
           </span>
         </div>
       </Link>
