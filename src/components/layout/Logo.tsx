@@ -18,97 +18,85 @@ export const Logo: React.FC<LogoProps> = ({
   const getContainerSize = () => {
     switch (size) {
       case 'small':
-        return 'h-12';
+        return 'h-10';
       case 'large':
-        return 'h-28';
+        return 'h-20';
       case 'auto':
         return 'h-full';
       case 'medium':
       default:
-        return 'h-16';
+        return 'h-14';
     }
   };
 
-  const getIconSize = () => {
+  const getSvgSize = () => {
     switch (size) {
       case 'small':
-        return 'w-10 h-10';
+        return { width: '120', height: '48' };
       case 'large':
-        return 'w-16 h-16';
+        return { width: '200', height: '80' };
       case 'auto':
-        return 'w-12 h-12';
+        return { width: '150', height: '60' };
       case 'medium':
       default:
-        return 'w-12 h-12';
+        return { width: '150', height: '60' };
     }
   };
 
-  const getTextSize = () => {
-    switch (size) {
-      case 'small':
-        return 'text-sm';
-      case 'large':
-        return 'text-xl';
-      case 'auto':
-        return 'text-base';
-      case 'medium':
-      default:
-        return 'text-lg';
-    }
-  };
+  const svgSize = getSvgSize();
+  const textColor = theme === 'dark' ? '#ffffff' : '#000000';
 
   return (
     <div
       className={cn(
-        'w-full flex items-center justify-center px-4 py-3',
+        'w-full flex items-center justify-center px-2 py-2',
         getContainerSize(),
         className
       )}
     >
       <Link 
         to="/dashboard" 
-        className="flex items-center gap-3 hover:opacity-80 transition-all duration-200 group"
+        className="flex items-center hover:opacity-80 transition-all duration-200"
       >
-        {/* Logo Icon - Professional RM */}
-        <div className={cn(
-          'relative rounded-xl overflow-hidden flex-shrink-0 shadow-lg group-hover:shadow-xl transition-shadow duration-200',
-          getIconSize()
-        )}>
-          {/* Background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-orange-500"></div>
-          
-          {/* RM Letters */}
-          <div className="relative w-full h-full flex items-center justify-center">
-            <svg
-              viewBox="0 0 48 48"
-              className="w-8 h-8 text-white font-bold"
-              fill="currentColor"
-            >
-              {/* Letter R */}
-              <path d="M6 6h12c3.3 0 6 2.7 6 6v2c0 2.2-1.2 4.1-3 5.2L24 24h-4l-2.5-4H10v4H6V6zm4 4v4h8c1.1 0 2-.9 2-2s-.9-2-2-2h-8z"/>
-              
-              {/* Letter M */}
-              <path d="M26 6h4l4 12 4-12h4v18h-3V12l-3 9h-2l-3-9v12h-3V6z"/>
-            </svg>
-          </div>
-        </div>
+        <svg 
+          width={svgSize.width} 
+          height={svgSize.height} 
+          viewBox="0 0 500 200" 
+          xmlns="http://www.w3.org/2000/svg"
+          className="flex-shrink-0"
+        >
+          {/* Ícone com divisão diagonal */}
+          <defs>
+            <clipPath id="diagonalSplit">
+              <polygon points="0,200 0,0 200,0 0,200" />
+            </clipPath>
+            <clipPath id="diagonalSplitRight">
+              <polygon points="200,0 200,200 0,200 200,0" />
+            </clipPath>
+          </defs>
 
-        {/* Logo Text */}
-        <div className="flex flex-col">
-          <span className={cn(
-            'font-bold leading-tight tracking-tight',
-            getTextSize(),
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          )}>
+          {/* Retângulo com cantos arredondados */}
+          <rect x="0" y="0" width="200" height="200" rx="30" fill="#F7632D" clipPath="url(#diagonalSplit)" />
+          <rect x="0" y="0" width="200" height="200" rx="30" fill="#2267D8" clipPath="url(#diagonalSplitRight)" />
+
+          {/* Símbolos estilizados dentro do ícone */}
+          {/* R estilizado */}
+          <path d="M50 60 L70 60 L70 100 L90 100 L60 140 Z" fill="white" />
+
+          {/* A estilizado */}
+          <path d="M150 140 L130 60 L170 60 Z M150 100 L150 140 Z" fill="white" />
+
+          {/* Linha divisora */}
+          <line x1="220" y1="30" x2="220" y2="170" stroke="#2267D8" strokeWidth="4"/>
+
+          {/* Texto */}
+          <text x="240" y="95" fontFamily="Inter, sans-serif" fontSize="36" fontWeight="bold" fill={textColor}>
             Rocket Mail
-          </span>
-          <span className={cn(
-            'text-xs font-semibold leading-tight tracking-wider uppercase',
-            theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-          )}>
-            System
-          </span>
-        </div>
+          </text>
+          <text x="240" y="135" fontFamily="Inter, sans-serif" fontSize="20" letterSpacing="4" fill={textColor}>
+            SYSTEM
+          </text>
+        </svg>
       </Link>
     </div>
   );
