@@ -18,14 +18,14 @@ export const Logo: React.FC<LogoProps> = ({
   const getContainerSize = () => {
     switch (size) {
       case 'small':
-        return 'h-8';
+        return 'h-6';
       case 'large':
-        return 'h-16';
+        return 'h-12';
       case 'auto':
         return 'h-full';
       case 'medium':
       default:
-        return 'h-12';
+        return 'h-8';
     }
   };
 
@@ -46,7 +46,7 @@ export const Logo: React.FC<LogoProps> = ({
   return (
     <div
       className={cn(
-        'w-full flex items-center justify-center px-2 py-2 mb-6',
+        'w-full flex items-center justify-center px-2 py-2 mb-4',
         getContainerSize(),
         className
       )}
@@ -55,8 +55,8 @@ export const Logo: React.FC<LogoProps> = ({
         to="/dashboard" 
         className="flex items-center hover:opacity-80 transition-all duration-200"
       >
-        <div className={cn('font-semibold', getFontSize())} style={{ fontFamily: 'Work Sans, sans-serif' }}>
-          <span style={{ color: '#F7632D' }}>Rocket</span>
+        <div className={cn('font-bold tracking-tight', getFontSize())} style={{ fontFamily: 'Work Sans, sans-serif' }}>
+          <span style={{ color: '#2267D8' }}>Rocket</span>
           <span className="ml-1" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>Mail</span>
         </div>
       </Link>
