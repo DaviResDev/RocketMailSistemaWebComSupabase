@@ -29,21 +29,19 @@ export const Logo: React.FC<LogoProps> = ({
     }
   };
 
-  const getSvgSize = () => {
+  const getFontSize = () => {
     switch (size) {
       case 'small':
-        return { width: '125', height: '50' };
+        return 'text-lg';
       case 'large':
-        return { width: '200', height: '80' };
+        return 'text-3xl';
       case 'auto':
-        return { width: '150', height: '60' };
+        return 'text-2xl';
       case 'medium':
       default:
-        return { width: '150', height: '60' };
+        return 'text-2xl';
     }
   };
-
-  const svgSize = getSvgSize();
 
   return (
     <div
@@ -52,43 +50,15 @@ export const Logo: React.FC<LogoProps> = ({
         getContainerSize(),
         className
       )}
-      style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
     >
       <Link 
         to="/dashboard" 
         className="flex items-center hover:opacity-80 transition-all duration-200"
       >
-        <svg 
-          width={svgSize.width} 
-          height={svgSize.height} 
-          viewBox="0 0 500 200" 
-          xmlns="http://www.w3.org/2000/svg"
-          className="flex-shrink-0"
-        >
-          <defs>
-            <clipPath id="diagonalSplit">
-              <polygon points="0,200 0,0 200,0 0,200" />
-            </clipPath>
-            <clipPath id="diagonalSplitRight">
-              <polygon points="200,0 200,200 0,200 200,0" />
-            </clipPath>
-          </defs>
-
-          <rect x="0" y="0" width="200" height="200" rx="30" fill="#F7632D" clipPath="url(#diagonalSplit)" />
-          <rect x="0" y="0" width="200" height="200" rx="30" fill="#2267D8" clipPath="url(#diagonalSplitRight)" />
-
-          <path d="M50 60 L70 60 L70 100 L90 100 L60 140 Z" fill="white" />
-          <path d="M150 140 L130 60 L170 60 Z M150 100 L150 140 Z" fill="white" />
-
-          <line x1="220" y1="30" x2="220" y2="170" stroke="#2267D8" strokeWidth="4"/>
-
-          <text x="240" y="95" fontFamily="Inter, sans-serif" fontSize="36" fontWeight="bold" fill="currentColor">
-            Rocket Mail
-          </text>
-          <text x="240" y="135" fontFamily="Inter, sans-serif" fontSize="20" letterSpacing="4" fill="currentColor">
-            SYSTEM
-          </text>
-        </svg>
+        <div className={cn('font-semibold', getFontSize())} style={{ fontFamily: 'Work Sans, sans-serif' }}>
+          <span style={{ color: '#F7632D' }}>Rocket</span>
+          <span className="ml-1" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>Mail</span>
+        </div>
       </Link>
     </div>
   );
