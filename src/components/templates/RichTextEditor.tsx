@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -148,19 +147,19 @@ export function RichTextEditor({
     }
   }, [editor, onEditorInit]);
 
-  // Função para inserir uma variável no editor
+  // Function to insert a variable in the editor
   const insertVariable = (variableKey: string) => {
     if (editor) {
       editor.chain().focus().insertContent(`{{${variableKey}}}`).run();
     }
   };
 
-  // Função para inserir um link
+  // Function to insert a link
   const insertLink = () => {
     if (!linkUrl.trim()) return;
     
     if (editor) {
-      // Se houver texto selecionado, aplique o link a ele
+      // If there's selected text, apply the link to it
       if (editor.state.selection.content().size > 0) {
         editor
           .chain()
@@ -169,7 +168,7 @@ export function RichTextEditor({
           .setLink({ href: linkUrl, target: '_blank' })
           .run();
       } 
-      // Se não houver texto selecionado mas houver texto de link definido
+      // If there's no selected text but there's link text defined
       else if (linkText.trim()) {
         editor
           .chain()
@@ -177,7 +176,7 @@ export function RichTextEditor({
           .insertContent(`<a href="${linkUrl}" target="_blank">${linkText}</a>`)
           .run();
       }
-      // Caso não haja nem texto selecionado nem definido, use a URL como texto
+      // If there's neither selected text nor defined text, use the URL as text
       else {
         editor
           .chain()
@@ -192,14 +191,14 @@ export function RichTextEditor({
     setLinkText('');
   };
 
-  // Função para remover um link
+  // Function to remove a link
   const removeLink = () => {
     if (editor) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
     }
   };
 
-  // Função para lidar com o upload de imagens
+  // Function to handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!onImageUpload || !e.target.files || e.target.files.length === 0) return;
 
@@ -222,44 +221,44 @@ export function RichTextEditor({
     }
   };
 
-  // Função para iniciar o processo de upload de imagem
+  // Function to start the image upload process
   const triggerImageUpload = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
-  // Função para aplicar uma família de fonte
+  // Function to apply a font family
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
       editor.chain().focus().setFontFamily(fontFamily).run();
     }
   };
 
-  // Função para aplicar um tamanho de fonte usando CSS
+  // Function to apply font size using CSS
   const applyFontSize = (fontSize: string) => {
     if (editor) {
       editor.chain().focus().setMark('textStyle', { fontSize }).run();
     }
   };
 
-  // Função para limpar toda a formatação
+  // Function to clear all formatting
   const clearFormatting = () => {
     if (editor) {
       editor.chain().focus().clearNodes().unsetAllMarks().run();
     }
   };
 
-  // Se o editor não estiver inicializado, não renderize nada
+  // If the editor is not initialized, don't render anything
   if (!editor) {
     return null;
   }
 
   return (
     <div className={`border rounded-md bg-background ${className}`}>
-      {/* Barra de ferramentas */}
+      {/* Toolbar */}
       <div className="bg-muted/40 p-1 border-b flex flex-wrap items-center gap-1">
-        {/* Formatação de texto básica */}
+        {/* Basic text formatting */}
         <Button
           type="button"
           variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
@@ -290,7 +289,7 @@ export function RichTextEditor({
           <UnderlineIcon className="h-4 w-4" />
         </Button>
 
-        {/* Dropdown de tamanho de fonte */}
+        {/* Font size dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="h-8">
@@ -311,7 +310,7 @@ export function RichTextEditor({
           </DropdownMenuContent>
         </DropdownMenu>
         
-        {/* Dropdown de família de fonte */}
+        {/* Font family dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="h-8">
@@ -333,7 +332,7 @@ export function RichTextEditor({
         
         <span className="w-px h-6 bg-border mx-1" />
         
-        {/* Alinhamento */}
+        {/* Alignment */}
         <Button
           type="button"
           variant={editor.isActive({ textAlign: 'left' }) ? 'secondary' : 'ghost'}
@@ -376,7 +375,7 @@ export function RichTextEditor({
         
         <span className="w-px h-6 bg-border mx-1" />
         
-        {/* Listas */}
+        {/* Lists */}
         <Button
           type="button"
           variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
@@ -399,7 +398,7 @@ export function RichTextEditor({
         
         <span className="w-px h-6 bg-border mx-1" />
         
-        {/* Imagem e Links */}
+        {/* Image and Links */}
         <Button
           type="button"
           variant="ghost"
@@ -489,7 +488,7 @@ export function RichTextEditor({
         
         <span className="w-px h-6 bg-border mx-1" />
         
-        {/* Desfazer / Refazer / Limpar Formatação */}
+        {/* Undo / Redo / Clear Formatting */}
         <Button
           type="button"
           variant="ghost"
@@ -524,7 +523,7 @@ export function RichTextEditor({
         
         <span className="w-px h-6 bg-border mx-1" />
         
-        {/* Dropdown de variáveis */}
+        {/* Variables dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="h-8">
@@ -546,7 +545,7 @@ export function RichTextEditor({
         </DropdownMenu>
       </div>
       
-      {/* Área do Editor */}
+      {/* Editor Area */}
       <div className="relative" style={{ minHeight }}>
         <EditorContent 
           editor={editor} 
