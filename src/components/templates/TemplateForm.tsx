@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,7 +28,6 @@ const templateSchema = z.object({
   descricao: z.string().optional(),
   conteudo: z.string().min(1, { message: 'Conteúdo é obrigatório' }),
   canal: z.string(),
-  status: z.string().default('ativo'),
   assinatura: z.string(),
   signature_image: z.string().optional().nullable(),
   attachments: z.any().optional(),
@@ -67,7 +67,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       descricao: template?.descricao || '',
       conteudo: template?.conteudo || '',
       canal: template?.canal || 'email',
-      status: template?.status || 'ativo',
       assinatura: 'sim', // Always use signature
       signature_image: settings?.signature_image || 'default_signature', // Always use from settings
       attachments: template?.attachments || [],
@@ -83,7 +82,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
         descricao: template.descricao || '',
         conteudo: template.conteudo,
         canal: template.canal || 'email',
-        status: template.status || 'ativo',
         assinatura: 'sim', // Always use signature
         signature_image: settings?.signature_image || 'default_signature', // Always use signature from settings
         attachments: template.attachments || [],
@@ -270,7 +268,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
             <CardTitle>{isEditing ? 'Editar Template' : 'Novo Template'}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 gap-4 mb-4">
               <FormField
                 control={form.control}
                 name="nome"
@@ -280,28 +278,6 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                     <FormControl>
                       <Input placeholder="Nome do template" {...field} />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="ativo">Ativo</SelectItem>
-                        <SelectItem value="inativo">Inativo</SelectItem>
-                        <SelectItem value="rascunho">Rascunho</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

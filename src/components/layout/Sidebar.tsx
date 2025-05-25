@@ -138,21 +138,8 @@ export function Sidebar() {
         )}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between p-4">
-            <Link to="/dashboard" className="flex items-center justify-center w-full" onClick={handleItemClick}>
-              <Logo size="medium" />
-            </Link>
-            {isMobile && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebar}
-                className="lg:hidden"
-                aria-label="Fechar menu"
-              >
-                <X size={18} />
-              </Button>
-            )}
+          <div className="flex items-center justify-start py-2">
+            <Logo size="medium" />
           </div>
           
           <Separator className="mb-2 opacity-50" />

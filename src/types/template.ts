@@ -8,7 +8,7 @@ export interface Template {
   created_at?: string;
   user_id?: string;
   signature_image?: string | null;
-  status: string;
+  status?: string;
   attachments?: any;
   descricao?: string;
   template_file_url?: string | null;  
@@ -22,7 +22,7 @@ export interface TemplateFormData {
   canal?: string; 
   assinatura?: string;
   signature_image?: string | null;
-  status: string;
+  status?: string;
   attachments?: any;
   descricao?: string;
   template_file_url?: string | null; 

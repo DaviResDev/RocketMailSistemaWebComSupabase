@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -58,9 +59,9 @@ const VARIABLES = [
 // Define as opções de fonte
 const FONT_FAMILIES = [
   { label: 'Arial', value: 'Arial, sans-serif' },
-  { label: 'Times New Roman', value: '"Times New Roman", serif' },
+  { label: 'Times New Roman', value: 'Times New Roman, serif' },
   { label: 'Roboto', value: 'Roboto, sans-serif' },
-  { label: 'Helvetica', value: 'Helvetica, sans-serif' },
+  { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
   { label: 'Georgia', value: 'Georgia, serif' }
 ];
 
@@ -235,10 +236,27 @@ export function RichTextEditor({
     }
   };
 
-  // Function to apply font size using CSS
+  // Function to apply font size using CSS style
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      editor.chain().focus().setMark('textStyle', { fontSize }).run();
+      // Use CSS style to apply font size
+      const selectedText = editor.state.selection;
+      if (selectedText.empty) {
+        // If no text is selected, apply to the current position
+        editor.chain().focus().setMark('textStyle', { fontSize }).run();
+      } else {
+        // If text is selected, wrap it in a span with the font size
+        const selection = editor.state.selection;
+        const { from, to } = selection;
+        const selectedContent = editor.state.doc.textBetween(from, to);
+        
+        // Remove existing selection and insert new content with styling
+        editor.chain()
+          .focus()
+          .deleteSelection()
+          .insertContent(`<span style="font-size: ${fontSize}">${selectedContent}</span>`)
+          .run();
+      }
     }
   };
 
