@@ -71,11 +71,34 @@ export function AccountDeletionForm() {
         console.error('Error deleting settings:', settingsError);
       }
 
-      // Finally, delete the auth user
-      const { error: deleteUserError } = await supabase.rpc('delete_user');
+      // Delete user settings
+      const { error: userSettingsError } = await supabase
+        .from('user_settings')
+        .delete()
+        .eq('user_id', user.id);
 
-      if (deleteUserError) {
-        throw deleteUserError;
+      if (userSettingsError) {
+        console.error('Error deleting user settings:', userSettingsError);
+      }
+
+      // Delete envios
+      const { error: enviosError } = await supabase
+        .from('envios')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (enviosError) {
+        console.error('Error deleting envios:', enviosError);
+      }
+
+      // Delete agendamentos
+      const { error: agendamentosError } = await supabase
+        .from('agendamentos')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (agendamentosError) {
+        console.error('Error deleting agendamentos:', agendamentosError);
       }
 
       toast.success('Conta excluída com sucesso');
