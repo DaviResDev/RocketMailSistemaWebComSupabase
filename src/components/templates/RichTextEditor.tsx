@@ -28,7 +28,8 @@ import {
   Type,
   Trash2,
   ChevronDown,
-  Variable
+  Variable,
+  Eraser
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,7 +60,7 @@ const VARIABLES = [
 // Define as opções de fonte
 const FONT_FAMILIES = [
   { label: 'Arial', value: 'Arial, sans-serif' },
-  { label: 'Times New Roman', value: 'Times New Roman, serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", Times, serif' },
   { label: 'Roboto', value: 'Roboto, sans-serif' },
   { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
   { label: 'Georgia', value: 'Georgia, serif' }
@@ -236,25 +237,26 @@ export function RichTextEditor({
     }
   };
 
-  // Function to apply font size using CSS style
+  // Function to apply font size using inline style
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      // Use CSS style to apply font size
-      const selectedText = editor.state.selection;
-      if (selectedText.empty) {
-        // If no text is selected, apply to the current position
-        editor.chain().focus().setMark('textStyle', { fontSize }).run();
-      } else {
-        // If text is selected, wrap it in a span with the font size
-        const selection = editor.state.selection;
-        const { from, to } = selection;
-        const selectedContent = editor.state.doc.textBetween(from, to);
-        
-        // Remove existing selection and insert new content with styling
+      // Check if there's selected text
+      const { from, to } = editor.state.selection;
+      const selectedText = editor.state.doc.textBetween(from, to);
+      
+      if (selectedText) {
+        // Apply font size to selected text using HTML span with style
         editor.chain()
           .focus()
           .deleteSelection()
-          .insertContent(`<span style="font-size: ${fontSize}">${selectedContent}</span>`)
+          .insertContent(`<span style="font-size: ${fontSize};">${selectedText}</span>`)
+          .run();
+      } else {
+        // If no text is selected, create a span for future typing
+        editor.chain()
+          .focus()
+          .insertContent(`<span style="font-size: ${fontSize};">&nbsp;</span>`)
+          .setTextSelection(from + 1)
           .run();
       }
     }
@@ -535,8 +537,9 @@ export function RichTextEditor({
           size="icon"
           className="h-8 w-8"
           onClick={clearFormatting}
+          title="Limpar formatação"
         >
-          <Trash2 className="h-4 w-4" />
+          <Eraser className="h-4 w-4" />
         </Button>
         
         <span className="w-px h-6 bg-border mx-1" />
