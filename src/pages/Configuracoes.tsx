@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { SettingsForm } from '@/components/settings/SettingsForm';
 import { SecuritySettingsForm } from '@/components/settings/SecuritySettingsForm';
+import { AccountDeletionForm } from '@/components/settings/AccountDeletionForm';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -82,6 +83,7 @@ export default function Configuracoes() {
           <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="security">Segurança</TabsTrigger>
           <TabsTrigger value="profile">Perfil</TabsTrigger>
+          <TabsTrigger value="account">Conta</TabsTrigger>
         </TabsList>
         
         <TabsContent value="email">
@@ -109,6 +111,12 @@ export default function Configuracoes() {
               toast.success('Perfil atualizado com sucesso!');
             }}
           />
+        </TabsContent>
+        
+        <TabsContent value="account">
+          <div className="space-y-6">
+            <AccountDeletionForm />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

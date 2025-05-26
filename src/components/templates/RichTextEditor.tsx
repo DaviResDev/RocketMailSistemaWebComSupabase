@@ -9,6 +9,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import TextStyle from '@tiptap/extension-text-style';
 import FontFamily from '@tiptap/extension-font-family';
+import FontSize from '@tiptap/extension-font-size';
 import { Button } from '@/components/ui/button';
 import {
   Bold,
@@ -101,10 +102,22 @@ export function RichTextEditor({
   // Configurar o editor TipTap com todas as extensões necessárias
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        bulletList: {
+          keepMarks: true,
+          keepAttributes: false,
+        },
+        orderedList: {
+          keepMarks: true,
+          keepAttributes: false,
+        },
+      }),
       Underline,
       TextStyle,
       FontFamily.configure({
+        types: ['textStyle'],
+      }),
+      FontSize.configure({
         types: ['textStyle'],
       }),
       Link.configure({
@@ -232,39 +245,14 @@ export function RichTextEditor({
   // Function to apply a font family - CORRIGIDO
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
-      const { from, to } = editor.state.selection;
-      
-      if (from !== to) {
-        // Se há texto selecionado, aplica a fonte ao texto selecionado
-        editor.chain().focus().setFontFamily(fontFamily).run();
-      } else {
-        // Se não há seleção, aplica a fonte para próximo texto digitado
-        editor.chain().focus().setFontFamily(fontFamily).run();
-      }
+      editor.chain().focus().setFontFamily(fontFamily).run();
     }
   };
 
-  // Function to apply font size - CORRIGIDO com tamanhos específicos
+  // Function to apply font size - CORRIGIDO
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      const { from, to } = editor.state.selection;
-      
-      if (from !== to) {
-        // Se há texto selecionado, aplica o tamanho
-        const selectedText = editor.state.doc.textBetween(from, to);
-        editor.chain()
-          .focus()
-          .deleteSelection()
-          .insertContent(`<span style="font-size: ${fontSize};">${selectedText}</span>`)
-          .run();
-      } else {
-        // Se não há seleção, insere um span para próximo texto
-        editor.chain()
-          .focus()
-          .insertContent(`<span style="font-size: ${fontSize};">&nbsp;</span>`)
-          .setTextSelection(from + 1)
-          .run();
-      }
+      editor.chain().focus().setFontSize(fontSize).run();
     }
   };
 
@@ -590,7 +578,7 @@ export function RichTextEditor({
       <div className="relative" style={{ minHeight }}>
         <EditorContent 
           editor={editor} 
-          className="p-4 focus:outline-none min-h-[200px] prose prose-sm max-w-none" 
+          className="p-4 focus:outline-none min-h-[200px] prose prose-sm max-w-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[200px]" 
         />
         {editor && editor.isEmpty && (
           <div className="absolute top-0 left-0 p-4 text-muted-foreground pointer-events-none">
