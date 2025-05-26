@@ -233,14 +233,26 @@ export function RichTextEditor({
   // Function to apply a font family
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
-      editor.chain().focus().setFontFamily(fontFamily).run();
+      const { from, to } = editor.state.selection;
+      const selectedText = editor.state.doc.textBetween(from, to);
+      
+      if (selectedText) {
+        // Apply font to selected text
+        editor.chain().focus().setFontFamily(fontFamily).run();
+      } else {
+        // If no text is selected, insert a span with the font family for future typing
+        editor.chain()
+          .focus()
+          .insertContent(`<span style="font-family: ${fontFamily};">&nbsp;</span>`)
+          .setTextSelection(from + 1)
+          .run();
+      }
     }
   };
 
   // Function to apply font size using inline style
   const applyFontSize = (fontSize: string) => {
     if (editor) {
-      // Check if there's selected text
       const { from, to } = editor.state.selection;
       const selectedText = editor.state.doc.textBetween(from, to);
       
@@ -266,6 +278,20 @@ export function RichTextEditor({
   const clearFormatting = () => {
     if (editor) {
       editor.chain().focus().clearNodes().unsetAllMarks().run();
+    }
+  };
+
+  // Function to toggle bullet list
+  const toggleBulletList = () => {
+    if (editor) {
+      editor.chain().focus().toggleBulletList().run();
+    }
+  };
+
+  // Function to toggle ordered list
+  const toggleOrderedList = () => {
+    if (editor) {
+      editor.chain().focus().toggleOrderedList().run();
     }
   };
 
@@ -401,7 +427,7 @@ export function RichTextEditor({
           variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          onClick={toggleBulletList}
         >
           <List className="h-4 w-4" />
         </Button>
@@ -411,7 +437,7 @@ export function RichTextEditor({
           variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'}
           size="icon"
           className="h-8 w-8"
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          onClick={toggleOrderedList}
         >
           <ListOrdered className="h-4 w-4" />
         </Button>

@@ -15,6 +15,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
   
@@ -54,6 +55,29 @@ export default function Login() {
       // Toast is handled in the signIn function
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error('Digite seu email para recuperar a senha');
+      return;
+    }
+
+    try {
+      setIsResettingPassword(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+
+      if (error) throw error;
+
+      toast.success('Email de recuperação enviado! Verifique sua caixa de entrada.');
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      toast.error('Erro ao enviar email de recuperação: ' + error.message);
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -105,6 +129,18 @@ export default function Login() {
                 {isSubmitting ? 'Entrando...' : 'Entrar'}
               </Button>
             </form>
+            
+            <div className="mt-4 text-center">
+              <Button
+                type="button"
+                variant="link"
+                onClick={handleForgotPassword}
+                disabled={isResettingPassword}
+                className="text-sm"
+              >
+                {isResettingPassword ? 'Enviando...' : 'Esqueceu a senha?'}
+              </Button>
+            </div>
           </CardContent>
           
           <CardFooter className="flex justify-center">
