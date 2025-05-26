@@ -121,7 +121,7 @@ export function AccountDeletionForm() {
       <CardHeader>
         <CardTitle className="text-destructive flex items-center">
           <Trash2 className="w-5 h-5 mr-2" />
-          Excluir Conta
+          Cancelar Assinatura
         </CardTitle>
         <CardDescription>
           Esta ação é irreversível. Todos os seus dados serão permanentemente excluídos.
@@ -131,12 +131,12 @@ export function AccountDeletionForm() {
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="destructive" className="w-full">
-              Excluir Minha Conta
+              Cancelar Assinatura
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Tem certeza que deseja excluir sua conta?</AlertDialogTitle>
+              <AlertDialogTitle>Tem certeza que deseja excluir sua conta permanentemente?</AlertDialogTitle>
               <AlertDialogDescription className="space-y-4">
                 <p>Esta ação é irreversível e resultará na exclusão permanente de:</p>
                 <ul className="list-disc list-inside space-y-1 text-sm">

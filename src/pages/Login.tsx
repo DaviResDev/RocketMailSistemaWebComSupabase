@@ -67,12 +67,12 @@ export default function Login() {
     try {
       setIsResettingPassword(true);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        redirectTo: `https://czinoycvwsjjxuqbuxtm.supabase.co/auth/reset-password`,
       });
 
       if (error) throw error;
 
-      toast.success('Email de recuperação enviado! Verifique sua caixa de entrada.');
+      toast.success('Email de recuperação enviado! Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.');
     } catch (error: any) {
       console.error('Reset password error:', error);
       toast.error('Erro ao enviar email de recuperação: ' + error.message);

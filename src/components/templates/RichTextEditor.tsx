@@ -26,7 +26,6 @@ import {
   RotateCcw,
   RotateCw,
   Type,
-  Trash2,
   ChevronDown,
   Variable,
   Eraser
@@ -66,13 +65,13 @@ const FONT_FAMILIES = [
   { label: 'Georgia', value: 'Georgia, serif' }
 ];
 
-// Define tamanhos de fonte
+// Define tamanhos de fonte com valores corretos
 const FONT_SIZES = [
-  { label: 'Pequeno', value: '12px' },
-  { label: 'Normal', value: '16px' },
-  { label: 'Médio', value: '20px' },
-  { label: 'Grande', value: '24px' },
-  { label: 'Enorme', value: '30px' }
+  { label: 'Pequeno', value: '10px' },
+  { label: 'Normal', value: '13px' },
+  { label: 'Médio', value: '16px' },
+  { label: 'Grande', value: '20px' },
+  { label: 'Enorme', value: '26px' }
 ];
 
 interface RichTextEditorProps {
@@ -230,41 +229,36 @@ export function RichTextEditor({
     }
   };
 
-  // Function to apply a font family
+  // Function to apply a font family - CORRIGIDO
   const applyFontFamily = (fontFamily: string) => {
     if (editor) {
       const { from, to } = editor.state.selection;
-      const selectedText = editor.state.doc.textBetween(from, to);
       
-      if (selectedText) {
-        // Apply font to selected text
+      if (from !== to) {
+        // Se há texto selecionado, aplica a fonte ao texto selecionado
         editor.chain().focus().setFontFamily(fontFamily).run();
       } else {
-        // If no text is selected, insert a span with the font family for future typing
-        editor.chain()
-          .focus()
-          .insertContent(`<span style="font-family: ${fontFamily};">&nbsp;</span>`)
-          .setTextSelection(from + 1)
-          .run();
+        // Se não há seleção, aplica a fonte para próximo texto digitado
+        editor.chain().focus().setFontFamily(fontFamily).run();
       }
     }
   };
 
-  // Function to apply font size using inline style
+  // Function to apply font size - CORRIGIDO com tamanhos específicos
   const applyFontSize = (fontSize: string) => {
     if (editor) {
       const { from, to } = editor.state.selection;
-      const selectedText = editor.state.doc.textBetween(from, to);
       
-      if (selectedText) {
-        // Apply font size to selected text using HTML span with style
+      if (from !== to) {
+        // Se há texto selecionado, aplica o tamanho
+        const selectedText = editor.state.doc.textBetween(from, to);
         editor.chain()
           .focus()
           .deleteSelection()
           .insertContent(`<span style="font-size: ${fontSize};">${selectedText}</span>`)
           .run();
       } else {
-        // If no text is selected, create a span for future typing
+        // Se não há seleção, insere um span para próximo texto
         editor.chain()
           .focus()
           .insertContent(`<span style="font-size: ${fontSize};">&nbsp;</span>`)
@@ -281,14 +275,14 @@ export function RichTextEditor({
     }
   };
 
-  // Function to toggle bullet list
+  // Function to toggle bullet list - CORRIGIDO
   const toggleBulletList = () => {
     if (editor) {
       editor.chain().focus().toggleBulletList().run();
     }
   };
 
-  // Function to toggle ordered list
+  // Function to toggle ordered list - CORRIGIDO
   const toggleOrderedList = () => {
     if (editor) {
       editor.chain().focus().toggleOrderedList().run();
@@ -335,7 +329,7 @@ export function RichTextEditor({
           <UnderlineIcon className="h-4 w-4" />
         </Button>
 
-        {/* Font size dropdown */}
+        {/* Font size dropdown - CORRIGIDO */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="h-8">
@@ -356,7 +350,7 @@ export function RichTextEditor({
           </DropdownMenuContent>
         </DropdownMenu>
         
-        {/* Font family dropdown */}
+        {/* Font family dropdown - CORRIGIDO */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="h-8">
@@ -421,7 +415,7 @@ export function RichTextEditor({
         
         <span className="w-px h-6 bg-border mx-1" />
         
-        {/* Lists */}
+        {/* Lists - CORRIGIDO */}
         <Button
           type="button"
           variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}

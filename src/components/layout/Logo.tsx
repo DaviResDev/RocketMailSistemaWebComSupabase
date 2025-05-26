@@ -53,9 +53,9 @@ export const Logo: React.FC<LogoProps> = ({
     >
       <Link 
         to="/dashboard" 
-        className="flex items-center hover:opacity-80 transition-all duration-200"
+        className="flex items-center justify-center hover:opacity-80 transition-all duration-200 w-full"
       >
-        <div className={cn('font-bold tracking-tight leading-none', getFontSize())} style={{ fontFamily: 'Inter, sans-serif' }}>
+        <div className={cn('font-bold tracking-tight leading-none text-center', getFontSize())} style={{ fontFamily: 'Inter, sans-serif' }}>
           <span style={{ color: '#2267D8' }}>Rocket</span>
           <span className="ml-1" style={{ color: theme === 'dark' ? '#9ca3af' : '#000000' }}>Mail</span>
         </div>
