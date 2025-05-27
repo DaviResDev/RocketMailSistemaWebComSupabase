@@ -25,18 +25,49 @@ const COLUMN_MAPPINGS = {
   email: ['email', 'Email', 'e-mail', 'E-mail', 'EMAIL', 'mail'],
   telefone: ['telefone', 'phone', 'Phone', 'Telefone', 'TELEFONE', 'tel', 'Tel', 'TEL', 'celular', 'mobile'],
   cliente: ['cliente', 'client', 'Client', 'Cliente', 'CLIENTE'],
-  razao_social: ['razao_social', 'razão social', 'empresa', 'Empresa', 'company', 'Company', 'EMPRESA', 'business_name']
+  razao_social: [
+    'razao_social', 'razão social', 'razao social', 'Razão Social', 'Razao Social', 
+    'RAZÃO SOCIAL', 'RAZAO SOCIAL', 'empresa', 'Empresa', 'EMPRESA', 
+    'company', 'Company', 'COMPANY', 'business_name', 'Business Name',
+    'companyname', 'CompanyName', 'company_name', 'Company_Name'
+  ]
 };
+
+function normalizeString(str: string): string {
+  return str
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^a-z0-9]/g, ' ') // Replace non-alphanumeric with spaces
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim();
+}
 
 function normalizeColumnName(columnName: string): string | null {
   const cleanColumn = columnName.trim();
+  const normalizedInput = normalizeString(cleanColumn);
+  
+  console.log(`🔍 Tentando mapear coluna: "${columnName}" -> normalizada: "${normalizedInput}"`);
   
   for (const [field, variations] of Object.entries(COLUMN_MAPPINGS)) {
+    // Check exact matches first
     if (variations.includes(cleanColumn)) {
+      console.log(`✅ Mapeamento exato encontrado: "${cleanColumn}" -> ${field}`);
       return field;
+    }
+    
+    // Check normalized matches
+    for (const variation of variations) {
+      const normalizedVariation = normalizeString(variation);
+      if (normalizedInput === normalizedVariation) {
+        console.log(`✅ Mapeamento normalizado encontrado: "${cleanColumn}" -> ${field} (via "${variation}")`);
+        return field;
+      }
     }
   }
   
+  console.log(`❌ Nenhum mapeamento encontrado para: "${columnName}"`);
   return null;
 }
 
@@ -54,7 +85,7 @@ function validateContact(contact: any): ImportedContact | null {
     return null;
   }
   
-  return {
+  const validatedContact = {
     nome,
     email,
     telefone: contact.telefone?.toString().trim() || '',
@@ -62,18 +93,33 @@ function validateContact(contact: any): ImportedContact | null {
     razao_social: contact.razao_social?.toString().trim() || '',
     tags: ['importado']
   };
+  
+  console.log(`✅ Contato validado:`, {
+    nome: validatedContact.nome,
+    email: validatedContact.email,
+    razao_social: validatedContact.razao_social || '(vazio)',
+    cliente: validatedContact.cliente || '(vazio)'
+  });
+  
+  return validatedContact;
 }
 
 function normalizeRowData(row: any): any {
   const normalizedRow: any = {};
   
+  console.log(`📋 Processando linha com colunas:`, Object.keys(row));
+  
   for (const [key, value] of Object.entries(row)) {
     const normalizedKey = normalizeColumnName(key as string);
-    if (normalizedKey && value !== null && value !== undefined) {
+    if (normalizedKey && value !== null && value !== undefined && value !== '') {
       normalizedRow[normalizedKey] = value;
+      console.log(`✅ Coluna mapeada: "${key}" -> "${normalizedKey}" = "${value}"`);
+    } else if (value === null || value === undefined || value === '') {
+      console.log(`⚠️ Valor vazio para coluna "${key}"`);
     }
   }
   
+  console.log(`📋 Dados normalizados:`, normalizedRow);
   return normalizedRow;
 }
 
@@ -171,6 +217,8 @@ export async function processExcelFile(file: File): Promise<ImportResult> {
         const headers = jsonData[0] as string[];
         const dataRows = jsonData.slice(1);
         
+        console.log(`📊 Cabeçalhos encontrados no Excel:`, headers);
+        
         dataRows.forEach((row: any[], index: number) => {
           try {
             // Criar objeto com base nos cabeçalhos
@@ -181,6 +229,8 @@ export async function processExcelFile(file: File): Promise<ImportResult> {
               }
             });
             
+            console.log(`📝 Linha ${index + 2} dados brutos:`, rowObj);
+            
             const normalizedRow = normalizeRowData(rowObj);
             const contact = validateContact(normalizedRow);
             
@@ -190,9 +240,12 @@ export async function processExcelFile(file: File): Promise<ImportResult> {
               errors.push(`Linha ${index + 2}: Dados inválidos (nome ou email ausente/inválido)`);
             }
           } catch (error) {
+            console.error(`Erro ao processar linha ${index + 2}:`, error);
             errors.push(`Linha ${index + 2}: Erro ao processar dados`);
           }
         });
+        
+        console.log(`📊 Resumo da importação - Total: ${dataRows.length}, Válidos: ${validContacts.length}, Erros: ${errors.length}`);
         
         resolve({
           success: validContacts.length > 0,
@@ -203,6 +256,7 @@ export async function processExcelFile(file: File): Promise<ImportResult> {
         });
         
       } catch (error: any) {
+        console.error('Erro ao processar arquivo Excel:', error);
         resolve({
           success: false,
           data: [],
