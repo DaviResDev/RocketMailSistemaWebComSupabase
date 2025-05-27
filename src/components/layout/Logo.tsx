@@ -18,28 +18,28 @@ export const Logo: React.FC<LogoProps> = ({
   const getContainerSize = () => {
     switch (size) {
       case 'small':
-        return 'h-4';
+        return 'h-6';
       case 'large':
-        return 'h-8';
+        return 'h-12';
       case 'auto':
         return 'h-full';
       case 'medium':
       default:
-        return 'h-6';
+        return 'h-10';
     }
   };
 
   const getFontSize = () => {
     switch (size) {
       case 'small':
-        return 'text-xs';
+        return 'text-sm';
       case 'large':
-        return 'text-lg';
+        return 'text-xl';
       case 'auto':
-        return 'text-base';
+        return 'text-lg';
       case 'medium':
       default:
-        return 'text-sm';
+        return 'text-lg';
     }
   };
 
@@ -57,7 +57,7 @@ export const Logo: React.FC<LogoProps> = ({
       >
         <div className={cn('font-bold tracking-tight leading-none text-center', getFontSize())} style={{ fontFamily: 'Inter, sans-serif' }}>
           <span style={{ color: '#2267D8' }}>Rocket</span>
-          <span className="ml-1" style={{ color: theme === 'dark' ? '#9ca3af' : '#000000' }}>Mail</span>
+          <span className="ml-1 text-sidebar-foreground">Mail</span>
         </div>
       </Link>
     </div>
