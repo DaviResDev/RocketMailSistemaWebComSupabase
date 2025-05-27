@@ -9,7 +9,7 @@ import { ContactsList } from '@/components/contacts/ContactsList';
 import { ContactForm } from '@/components/contacts/ContactForm';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import Papa from 'papaparse';
+import { processImportFile, getFileType } from '@/utils/fileImportUtils';
 
 export default function Contatos() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,89 +36,90 @@ export default function Contatos() {
     
     try {
       setIsImporting(true);
-      toast.info(`Importando contatos do arquivo "${file.name}"...`);
       
       // Reset the input so the same file can be selected again
       e.target.value = '';
       
-      // Parse the CSV file
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
-          if (results.data && results.data.length > 0) {
-            const { data: userData } = await supabase.auth.getUser();
-            if (!userData || !userData.user) {
-              toast.error('Você precisa estar logado para importar contatos');
-              setIsImporting(false);
-              return;
-            }
-            
-            // Map CSV data to contacts format
-            const contactsToImport = results.data.map((row: any) => ({
-              nome: row.nome || row.name || row.Nome || '',
-              email: row.email || row.Email || row['e-mail'] || row['E-mail'] || '',
-              telefone: row.telefone || row.phone || row.Telefone || row.tel || row.Tel || '',
-              cliente: row.cliente || row.client || row.Cliente || row.Client || '',
-              razao_social: row.razao_social || row['razão social'] || row.empresa || row.Empresa || row.company || row.Company || '',
-              user_id: userData.user.id,
-              tags: ['importado']
-            }));
-            
-            // Filter out contacts with missing required fields
-            const validContacts = contactsToImport.filter(contact => contact.nome && contact.email);
-            
-            if (validContacts.length === 0) {
-              toast.error('Nenhum contato válido encontrado no arquivo. Certifique-se de que o arquivo contenha colunas "nome" e "email".');
-              setIsImporting(false);
-              return;
-            }
-            
-            // Insert contacts in batches to avoid request size limitations
-            const batchSize = 20;
-            let successCount = 0;
-            let errorCount = 0;
-            
-            for (let i = 0; i < validContacts.length; i += batchSize) {
-              const batch = validContacts.slice(i, i + batchSize);
-              const { error } = await supabase
-                .from('contatos')
-                .insert(batch);
-              
-              if (error) {
-                console.error('Erro ao importar lote de contatos:', error);
-                errorCount += batch.length;
-              } else {
-                successCount += batch.length;
-              }
-            }
-            
-            // Refresh contacts list
-            fetchContacts();
-            
-            if (successCount > 0) {
-              toast.success(`${successCount} contatos importados com sucesso!`);
-            }
-            
-            if (errorCount > 0) {
-              toast.error(`${errorCount} contatos não puderam ser importados. Verifique os logs para mais detalhes.`);
-            }
-          } else {
-            toast.error('O arquivo não contém dados válidos');
-          }
-          
-          setIsImporting(false);
-        },
-        error: (error) => {
-          console.error('Erro ao analisar arquivo CSV:', error);
-          toast.error(`Erro ao analisar o arquivo: ${error.message}`);
-          setIsImporting(false);
+      const fileType = getFileType(file);
+      const fileTypeText = fileType === 'csv' ? 'CSV' : fileType === 'excel' ? 'Excel' : 'desconhecido';
+      
+      toast.info(`Importando contatos do arquivo ${fileTypeText} "${file.name}"...`);
+      
+      // Process the file using our new utility
+      const result = await processImportFile(file);
+      
+      if (!result.success) {
+        toast.error(`Erro na importação: ${result.errors.join(', ')}`);
+        setIsImporting(false);
+        return;
+      }
+      
+      if (result.data.length === 0) {
+        toast.error('Nenhum contato válido encontrado no arquivo. Certifique-se de que o arquivo contenha colunas "nome" e "email" válidas.');
+        setIsImporting(false);
+        return;
+      }
+      
+      // Get current user
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData || !userData.user) {
+        toast.error('Você precisa estar logado para importar contatos');
+        setIsImporting(false);
+        return;
+      }
+      
+      // Prepare contacts for insertion
+      const contactsToImport = result.data.map(contact => ({
+        ...contact,
+        user_id: userData.user.id
+      }));
+      
+      // Insert contacts in batches to avoid request size limitations
+      const batchSize = 20;
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (let i = 0; i < contactsToImport.length; i += batchSize) {
+        const batch = contactsToImport.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from('contatos')
+          .insert(batch);
+        
+        if (error) {
+          console.error('Erro ao importar lote de contatos:', error);
+          errorCount += batch.length;
+        } else {
+          successCount += batch.length;
         }
-      });
+      }
+      
+      // Refresh contacts list
+      fetchContacts();
+      
+      // Show detailed results
+      if (successCount > 0) {
+        const message = `${successCount} contatos importados com sucesso!`;
+        if (result.errors.length > 0) {
+          toast.success(`${message} (${result.errors.length} linhas com problemas foram ignoradas)`);
+        } else {
+          toast.success(message);
+        }
+      }
+      
+      if (errorCount > 0) {
+        toast.error(`${errorCount} contatos não puderam ser importados. Verifique os logs para mais detalhes.`);
+      }
+      
+      // Show processing summary
+      if (result.errors.length > 0) {
+        console.log('Erros durante a importação:', result.errors);
+        toast.info(`Processados: ${result.totalRows} linhas, Válidos: ${result.validRows}, Erros: ${result.errors.length}`);
+      }
       
     } catch (error: any) {
       console.error('Erro na importação:', error);
       toast.error(`Erro na importação: ${error.message}`);
+    } finally {
       setIsImporting(false);
     }
   };
