@@ -56,8 +56,8 @@ export const Logo: React.FC<LogoProps> = ({
         className="flex items-center justify-center hover:opacity-80 transition-all duration-200"
       >
         <div className={cn('font-bold tracking-tight leading-none text-center', getFontSize())} style={{ fontFamily: 'Inter, sans-serif' }}>
-          <span style={{ color: '#2267D8' }}>Rocket</span>
-          <span className="ml-1 text-sidebar-foreground">Mail</span>
+          <span style={{ color: '#007BFF' }}>Rocket</span>
+          <span className={cn('ml-1', theme === 'light' ? 'text-black' : 'text-sidebar-foreground')} style={theme === 'light' ? { color: '#000000' } : {}}>Mail</span>
         </div>
       </Link>
     </div>
