@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -18,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMetrics } from '@/hooks/useMetrics';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import EmailSendingChart from '@/components/dashboard/EmailSendingChart';
 
 export default function Dashboard() {
   const [period, setPeriod] = useState('7d');
@@ -313,8 +315,12 @@ export default function Dashboard() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {stats.totalEnvios > 0 ? (
+        <div className="space-y-6">
+          {/* Novo gráfico de linha de envios por dia */}
+          <EmailSendingChart />
+          
+          {/* Gráfico de status dos envios existente */}
+          {stats.totalEnvios > 0 && (
             <Card className="col-span-2 md:col-span-2 shadow-md hover:shadow-lg transition-shadow duration-300 border border-blue-100 dark:border-blue-900 bg-gradient-to-br from-white to-blue-50 dark:from-slate-900 dark:to-slate-800">
               <CardHeader>
                 <CardTitle className="text-xl">Status dos Envios</CardTitle>
@@ -356,7 +362,7 @@ export default function Dashboard() {
                 )}
               </CardContent>
             </Card>
-          ) : null}
+          )}
         </div>
       )}
       
