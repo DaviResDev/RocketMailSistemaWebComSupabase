@@ -5,7 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check, Search } from 'lucide-react';
+import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check, Search, CheckCheck } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -221,6 +221,18 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       }
     });
   };
+
+  const handleSelectAllContacts = () => {
+    if (filteredContacts.length === 0) {
+      toast.error("Nenhum contato disponível para seleção");
+      return;
+    }
+    
+    const allContactIds = filteredContacts.map(contact => contact.id);
+    setSelectedContacts(allContactIds);
+    setBulkMode(true); // Automatically enable bulk mode when selecting all
+    toast.success(`${allContactIds.length} contatos selecionados`);
+  };
   
   // Filter contacts based on search query and selected tags
   const filteredContacts = contacts.filter(contact => {
@@ -293,7 +305,19 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
           )}
 
           <div>
-            <Label htmlFor="contato">Contato{bulkMode ? 's' : ''}</Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label htmlFor="contato">Contato{bulkMode ? 's' : ''}</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAllContacts}
+                disabled={filteredContacts.length === 0}
+              >
+                <CheckCheck className="h-4 w-4 mr-2" />
+                Selecionar todos os contatos
+              </Button>
+            </div>
             <ScrollArea className="h-40 border rounded-md p-2 mt-2">
               {filteredContacts.length > 0 ? (
                 filteredContacts.map((contact) => (

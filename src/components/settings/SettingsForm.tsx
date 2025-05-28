@@ -1,23 +1,23 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, Save, KeyRound, CheckCircle2, Loader2, Send, AlertCircle, Info } from 'lucide-react';
+import { Mail, Save, KeyRound, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { SecuritySettingsForm } from './SecuritySettingsForm';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
 
 interface SettingsFormProps {
   onSave?: () => void;
 }
 
 export function SettingsForm({ onSave }: SettingsFormProps) {
-  const { settings, loading, saveSettings, testSmtpConnection } = useSettings();
+  const { settings, loading, saveSettings } = useSettings();
   const [formData, setFormData] = useState<SettingsFormData>({
     email_smtp: '',
     email_porta: null,
@@ -31,8 +31,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     use_smtp: true, // Default to using SMTP
     signature_image: null // Add the signature_image property
   });
-  
-  const [testingSmtp, setTestingSmtp] = useState(false);
 
   // Update form data when settings change
   useEffect(() => {
@@ -58,43 +56,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     const success = await saveSettings(formData);
     if (success && onSave) {
       onSave();
-    }
-  };
-  
-  // Function to test SMTP connection
-  const handleTestSmtpConnection = async () => {
-    if (!formData.email_usuario) {
-      toast.error("Por favor, insira seu endereço de email antes de testar");
-      return;
-    }
-
-    setTestingSmtp(true);
-    try {
-      const result = await testSmtpConnection(formData);
-      
-      if (result.success) {
-        toast.success(
-          <div>
-            <p><strong>Conexão bem-sucedida!</strong></p>
-            <p>Um email de teste foi enviado para seu endereço. Verifique sua caixa de entrada.</p>
-            <p className="text-xs mt-2">
-              {formData.use_smtp ? 
-                `Enviado via seu servidor SMTP configurado ${result.details?.transport === 'nodemailer' ? 'com Nodemailer' : ''}` : 
-                'Enviado via serviço Resend com seu email como resposta'}
-            </p>
-          </div>, 
-          { duration: 6000 }
-        );
-      } else {
-        toast.error(
-          <div>
-            <p><strong>Falha na conexão</strong></p>
-            <p>{result.message || "Não foi possível testar a conexão"}</p>
-          </div>
-        );
-      }
-    } finally {
-      setTestingSmtp(false);
     }
   };
 
@@ -301,26 +262,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                   </AlertDescription>
                 </Alert>
               )}
-              
-              <Button 
-                type="button"
-                variant="outline"
-                onClick={handleTestSmtpConnection}
-                disabled={testingSmtp || (!formData.email_usuario)}
-                className="mt-2"
-              >
-                {testingSmtp ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Testando...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Enviar Email de Teste
-                  </>
-                )}
-              </Button>
             </CardContent>
             <CardFooter>
               <Button type="submit" disabled={loading}>
