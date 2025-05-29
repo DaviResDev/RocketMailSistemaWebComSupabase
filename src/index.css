@@ -96,48 +96,52 @@
     border-color: hsl(var(--sidebar-border)) !important;
   }
 
-  /* Dark mode border styles for interactive elements */
-  .dark input:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]),
-  .dark textarea:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]),
-  .dark button:not([data-sidebar]):not(.ghost):not(.link):not([class*="bg-"]):not([style*="background"]),
-  .dark [data-radix-select-trigger]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]),
-  .dark [data-radix-combobox-trigger]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]),
-  .dark [role="combobox"]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]),
-  .dark .ProseMirror:not([class*="bg-"]):not([style*="background"]),
+  /* Dark mode border styles for ALL interactive elements */
+  .dark input:not([data-sidebar]),
+  .dark textarea:not([data-sidebar]),
+  .dark button:not([data-sidebar]):not(.ghost):not(.link),
+  .dark [data-radix-select-trigger]:not([data-sidebar]),
+  .dark [data-radix-select-content]:not([data-sidebar]),
+  .dark [data-radix-combobox-trigger]:not([data-sidebar]),
+  .dark [role="combobox"]:not([data-sidebar]),
+  .dark .ProseMirror:not([data-sidebar]),
   .dark .checkbox:not([data-sidebar]),
   .dark [data-radix-checkbox-root]:not([data-sidebar]),
-  .dark [data-radix-radio-item]:not([data-sidebar]) {
+  .dark [data-radix-radio-item]:not([data-sidebar]),
+  .dark [data-radix-switch-root]:not([data-sidebar]) {
     border: 1px solid rgba(255, 255, 255, 0.3) !important;
     border-radius: 4px !important;
     box-shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.1), 0 2px 4px -1px rgba(255, 255, 255, 0.06) !important;
     transition: all 0.2s ease-in-out !important;
   }
 
-  /* Hover effects for elements without background color in dark mode */
-  .dark input:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):hover,
-  .dark textarea:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):hover,
-  .dark button:not([data-sidebar]):not(.ghost):not(.link):not([class*="bg-"]):not([style*="background"]):hover,
-  .dark [data-radix-select-trigger]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):hover,
-  .dark [data-radix-combobox-trigger]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):hover,
-  .dark [role="combobox"]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):hover,
+  /* Hover effects for all elements in dark mode */
+  .dark input:not([data-sidebar]):hover,
+  .dark textarea:not([data-sidebar]):hover,
+  .dark button:not([data-sidebar]):not(.ghost):not(.link):hover,
+  .dark [data-radix-select-trigger]:not([data-sidebar]):hover,
+  .dark [data-radix-combobox-trigger]:not([data-sidebar]):hover,
+  .dark [role="combobox"]:not([data-sidebar]):hover,
   .dark .checkbox:not([data-sidebar]):hover,
   .dark [data-radix-checkbox-root]:not([data-sidebar]):hover,
-  .dark [data-radix-radio-item]:not([data-sidebar]):hover {
+  .dark [data-radix-radio-item]:not([data-sidebar]):hover,
+  .dark [data-radix-switch-root]:not([data-sidebar]):hover {
     border-color: rgba(255, 255, 255, 0.5) !important;
     box-shadow: 0 8px 15px -3px rgba(255, 255, 255, 0.15), 0 4px 6px -2px rgba(255, 255, 255, 0.1) !important;
     transform: translateY(-1px) !important;
   }
 
-  /* Focus effects for elements without background color in dark mode */
-  .dark input:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):focus,
-  .dark textarea:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):focus,
-  .dark button:not([data-sidebar]):not(.ghost):not(.link):not([class*="bg-"]):not([style*="background"]):focus,
-  .dark [data-radix-select-trigger]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):focus,
-  .dark [data-radix-combobox-trigger]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):focus,
-  .dark [role="combobox"]:not([data-sidebar]):not([class*="bg-"]):not([style*="background"]):focus,
+  /* Focus effects for all elements in dark mode */
+  .dark input:not([data-sidebar]):focus,
+  .dark textarea:not([data-sidebar]):focus,
+  .dark button:not([data-sidebar]):not(.ghost):not(.link):focus,
+  .dark [data-radix-select-trigger]:not([data-sidebar]):focus,
+  .dark [data-radix-combobox-trigger]:not([data-sidebar]):focus,
+  .dark [role="combobox"]:not([data-sidebar]):focus,
   .dark .checkbox:not([data-sidebar]):focus,
   .dark [data-radix-checkbox-root]:not([data-sidebar]):focus-visible,
-  .dark [data-radix-radio-item]:not([data-sidebar]):focus-visible {
+  .dark [data-radix-radio-item]:not([data-sidebar]):focus-visible,
+  .dark [data-radix-switch-root]:not([data-sidebar]):focus-visible {
     border-color: rgba(255, 255, 255, 0.7) !important;
     box-shadow: 0 8px 15px -3px rgba(255, 255, 255, 0.2), 0 4px 6px -2px rgba(255, 255, 255, 0.15) !important;
     transform: translateY(-1px) !important;
@@ -152,13 +156,14 @@
   .dark [data-sidebar="sidebar"] [role="combobox"],
   .dark [data-sidebar="sidebar"] .checkbox,
   .dark [data-sidebar="sidebar"] [data-radix-checkbox-root],
-  .dark [data-sidebar="sidebar"] [data-radix-radio-item] {
+  .dark [data-sidebar="sidebar"] [data-radix-radio-item],
+  .dark [data-sidebar="sidebar"] [data-radix-switch-root] {
     border: none !important;
     box-shadow: none !important;
     transform: none !important;
   }
 
-  /* Exclude elements that already have background colors */
+  /* Exclude elements that already have background colors from border styling */
   .dark .bg-primary,
   .dark .bg-secondary,
   .dark .bg-accent,
@@ -179,26 +184,51 @@
     box-shadow: none !important;
     transform: none !important;
   }
+
+  /* Force borders on specific UI components in dark mode */
+  .dark [data-radix-select-trigger],
+  .dark [data-radix-combobox-trigger],
+  .dark [role="combobox"],
+  .dark input[type="file"],
+  .dark input[type="text"],
+  .dark input[type="email"],
+  .dark input[type="password"],
+  .dark input[type="tel"],
+  .dark input[type="date"],
+  .dark input[type="datetime-local"],
+  .dark textarea {
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  }
 }
 
 /* Rich Text Editor Styles */
 .ProseMirror {
   outline: none !important;
   min-height: 200px;
-  font-family: inherit;
+  font-family: Arial, sans-serif !important;
 }
 
+/* Rich text editor placeholder and title styling */
 .ProseMirror p.is-editor-empty:first-child::before {
   color: #adb5bd;
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
+  font-family: Arial, sans-serif !important;
+  font-size: 14px !important;
+}
+
+/* Template content title styling */
+.dark h3:contains("Conteúdo do Template"),
+h3:contains("Conteúdo do Template") {
+  font-family: Arial, sans-serif !important;
+  font-size: 14px !important;
 }
 
 /* Ensure font families are available */
 .ProseMirror * {
-  font-family: inherit;
+  font-family: Arial, sans-serif !important;
 }
 
 /* Lista styles */
