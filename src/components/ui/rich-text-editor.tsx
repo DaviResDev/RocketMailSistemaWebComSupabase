@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -152,11 +151,18 @@ export function RichTextEditor({
     onChange(editor.innerHTML);
   };
 
-  // Handle image upload
+  // Handle image upload - UPDATED to accept all image types
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!onImageUpload || !e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
+    
+    // Verificar se o arquivo é uma imagem
+    if (!file.type.startsWith('image/')) {
+      console.error('Arquivo selecionado não é uma imagem');
+      return;
+    }
+    
     try {
       const url = await onImageUpload(file);
       if (url) {

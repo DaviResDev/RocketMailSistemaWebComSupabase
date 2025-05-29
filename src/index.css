@@ -60,7 +60,7 @@
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 215 28% 25%;
+    --border: 0 0% 100%; /* Borda branca no modo escuro */
     --input: 215 28% 17%;
     --ring: 240 4.9% 83.9%;
     --chart-1: 220 70% 50%;
@@ -94,6 +94,28 @@
     background-color: hsl(var(--sidebar-background)) !important;
     color: hsl(var(--sidebar-foreground)) !important;
     border-color: hsl(var(--sidebar-border)) !important;
+  }
+
+  /* Dark mode border styles for interactive elements */
+  .dark input:not([data-sidebar]),
+  .dark textarea:not([data-sidebar]),
+  .dark button:not([data-sidebar]):not(.ghost):not(.link),
+  .dark [data-radix-select-trigger]:not([data-sidebar]),
+  .dark [data-radix-combobox-trigger]:not([data-sidebar]),
+  .dark [role="combobox"]:not([data-sidebar]),
+  .dark .ProseMirror {
+    border: 1px solid #ffffff !important;
+    border-radius: 4px !important;
+  }
+
+  /* Exclude sidebar elements from border styling */
+  .dark [data-sidebar="sidebar"] input,
+  .dark [data-sidebar="sidebar"] textarea,
+  .dark [data-sidebar="sidebar"] button,
+  .dark [data-sidebar="sidebar"] [data-radix-select-trigger],
+  .dark [data-sidebar="sidebar"] [data-radix-combobox-trigger],
+  .dark [data-sidebar="sidebar"] [role="combobox"] {
+    border: none !important;
   }
 }
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -217,6 +216,13 @@ export function RichTextEditor({
     if (!onImageUpload || !e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
+    
+    // Verificar se o arquivo é uma imagem
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor, selecione apenas arquivos de imagem.');
+      return;
+    }
+    
     try {
       toast.loading('Enviando imagem...');
       const url = await onImageUpload(file);
