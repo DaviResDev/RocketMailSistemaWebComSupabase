@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -13,12 +12,13 @@ import useEnvios from '@/hooks/useEnvios';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { processBatch, getBatchSummary } from '@/utils/batchProcessing';
 
 interface ScheduleFormProps {
   onCancel: () => void;
   initialData?: ScheduleFormData & { id?: string };
   isEditing?: boolean;
-  onSuccess?: () => void; // Added onSuccess prop
+  onSuccess?: () => void;
 }
 
 export function ScheduleForm({ onCancel, initialData, isEditing = false, onSuccess }: ScheduleFormProps) {
@@ -38,6 +38,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const { createSchedule, updateSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
@@ -78,49 +79,62 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       return;
     }
     
-    // Bulk scheduling
-    if (bulkMode && selectedContacts.length > 1) {
-      let successCount = 0;
-      const totalCount = selectedContacts.length;
-      
-      for (const contactId of selectedContacts) {
-        const singleFormData = {
-          ...formData,
-          contato_id: contactId
-        };
+    setIsProcessing(true);
+    
+    try {
+      if (bulkMode && selectedContacts.length > 1) {
+        // Bulk scheduling with batch processing
+        const results = await processBatch(
+          selectedContacts,
+          async (contactId) => {
+            const singleFormData = {
+              ...formData,
+              contato_id: contactId
+            };
+            
+            return isEditing && initialData?.id
+              ? await updateSchedule(initialData.id, singleFormData)
+              : await createSchedule(singleFormData);
+          },
+          {
+            batchSize: 5,
+            delayBetweenBatches: 200,
+            showProgress: true
+          }
+        );
         
-        const success = isEditing && initialData?.id
-          ? await updateSchedule(initialData.id, singleFormData)
-          : await createSchedule(singleFormData);
-          
-        if (success) successCount++;
+        const summary = getBatchSummary(results);
+        
+        if (summary.successCount === summary.total) {
+          toast.success(`${summary.total} agendamentos criados com sucesso!`);
+          onCancel();
+          if (onSuccess) onSuccess();
+        } else if (summary.successCount > 0) {
+          toast.warning(`${summary.successCount} de ${summary.total} agendamentos foram criados com sucesso.`);
+          if (onSuccess) onSuccess();
+        } else {
+          toast.error("Falha ao criar agendamentos");
+        }
+        
+        return;
       }
       
-      if (successCount === totalCount) {
-        toast.success(`${totalCount} agendamentos criados com sucesso!`);
+      // Single scheduling
+      const singleFormData = {
+        ...formData,
+        contato_id: selectedContacts[0]
+      };
+      
+      const success = isEditing && initialData?.id
+        ? await updateSchedule(initialData.id, singleFormData)
+        : await createSchedule(singleFormData);
+        
+      if (success) {
         onCancel();
         if (onSuccess) onSuccess();
-      } else {
-        toast.warning(`${successCount} de ${totalCount} agendamentos foram criados com sucesso.`);
-        if (successCount > 0 && onSuccess) onSuccess();
       }
-      
-      return;
-    }
-    
-    // Single scheduling
-    const singleFormData = {
-      ...formData,
-      contato_id: selectedContacts[0]
-    };
-    
-    const success = isEditing && initialData?.id
-      ? await updateSchedule(initialData.id, singleFormData)
-      : await createSchedule(singleFormData);
-      
-    if (success) {
-      onCancel();
-      if (onSuccess) onSuccess();
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -135,32 +149,39 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       return;
     }
 
+    setIsProcessing(true);
+
     try {
       if (bulkMode && selectedContacts.length > 1) {
-        let successCount = 0;
-        const totalCount = selectedContacts.length;
+        // Bulk sending with batch processing
+        toast.info(`Iniciando envio em lote para ${selectedContacts.length} contatos...`);
         
-        toast.info(
-          `Iniciando envio para ${totalCount} contatos...`,
-          { duration: 3000 }
+        const results = await processBatch(
+          selectedContacts,
+          async (contactId) => {
+            return await sendEmail({
+              contato_id: contactId,
+              template_id: formData.template_id
+            });
+          },
+          {
+            batchSize: 3, // Smaller batch size for email sending
+            delayBetweenBatches: 500, // Longer delay for email sending
+            showProgress: true
+          }
         );
         
-        for (const contactId of selectedContacts) {
-          const result = await sendEmail({
-            contato_id: contactId,
-            template_id: formData.template_id
-          });
-          
-          if (result) successCount++;
-        }
+        const summary = getBatchSummary(results);
         
-        if (successCount === totalCount) {
-          toast.success(`Mensagens enviadas com sucesso para todos os ${totalCount} contatos!`);
+        if (summary.successCount === summary.total) {
+          toast.success(`Mensagens enviadas com sucesso para todos os ${summary.total} contatos!`);
           onCancel();
           if (onSuccess) onSuccess();
+        } else if (summary.successCount > 0) {
+          toast.warning(`${summary.successCount} de ${summary.total} mensagens foram enviadas com sucesso.`);
+          if (onSuccess) onSuccess();
         } else {
-          toast.warning(`${successCount} de ${totalCount} mensagens foram enviadas com sucesso.`);
-          if (successCount > 0 && onSuccess) onSuccess();
+          toast.error("Falha ao enviar mensagens");
         }
         
         return;
@@ -169,10 +190,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       // Single send
       const selectedContact = contacts.find(c => c.id === selectedContacts[0]);
       
-      toast.info(
-        `Iniciando envio para ${selectedContact?.nome || 'contato selecionado'}...`,
-        { duration: 3000 }
-      );
+      toast.info(`Iniciando envio para ${selectedContact?.nome || 'contato selecionado'}...`);
       
       const result = await sendEmail({
         contato_id: selectedContacts[0],
@@ -186,6 +204,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     } catch (error: any) {
       console.error("Erro durante o envio:", error);
       toast.error(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -249,6 +269,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       
     return matchesSearch && matchesTags;
   });
+
+  const isLoading = sending || isProcessing;
 
   return (
     <Card>
@@ -402,7 +424,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             variant="ghost" 
             type="button"
             onClick={onCancel}
-            disabled={sending}
+            disabled={isLoading}
           >
             <X className="mr-2 h-4 w-4" />
             Cancelar
@@ -412,18 +434,18 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
               type="button" 
               variant="outline"
               onClick={handleSendNow}
-              disabled={sending || selectedContacts.length === 0 || !formData.template_id}
+              disabled={isLoading || selectedContacts.length === 0 || !formData.template_id}
             >
-              {sending ? (
+              {isLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <SendHorizontal className="mr-2 h-4 w-4" />
               )}
-              {sending ? 'Enviando...' : 'Enviar Agora'}
+              {isLoading ? 'Processando...' : 'Enviar Agora'}
             </Button>
             <Button 
               type="submit"
-              disabled={sending || selectedContacts.length === 0 || !formData.template_id}
+              disabled={isLoading || selectedContacts.length === 0 || !formData.template_id}
             >
               {isEditing ? (
                 <>

@@ -7,6 +7,71 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface BatchResult<T> {
+  success: boolean;
+  result?: T;
+  error?: string;
+  index: number;
+  id: string;
+}
+
+async function processBatch<T, R>(
+  items: T[],
+  processor: (item: T, index: number) => Promise<R>,
+  batchSize: number = 3,
+  delayBetweenBatches: number = 500
+): Promise<BatchResult<R>[]> {
+  const results: BatchResult<R>[] = [];
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchStartIndex = i;
+    
+    console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(items.length / batchSize)} (${batch.length} items)`);
+    
+    const batchPromises = batch.map(async (item: any, batchIndex) => {
+      const globalIndex = batchStartIndex + batchIndex;
+      try {
+        const result = await processor(item, globalIndex);
+        return {
+          success: true,
+          result,
+          index: globalIndex,
+          id: item.id
+        } as BatchResult<R>;
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message || 'Erro desconhecido',
+          index: globalIndex,
+          id: item.id
+        } as BatchResult<R>;
+      }
+    });
+    
+    const batchResults = await Promise.allSettled(batchPromises);
+    
+    batchResults.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        results.push(result.value);
+      } else {
+        results.push({
+          success: false,
+          error: result.reason?.message || 'Erro durante processamento',
+          index: results.length,
+          id: 'unknown'
+        });
+      }
+    });
+    
+    if (i + batchSize < items.length && delayBetweenBatches > 0) {
+      await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+  }
+  
+  return results;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -47,9 +112,6 @@ serve(async (req) => {
         ),
         template:template_id(
           id, nome, conteudo, canal, signature_image, image_url, attachments
-        ),
-        user:user_id(
-          id
         )
       `)
       .eq('status', 'pendente')
@@ -72,53 +134,40 @@ serve(async (req) => {
       );
     }
     
-    // Processar cada agendamento
-    const results = [];
-    
-    for (const agendamento of agendamentos) {
-      if (!agendamento.contato || !agendamento.template) {
-        console.error(`Skipping agendamento ${agendamento.id} - missing contato or template`);
+    // Process emails in batches
+    const results = await processBatch(
+      agendamentos,
+      async (agendamento: any) => {
+        if (!agendamento.contato || !agendamento.template) {
+          console.error(`Skipping agendamento ${agendamento.id} - missing contato or template`);
+          
+          await supabaseAdmin
+            .from('agendamentos')
+            .update({ 
+              status: 'erro',
+              erro: 'Contato ou template não encontrado'
+            })
+            .eq('id', agendamento.id);
+          
+          throw new Error('Contato ou template não encontrado');
+        }
         
-        // Update status to erro
-        await supabaseAdmin
-          .from('agendamentos')
-          .update({ 
-            status: 'erro',
-            erro: 'Contato ou template não encontrado'
-          })
-          .eq('id', agendamento.id);
+        if (!agendamento.contato.email || !agendamento.template.conteudo) {
+          console.error(`Skipping agendamento ${agendamento.id} - missing email or content`);
+          
+          await supabaseAdmin
+            .from('agendamentos')
+            .update({ 
+              status: 'erro',
+              erro: 'Email do contato ou conteúdo do template não encontrado'
+            })
+            .eq('id', agendamento.id);
+          
+          throw new Error('Email do contato ou conteúdo do template não encontrado');
+        }
         
-        results.push({
-          id: agendamento.id,
-          status: 'erro',
-          error: 'Contato ou template não encontrado'
-        });
-        continue;
-      }
-      
-      if (!agendamento.contato.email || !agendamento.template.conteudo) {
-        console.error(`Skipping agendamento ${agendamento.id} - missing email or content`);
+        console.log(`Processing scheduled email for ${agendamento.contato.email}`);
         
-        // Update status to erro
-        await supabaseAdmin
-          .from('agendamentos')
-          .update({ 
-            status: 'erro',
-            erro: 'Email do contato ou conteúdo do template não encontrado'
-          })
-          .eq('id', agendamento.id);
-        
-        results.push({
-          id: agendamento.id,
-          status: 'erro',
-          error: 'Email do contato ou conteúdo do template não encontrado'
-        });
-        continue;
-      }
-      
-      console.log(`Processing scheduled email for ${agendamento.contato.email}`);
-      
-      try {
         // Get user settings for signature
         const { data: userSettings, error: settingsError } = await supabaseAdmin
           .from('configuracoes')
@@ -130,7 +179,6 @@ serve(async (req) => {
           console.warn(`Could not fetch user settings: ${settingsError.message}`);
         }
         
-        // Use user settings signature or template signature
         const signatureImage = userSettings?.signature_image || agendamento.template.signature_image;
         
         // Process attachments if present
@@ -147,29 +195,28 @@ serve(async (req) => {
           }
         }
         
-        // Chamar a Edge Function de envio de email com retry logic
+        const currentDate = new Date();
+        const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
+        const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
+        
+        // Process template with actual contato data
+        let processedContent = agendamento.template.conteudo
+          .replace(/\{\{nome\}\}/g, agendamento.contato.nome || "")
+          .replace(/\{\{email\}\}/g, agendamento.contato.email || "")
+          .replace(/\{\{telefone\}\}/g, agendamento.contato.telefone || "")
+          .replace(/\{\{data\}\}/g, formattedDate)
+          .replace(/\{\{hora\}\}/g, formattedTime);
+        
+        // Send email with retry logic
         let attemptCount = 0;
         const maxAttempts = 2;
-        let success = false;
         let lastError = null;
         
-        while (attemptCount < maxAttempts && !success) {
+        while (attemptCount < maxAttempts) {
           attemptCount++;
           
           try {
             console.log(`Attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
-            
-            const currentDate = new Date();
-            const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
-            const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
-            
-            // Process template with actual contato data
-            let processedContent = agendamento.template.conteudo
-              .replace(/\{\{nome\}\}/g, agendamento.contato.nome || "")
-              .replace(/\{\{email\}\}/g, agendamento.contato.email || "")
-              .replace(/\{\{telefone\}\}/g, agendamento.contato.telefone || "")
-              .replace(/\{\{data\}\}/g, formattedDate)
-              .replace(/\{\{hora\}\}/g, formattedTime);
             
             const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
               body: {
@@ -189,100 +236,87 @@ serve(async (req) => {
             if (sendError) {
               console.error(`Error on attempt ${attemptCount}:`, sendError);
               lastError = sendError;
-              // Wait a moment before retrying (500ms)
-              await new Promise(resolve => setTimeout(resolve, 500));
-              continue;
+              if (attemptCount < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                continue;
+              }
+              throw sendError;
             }
             
             if (!sendResult || !sendResult.success) {
-              console.error(`Error in send-email function on attempt ${attemptCount}:`, sendResult?.error || "Unknown error");
-              lastError = sendResult?.error || new Error("Unknown error in send-email function");
-              // Wait a moment before retrying
-              await new Promise(resolve => setTimeout(resolve, 500));
-              continue;
+              const error = new Error(sendResult?.error || "Unknown error in send-email function");
+              console.error(`Error in send-email function on attempt ${attemptCount}:`, error.message);
+              lastError = error;
+              if (attemptCount < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                continue;
+              }
+              throw error;
             }
             
-            // No errors, mark as success
-            success = true;
-            console.log(`Successfully sent email on attempt ${attemptCount}`);
-          } catch (error) {
+            // Success - update status and create envio record
+            await supabaseAdmin
+              .from('agendamentos')
+              .update({ status: 'enviado' })
+              .eq('id', agendamento.id);
+            
+            await supabaseAdmin
+              .from('envios')
+              .insert({
+                user_id: agendamento.user_id,
+                template_id: agendamento.template_id,
+                contato_id: agendamento.contato_id,
+                status: 'enviado',
+                data_envio: new Date().toISOString()
+              });
+            
+            console.log(`Successfully sent scheduled email ${agendamento.id}`);
+            return { success: true, id: agendamento.id };
+            
+          } catch (error: any) {
             console.error(`Exception on attempt ${attemptCount}:`, error);
             lastError = error;
-            // Wait a moment before retrying
-            await new Promise(resolve => setTimeout(resolve, 500));
+            if (attemptCount < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
           }
         }
         
-        if (success) {
-          // Sucesso no envio - atualizar status do agendamento
-          await supabaseAdmin
-            .from('agendamentos')
-            .update({ status: 'enviado' })
-            .eq('id', agendamento.id);
-          
-          console.log(`Successfully sent scheduled email ${agendamento.id}`);
-          
-          results.push({
-            id: agendamento.id,
-            status: 'enviado'
-          });
-          
-          // Create entry in envios table
-          await supabaseAdmin
-            .from('envios')
-            .insert({
-              user_id: agendamento.user_id,
-              template_id: agendamento.template_id,
-              contato_id: agendamento.contato_id,
-              status: 'enviado',
-              data_envio: new Date().toISOString()
-            });
-        } else {
-          // Todas as tentativas falharam - atualizar status do agendamento para erro
-          const errorMessage = lastError ? 
-            (typeof lastError === 'string' ? lastError : JSON.stringify(lastError)) : 
-            'Falha após múltiplas tentativas';
-          
-          await supabaseAdmin
-            .from('agendamentos')
-            .update({ 
-              status: 'erro',
-              erro: errorMessage
-            })
-            .eq('id', agendamento.id);
-          
-          console.error(`Failed to send scheduled email ${agendamento.id} after ${maxAttempts} attempts`);
-          
-          results.push({
-            id: agendamento.id,
-            status: 'erro',
-            error: errorMessage
-          });
-        }
-      } catch (error: any) {
-        console.error(`Error processing agendamento ${agendamento.id}:`, error);
+        // All attempts failed
+        const errorMessage = lastError ? 
+          (typeof lastError === 'string' ? lastError : lastError.message || JSON.stringify(lastError)) : 
+          'Falha após múltiplas tentativas';
         
-        // Atualizar status do agendamento para erro
         await supabaseAdmin
           .from('agendamentos')
           .update({ 
             status: 'erro',
-            erro: error.message || 'Erro desconhecido'
+            erro: errorMessage
           })
           .eq('id', agendamento.id);
         
-        results.push({
-          id: agendamento.id,
-          status: 'erro',
-          error: error.message || 'Erro desconhecido'
-        });
-      }
-    }
+        throw new Error(errorMessage);
+      },
+      3, // Batch size of 3 for email sending
+      800 // 800ms delay between batches
+    );
+    
+    // Calculate summary
+    const successCount = results.filter(r => r.success).length;
+    const errorCount = results.filter(r => !r.success).length;
+    
+    console.log(`Batch processing complete: ${successCount} successful, ${errorCount} failed`);
     
     return new Response(
       JSON.stringify({ 
         processed: results.length,
-        results: results
+        successful: successCount,
+        failed: errorCount,
+        results: results.map(r => ({
+          id: r.id,
+          success: r.success,
+          error: r.error
+        }))
       }),
       { 
         status: 200, 

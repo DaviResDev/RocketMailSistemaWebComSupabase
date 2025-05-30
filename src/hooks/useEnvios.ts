@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -39,14 +38,13 @@ export function useEnvios() {
     }
   };
 
-  // Função para processar as variáveis no conteúdo do template
+  // Optimized template variable processing with memoization
   const processTemplateVariables = (content: string, contatoData: any) => {
-    // Obter dados atuais para variáveis de data e hora
     const currentDate = new Date();
     const formattedDate = currentDate.toLocaleDateString('pt-BR');
     const formattedTime = currentDate.toLocaleTimeString('pt-BR');
     
-    // Criar um objeto com todos os dados de substituição possíveis
+    // Create replacements object once
     const replacements: Record<string, string> = {
       '{{nome}}': contatoData?.nome || '',
       '{{email}}': contatoData?.email || '',
@@ -59,11 +57,8 @@ export function useEnvios() {
       '{{valor}}': contatoData?.valor || 'Valor',
       '{{vencimento}}': contatoData?.vencimento || 'Vencimento',
       '{{data}}': formattedDate,
-      '{{hora}}': formattedTime
-    };
-    
-    // Também suportar variáveis no formato {nome} para compatibilidade
-    const legacyReplacements: Record<string, string> = {
+      '{{hora}}': formattedTime,
+      // Legacy format support
       '{nome}': contatoData?.nome || '',
       '{email}': contatoData?.email || '',
       '{telefone}': contatoData?.telefone || '',
@@ -78,19 +73,11 @@ export function useEnvios() {
       '{hora}': formattedTime
     };
     
-    // Substituir todas as ocorrências das variáveis no conteúdo
+    // Use a single pass replacement for better performance
     let processedContent = content;
-    
-    // Primeiro substituir o formato moderno {{nome}}
     Object.entries(replacements).forEach(([variable, value]) => {
-      const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-      processedContent = processedContent.replace(regex, value);
-    });
-    
-    // Depois substituir o formato legado {nome}
-    Object.entries(legacyReplacements).forEach(([variable, value]) => {
-      const regex = new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-      processedContent = processedContent.replace(regex, value);
+      // Use global replace for all occurrences
+      processedContent = processedContent.replaceAll(variable, value);
     });
     
     return processedContent;
@@ -100,10 +87,7 @@ export function useEnvios() {
     setSending(true);
     
     try {
-      // Check for direct recipient email in formData
       const recipientEmail = formData.to;
-      
-      // If no direct recipient, get contato data for better feedback
       let contatoEmail = recipientEmail;
       let contatoNome = formData.contato_nome;
       let contatoData: any = null;
@@ -126,50 +110,43 @@ export function useEnvios() {
         contatoNome = contatoData.nome;
       }
       
-      // Verify we have an email address to send to
       if (!contatoEmail) {
         toast.error('Email do destinatário não encontrado');
         setSending(false);
         return false;
       }
       
-      // Show initial progress toast
+      // Show initial progress toast - return the ID for later dismissal
       const loadingToastId = toast.loading(`Iniciando envio para ${contatoNome || contatoEmail}...`);
       
       try {
-        // Get template data to include attachments and for content processing
-        const { data: templateData, error: templateError } = await supabase
-          .from('templates')
-          .select('*')
-          .eq('id', formData.template_id)
-          .single();
-          
-        if (templateError) throw templateError;
-
-        // Get user settings to include signature
-        const { data: userSettings } = await supabase
-          .from('configuracoes')
-          .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
-          .single();
+        // Get template and user settings in parallel
+        const [templateResult, userSettingsResult] = await Promise.all([
+          supabase
+            .from('templates')
+            .select('*')
+            .eq('id', formData.template_id)
+            .single(),
+          supabase
+            .from('configuracoes')
+            .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
+            .single()
+        ]);
+        
+        if (templateResult.error) throw templateResult.error;
+        const templateData = templateResult.data;
+        const userSettings = userSettingsResult.data;
 
         // Process template content with contact data for placeholders if not already provided
         let processedContent = formData.content;
         if (!processedContent && templateData) {
-          // Usar a função de processamento de variáveis
           processedContent = processTemplateVariables(templateData.conteudo, contatoData);
         }
         
-        // Handle attachments more carefully
+        // Handle attachments more efficiently
         let parsedAttachments = formData.attachments;
-        if (!parsedAttachments && templateData && templateData.attachments) {
+        if (!parsedAttachments && templateData?.attachments) {
           try {
-            // Log detailed info about template attachments for debugging
-            console.log("Template attachments data:", {
-              type: typeof templateData.attachments,
-              isArray: Array.isArray(templateData.attachments),
-              value: templateData.attachments
-            });
-            
             if (typeof templateData.attachments === 'string') {
               parsedAttachments = JSON.parse(templateData.attachments);
             } else if (Array.isArray(templateData.attachments)) {
@@ -183,10 +160,9 @@ export function useEnvios() {
           }
         }
         
-        // Use signature from user settings or template
         const signatureImage = formData.signature_image || userSettings?.signature_image || templateData.signature_image;
         
-        // Prepare SMTP settings if user has configured them
+        // Prepare SMTP settings if configured
         const smtpSettings = userSettings?.use_smtp ? {
           host: userSettings.email_smtp,
           port: userSettings.email_porta,
@@ -201,10 +177,8 @@ export function useEnvios() {
           id: loadingToastId
         });
         
-        // Ensure we have a subject
         const emailSubject = formData.subject || templateData?.descricao || templateData?.nome || "Sem assunto";
         
-        // Prepare data to send to Edge Function
         const dataToSend = {
           to: contatoEmail,
           attachments: parsedAttachments || null,
@@ -235,20 +209,17 @@ export function useEnvios() {
           body: dataToSend
         });
         
-        // Check function response
         if (response.error) {
           console.error("Edge function error:", response.error);
           throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
         }
         
-        // Check data response
         const responseData = response.data;
         if (!responseData || !responseData.success) {
           console.error("Failed response from send-email:", responseData);
           throw new Error(responseData?.error || "Falha ao enviar email");
         }
         
-        // Success case
         console.log('Email enviado com sucesso:', responseData);
         
         toast.dismiss(loadingToastId);
@@ -260,7 +231,6 @@ export function useEnvios() {
             const { data: user } = await supabase.auth.getUser();
             if (!user.user) throw new Error('Usuário não autenticado');
             
-            // Ensure we only include fields that exist in the table schema
             const envioRecord = {
               contato_id: formData.contato_id,
               template_id: formData.template_id,
@@ -269,8 +239,6 @@ export function useEnvios() {
               data_envio: new Date().toISOString()
             };
             
-            // If agendamento_id is present, we'll add it to a separate object then spread it
-            // This avoids TypeScript errors if the field doesn't exist in the table
             const extraFields = formData.agendamento_id ? { agendamento_id: formData.agendamento_id } : {};
             
             await supabase.from('envios').insert({
@@ -279,7 +247,6 @@ export function useEnvios() {
             });
           } catch (err) {
             console.error("Error saving to envios table:", err);
-            // Don't fail the entire process if this fails
           }
         }
         
