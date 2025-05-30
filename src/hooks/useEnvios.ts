@@ -73,11 +73,11 @@ export function useEnvios() {
       '{hora}': formattedTime
     };
     
-    // Use a single pass replacement for better performance
+    // Use a single pass replacement for better performance - replace replaceAll with split/join
     let processedContent = content;
     Object.entries(replacements).forEach(([variable, value]) => {
-      // Use global replace for all occurrences
-      processedContent = processedContent.replaceAll(variable, value);
+      // Use split and join instead of replaceAll for compatibility
+      processedContent = processedContent.split(variable).join(value);
     });
     
     return processedContent;
