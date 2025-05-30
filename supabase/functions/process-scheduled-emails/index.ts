@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -18,16 +17,18 @@ interface BatchResult<T> {
 async function processBatch<T, R>(
   items: T[],
   processor: (item: T, index: number) => Promise<R>,
-  batchSize: number = 3,
-  delayBetweenBatches: number = 500
+  batchSize: number = 10, // Increased from 3 to 10
+  delayBetweenBatches: number = 200 // Reduced from 500 to 200ms
 ): Promise<BatchResult<R>[]> {
   const results: BatchResult<R>[] = [];
+  const totalBatches = Math.ceil(items.length / batchSize);
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     const batchStartIndex = i;
+    const batchNumber = Math.floor(i / batchSize) + 1;
     
-    console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(items.length / batchSize)} (${batch.length} items)`);
+    console.log(`Processing optimized batch ${batchNumber} of ${totalBatches} (${batch.length} items)`);
     
     const batchPromises = batch.map(async (item: any, batchIndex) => {
       const globalIndex = batchStartIndex + batchIndex;
@@ -64,6 +65,7 @@ async function processBatch<T, R>(
       }
     });
     
+    // Optimized delay - less delay for better throughput
     if (i + batchSize < items.length && delayBetweenBatches > 0) {
       await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
     }
@@ -99,7 +101,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') || ''
     );
     
-    console.log("Fetching scheduled emails to send...");
+    console.log("Fetching scheduled emails to send with optimizations...");
     
     // Buscar todos os agendamentos pendentes que devem ser enviados agora
     const now = new Date().toISOString();
@@ -134,7 +136,9 @@ serve(async (req) => {
       );
     }
     
-    // Process emails in batches
+    console.log(`Processing ${agendamentos.length} scheduled emails with optimized batching...`);
+    
+    // Process emails with optimized batch settings
     const results = await processBatch(
       agendamentos,
       async (agendamento: any) => {
@@ -207,16 +211,16 @@ serve(async (req) => {
           .replace(/\{\{data\}\}/g, formattedDate)
           .replace(/\{\{hora\}\}/g, formattedTime);
         
-        // Send email with retry logic
+        // Optimized retry logic with shorter delays
         let attemptCount = 0;
-        const maxAttempts = 2;
+        const maxAttempts = 2; // Reduced from 3 to 2 for faster processing
         let lastError = null;
         
         while (attemptCount < maxAttempts) {
           attemptCount++;
           
           try {
-            console.log(`Attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
+            console.log(`Optimized attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
             
             const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
               body: {
@@ -234,10 +238,10 @@ serve(async (req) => {
             });
             
             if (sendError) {
-              console.error(`Error on attempt ${attemptCount}:`, sendError);
+              console.error(`Error on optimized attempt ${attemptCount}:`, sendError);
               lastError = sendError;
               if (attemptCount < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 200)); // Reduced retry delay
                 continue;
               }
               throw sendError;
@@ -245,10 +249,10 @@ serve(async (req) => {
             
             if (!sendResult || !sendResult.success) {
               const error = new Error(sendResult?.error || "Unknown error in send-email function");
-              console.error(`Error in send-email function on attempt ${attemptCount}:`, error.message);
+              console.error(`Error in send-email function on optimized attempt ${attemptCount}:`, error.message);
               lastError = error;
               if (attemptCount < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 200)); // Reduced retry delay
                 continue;
               }
               throw error;
@@ -274,10 +278,10 @@ serve(async (req) => {
             return { success: true, id: agendamento.id };
             
           } catch (error: any) {
-            console.error(`Exception on attempt ${attemptCount}:`, error);
+            console.error(`Exception on optimized attempt ${attemptCount}:`, error);
             lastError = error;
             if (attemptCount < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 500));
+              await new Promise(resolve => setTimeout(resolve, 200)); // Reduced retry delay
             }
           }
         }
@@ -297,21 +301,21 @@ serve(async (req) => {
         
         throw new Error(errorMessage);
       },
-      3, // Batch size of 3 for email sending
-      800 // 800ms delay between batches
+      10, // Optimized batch size
+      200 // Optimized delay between batches
     );
     
-    // Calculate summary
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
     
-    console.log(`Batch processing complete: ${successCount} successful, ${errorCount} failed`);
+    console.log(`Optimized batch processing complete: ${successCount} successful, ${errorCount} failed`);
     
     return new Response(
       JSON.stringify({ 
         processed: results.length,
         successful: successCount,
         failed: errorCount,
+        optimized: true,
         results: results.map(r => ({
           id: r.id,
           success: r.success,
@@ -325,7 +329,7 @@ serve(async (req) => {
     );
     
   } catch (error: any) {
-    console.error("Error in process-scheduled-emails function:", error);
+    console.error("Error in optimized process-scheduled-emails function:", error);
     
     return new Response(
       JSON.stringify({ 

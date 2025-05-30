@@ -4,15 +4,15 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check, Search, CheckCheck } from 'lucide-react';
+import { Mail, MessageSquare, X, SendHorizontal, Loader2, Check, Search, CheckCheck, Zap } from 'lucide-react';
 import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
-import useEnvios from '@/hooks/useEnvios';
+import { useBatchEmailSending } from '@/hooks/useBatchEmailSending';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { processBatch, getBatchSummary } from '@/utils/batchProcessing';
+import { Progress } from '@/components/ui/progress';
 
 interface ScheduleFormProps {
   onCancel: () => void;
@@ -38,12 +38,12 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [optimizationEnabled, setOptimizationEnabled] = useState(true);
   
   const { createSchedule, updateSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
-  const { sendEmail, sending } = useEnvios();
+  const { sendBatchEmails, isProcessing, progress } = useBatchEmailSending();
 
   useEffect(() => {
     fetchContacts();
@@ -78,8 +78,6 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       toast.error("Selecione pelo menos um contato para agendar");
       return;
     }
-    
-    setIsProcessing(true);
     
     try {
       if (bulkMode && selectedContacts.length > 1) {
@@ -149,39 +147,31 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       return;
     }
 
-    setIsProcessing(true);
-
     try {
       if (bulkMode && selectedContacts.length > 1) {
-        // Bulk sending with batch processing
-        toast.info(`Iniciando envio em lote para ${selectedContacts.length} contatos...`);
+        // Use the optimized batch email sending
+        const emailJobs = selectedContacts.map(contactId => {
+          const contact = contacts.find(c => c.id === contactId);
+          return {
+            contactId,
+            templateId: formData.template_id,
+            contactName: contact?.nome
+          };
+        });
+
+        // Show optimization info for large batches
+        if (selectedContacts.length >= 100 && optimizationEnabled) {
+          toast.info(`🚀 Modo otimizado ativado para ${selectedContacts.length} emails`);
+        }
+
+        const result = await sendBatchEmails(emailJobs, {
+          showProgress: true,
+          enableOptimizations: optimizationEnabled
+        });
         
-        const results = await processBatch(
-          selectedContacts,
-          async (contactId) => {
-            return await sendEmail({
-              contato_id: contactId,
-              template_id: formData.template_id
-            });
-          },
-          {
-            batchSize: 3, // Smaller batch size for email sending
-            delayBetweenBatches: 500, // Longer delay for email sending
-            showProgress: true
-          }
-        );
-        
-        const summary = getBatchSummary(results);
-        
-        if (summary.successCount === summary.total) {
-          toast.success(`Mensagens enviadas com sucesso para todos os ${summary.total} contatos!`);
+        if (result.success) {
           onCancel();
           if (onSuccess) onSuccess();
-        } else if (summary.successCount > 0) {
-          toast.warning(`${summary.successCount} de ${summary.total} mensagens foram enviadas com sucesso.`);
-          if (onSuccess) onSuccess();
-        } else {
-          toast.error("Falha ao enviar mensagens");
         }
         
         return;
@@ -204,8 +194,6 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     } catch (error: any) {
       console.error("Erro durante o envio:", error);
       toast.error(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -270,7 +258,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     return matchesSearch && matchesTags;
   });
 
-  const isLoading = sending || isProcessing;
+  const progressPercent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
   return (
     <Card>
@@ -279,19 +267,43 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
           <h3 className="text-lg font-semibold">{isEditing ? 'Editar Agendamento' : 'Novo Agendamento'}</h3>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2 mb-4">
-            <Checkbox 
-              id="bulkMode" 
-              checked={bulkMode} 
-              onCheckedChange={toggleBulkMode}
-            />
-            <label
-              htmlFor="bulkMode"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Selecionar múltiplos contatos
-            </label>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="bulkMode" 
+                checked={bulkMode} 
+                onCheckedChange={setBulkMode}
+              />
+              <label htmlFor="bulkMode" className="text-sm font-medium">
+                Selecionar múltiplos contatos
+              </label>
+            </div>
+            
+            {selectedContacts.length >= 50 && (
+              <div className="flex items-center space-x-2">
+                <Zap className="h-4 w-4 text-orange-500" />
+                <Checkbox 
+                  id="optimizationEnabled" 
+                  checked={optimizationEnabled} 
+                  onCheckedChange={setOptimizationEnabled}
+                />
+                <label htmlFor="optimizationEnabled" className="text-sm font-medium text-orange-600">
+                  Otimizações para lotes grandes
+                </label>
+              </div>
+            )}
           </div>
+          
+          {/* Progress bar for batch operations */}
+          {isProcessing && progress.total > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Enviando emails...</span>
+                <span>{progress.current}/{progress.total} ({progressPercent}%)</span>
+              </div>
+              <Progress value={progressPercent} className="w-full" />
+            </div>
+          )}
           
           {/* Search input */}
           <div className="relative">
@@ -424,7 +436,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             variant="ghost" 
             type="button"
             onClick={onCancel}
-            disabled={isLoading}
+            disabled={isProcessing}
           >
             <X className="mr-2 h-4 w-4" />
             Cancelar
@@ -434,18 +446,21 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
               type="button" 
               variant="outline"
               onClick={handleSendNow}
-              disabled={isLoading || selectedContacts.length === 0 || !formData.template_id}
+              disabled={isProcessing || selectedContacts.length === 0 || !formData.template_id}
             >
-              {isLoading ? (
+              {isProcessing ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : selectedContacts.length >= 100 && optimizationEnabled ? (
+                <Zap className="mr-2 h-4 w-4" />
               ) : (
                 <SendHorizontal className="mr-2 h-4 w-4" />
               )}
-              {isLoading ? 'Processando...' : 'Enviar Agora'}
+              {isProcessing ? 'Processando...' : 
+               selectedContacts.length >= 100 && optimizationEnabled ? 'Envio Otimizado' : 'Enviar Agora'}
             </Button>
             <Button 
               type="submit"
-              disabled={isLoading || selectedContacts.length === 0 || !formData.template_id}
+              disabled={isProcessing || selectedContacts.length === 0 || !formData.template_id}
             >
               {isEditing ? (
                 <>
