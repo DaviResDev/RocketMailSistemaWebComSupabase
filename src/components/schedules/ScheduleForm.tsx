@@ -9,6 +9,8 @@ import { useSchedules, ScheduleFormData } from '@/hooks/useSchedules';
 import { useContacts } from '@/hooks/useContacts';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useBatchEmailSending } from '@/hooks/useBatchEmailSending';
+import { useEnvios } from '@/hooks/useEnvios';
+import { processBatch, getBatchSummary } from '@/utils/batchProcessing';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,6 +46,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
   const { sendBatchEmails, isProcessing, progress } = useBatchEmailSending();
+  const { sendEmail } = useEnvios();
 
   useEffect(() => {
     fetchContacts();
@@ -131,8 +134,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
         onCancel();
         if (onSuccess) onSuccess();
       }
-    } finally {
-      setIsProcessing(false);
+    } catch (error) {
+      console.error('Error in handleSubmit:', error);
     }
   };
 
@@ -212,10 +215,11 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     });
   };
 
-  const toggleBulkMode = () => {
-    setBulkMode(!bulkMode);
+  const toggleBulkMode = (checked: boolean | "indeterminate") => {
+    const isChecked = checked === true;
+    setBulkMode(isChecked);
     // When switching to single mode, keep only the first selection
-    if (bulkMode && selectedContacts.length > 1) {
+    if (!isChecked && selectedContacts.length > 1) {
       setSelectedContacts([selectedContacts[0]]);
     }
   };
@@ -260,6 +264,10 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
 
   const progressPercent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
+  const handleOptimizationToggle = (checked: boolean | "indeterminate") => {
+    setOptimizationEnabled(checked === true);
+  };
+
   return (
     <Card>
       <form onSubmit={handleSubmit}>
@@ -272,7 +280,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
               <Checkbox 
                 id="bulkMode" 
                 checked={bulkMode} 
-                onCheckedChange={setBulkMode}
+                onCheckedChange={toggleBulkMode}
               />
               <label htmlFor="bulkMode" className="text-sm font-medium">
                 Selecionar múltiplos contatos
@@ -285,7 +293,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
                 <Checkbox 
                   id="optimizationEnabled" 
                   checked={optimizationEnabled} 
-                  onCheckedChange={setOptimizationEnabled}
+                  onCheckedChange={handleOptimizationToggle}
                 />
                 <label htmlFor="optimizationEnabled" className="text-sm font-medium text-orange-600">
                   Otimizações para lotes grandes
