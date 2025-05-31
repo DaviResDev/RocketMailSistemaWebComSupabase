@@ -82,16 +82,16 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-white to-blue-50 dark:from-gray-900 dark:to-gray-800">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-6">
           <Logo size="medium" />
         </div>
         
-        <Card>
+        <Card className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Login</CardTitle>
-            <CardDescription className="text-center">
+            <CardTitle className="text-2xl font-bold text-center text-gray-900 dark:text-white">Login</CardTitle>
+            <CardDescription className="text-center text-gray-600 dark:text-gray-300">
               Entre com suas credenciais para acessar sua conta
             </CardDescription>
           </CardHeader>
@@ -99,7 +99,7 @@ export default function Login() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-gray-700 dark:text-gray-300">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -108,10 +108,11 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isSubmitting}
                   required
+                  className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
+                <Label htmlFor="password" className="text-gray-700 dark:text-gray-300">Senha</Label>
                 <Input
                   id="password"
                   type="password"
@@ -119,11 +120,12 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isSubmitting}
                   required
+                  className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 />
               </div>
               <Button 
                 type="submit" 
-                className="w-full"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500 dark:hover:bg-blue-600 border-0"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? 'Entrando...' : 'Entrar'}
@@ -136,7 +138,7 @@ export default function Login() {
                 variant="link"
                 onClick={handleForgotPassword}
                 disabled={isResettingPassword}
-                className="text-sm"
+                className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 {isResettingPassword ? 'Enviando...' : 'Esqueceu a senha?'}
               </Button>
@@ -144,9 +146,9 @@ export default function Login() {
           </CardContent>
           
           <CardFooter className="flex justify-center">
-            <p className="text-sm text-center text-muted-foreground">
+            <p className="text-sm text-center text-gray-600 dark:text-gray-400">
               Não tem uma conta?{" "}
-              <Link to="/cadastro" className="text-primary hover:underline">
+              <Link to="/cadastro" className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
                 Cadastre-se
               </Link>
             </p>
