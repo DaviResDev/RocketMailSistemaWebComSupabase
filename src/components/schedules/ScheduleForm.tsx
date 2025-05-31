@@ -41,6 +41,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [optimizationEnabled, setOptimizationEnabled] = useState(true);
+  const [estimatedTime, setEstimatedTime] = useState<{minutes: number, hours: number} | null>(null);
   
   const { createSchedule, updateSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
@@ -69,6 +70,19 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     setAvailableTags(tags);
   }, [contacts]);
 
+  // Calculate estimated processing time for large volumes
+  useEffect(() => {
+    if (selectedContacts.length >= 100) {
+      const avgTimePerEmail = 500; // 500ms per email average
+      const totalMs = selectedContacts.length * avgTimePerEmail;
+      const minutes = Math.round(totalMs / (1000 * 60));
+      const hours = Math.round(minutes / 60 * 10) / 10;
+      setEstimatedTime({ minutes, hours });
+    } else {
+      setEstimatedTime(null);
+    }
+  }, [selectedContacts.length]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -81,10 +95,15 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       toast.error("Selecione pelo menos um contato para agendar");
       return;
     }
+
+    // Warning for very large volumes
+    if (selectedContacts.length >= 1000) {
+      toast.warning(`⚠️ Volume alto detectado: ${selectedContacts.length} contatos. O processamento pode levar alguns minutos.`);
+    }
     
     try {
       if (bulkMode && selectedContacts.length > 1) {
-        // Bulk scheduling with batch processing
+        // Enhanced bulk scheduling with optimizations for large volumes
         const results = await processBatch(
           selectedContacts,
           async (contactId) => {
@@ -98,23 +117,24 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
               : await createSchedule(singleFormData);
           },
           {
-            batchSize: 5,
-            delayBetweenBatches: 200,
-            showProgress: true
+            batchSize: selectedContacts.length >= 1000 ? 20 : selectedContacts.length >= 500 ? 15 : 10,
+            delayBetweenBatches: selectedContacts.length >= 1000 ? 50 : selectedContacts.length >= 500 ? 100 : 200,
+            showProgress: true,
+            enableLargeVolumeOptimizations: selectedContacts.length >= 500
           }
         );
         
         const summary = getBatchSummary(results);
         
-        if (summary.successCount === summary.total) {
-          toast.success(`${summary.total} agendamentos criados com sucesso!`);
+        if (summary.isFullSuccess) {
+          toast.success(`🎉 Todos os ${summary.total} agendamentos criados com sucesso!`);
           onCancel();
           if (onSuccess) onSuccess();
         } else if (summary.successCount > 0) {
-          toast.warning(`${summary.successCount} de ${summary.total} agendamentos foram criados com sucesso.`);
+          toast.warning(`⚠️ ${summary.successCount} de ${summary.total} agendamentos criados (${summary.successRate}% sucesso).`);
           if (onSuccess) onSuccess();
         } else {
-          toast.error("Falha ao criar agendamentos");
+          toast.error("❌ Falha ao criar agendamentos");
         }
         
         return;
@@ -150,9 +170,19 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       return;
     }
 
+    // Enhanced warning and confirmation for large volumes
+    if (selectedContacts.length >= 1000) {
+      const proceed = window.confirm(
+        `Você está prestes a enviar ${selectedContacts.length} emails. ` +
+        `Isto pode levar ${estimatedTime?.minutes || 'vários'} minutos. ` +
+        `Deseja continuar?`
+      );
+      if (!proceed) return;
+    }
+
     try {
       if (bulkMode && selectedContacts.length > 1) {
-        // Use the optimized batch email sending
+        // Use the ultra-optimized batch email sending
         const emailJobs = selectedContacts.map(contactId => {
           const contact = contacts.find(c => c.id === contactId);
           return {
@@ -163,8 +193,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
         });
 
         // Show optimization info for large batches
-        if (selectedContacts.length >= 100 && optimizationEnabled) {
-          toast.info(`🚀 Modo otimizado ativado para ${selectedContacts.length} emails`);
+        if (selectedContacts.length >= 500) {
+          toast.info(`🚀 Modo ultra-otimizado ativado para ${selectedContacts.length} emails (ETA: ${estimatedTime?.minutes || '?'} min)`);
         }
 
         const result = await sendBatchEmails(emailJobs, {
@@ -302,7 +332,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             )}
           </div>
           
-          {/* Progress bar for batch operations */}
+          {/* Enhanced progress bar and performance metrics */}
           {isProcessing && progress.total > 0 && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -310,6 +340,27 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
                 <span>{progress.current}/{progress.total} ({progressPercent}%)</span>
               </div>
               <Progress value={progressPercent} className="w-full" />
+              {progress.total >= 500 && (
+                <div className="text-xs text-muted-foreground">
+                  ⚡ Modo otimizado ativo para volumes grandes
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Large volume estimation display */}
+          {estimatedTime && selectedContacts.length >= 100 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <div className="flex items-center space-x-2">
+                <Zap className="h-4 w-4 text-blue-500" />
+                <span className="text-sm font-medium text-blue-800">
+                  Volume estimado: {selectedContacts.length} emails
+                </span>
+              </div>
+              <div className="text-xs text-blue-600 mt-1">
+                Tempo estimado: ~{estimatedTime.minutes} minutos
+                {selectedContacts.length >= 1000 && ` (${estimatedTime.hours}h)`}
+              </div>
             </div>
           )}
           
@@ -458,13 +509,14 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             >
               {isProcessing ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : selectedContacts.length >= 100 && optimizationEnabled ? (
+              ) : selectedContacts.length >= 500 && optimizationEnabled ? (
                 <Zap className="mr-2 h-4 w-4" />
               ) : (
                 <SendHorizontal className="mr-2 h-4 w-4" />
               )}
               {isProcessing ? 'Processando...' : 
-               selectedContacts.length >= 100 && optimizationEnabled ? 'Envio Otimizado' : 'Enviar Agora'}
+               selectedContacts.length >= 500 && optimizationEnabled ? 'Envio Ultra-otimizado' : 
+               selectedContacts.length >= 100 ? 'Envio Otimizado' : 'Enviar Agora'}
             </Button>
             <Button 
               type="submit"

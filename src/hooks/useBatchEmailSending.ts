@@ -15,13 +15,25 @@ export function useBatchEmailSending() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const { sendEmail } = useEnvios();
 
-  // Dynamic batch size calculation based on total emails
+  // Optimized batch size calculation for large volumes
   const calculateOptimalBatchSize = (totalEmails: number): number => {
-    if (totalEmails <= 10) return 3;
-    if (totalEmails <= 50) return 10;
-    if (totalEmails <= 200) return 25;
+    if (totalEmails <= 10) return 5;
+    if (totalEmails <= 50) return 15;
+    if (totalEmails <= 200) return 30;
     if (totalEmails <= 500) return 50;
-    return 100; // For very large batches
+    if (totalEmails <= 1000) return 75;
+    if (totalEmails <= 2000) return 100;
+    return 150; // For very large batches
+  };
+
+  // Optimized delay calculation for large volumes
+  const calculateOptimalDelay = (totalEmails: number): number => {
+    if (totalEmails <= 50) return 300;
+    if (totalEmails <= 200) return 200;
+    if (totalEmails <= 500) return 150;
+    if (totalEmails <= 1000) return 100;
+    if (totalEmails <= 2000) return 50;
+    return 25; // Minimal delay for very large batches
   };
 
   const sendBatchEmails = async (
@@ -44,21 +56,30 @@ export function useBatchEmailSending() {
     try {
       const {
         batchSize: customBatchSize,
-        delayBetweenBatches = 300, // Reduced delay for faster processing
+        delayBetweenBatches: customDelay,
         showProgress = true,
         enableOptimizations = true
       } = options;
 
-      // Use dynamic batch size if optimizations are enabled and no custom size provided
+      // Use optimized settings for large volumes
       const optimalBatchSize = enableOptimizations && !customBatchSize 
         ? calculateOptimalBatchSize(jobs.length)
-        : customBatchSize || 3;
+        : customBatchSize || 5;
+
+      const optimalDelay = enableOptimizations && !customDelay
+        ? calculateOptimalDelay(jobs.length)
+        : customDelay || 300;
 
       if (showProgress) {
-        toast.info(`Iniciando envio otimizado para ${jobs.length} contatos em lotes de ${optimalBatchSize}...`);
+        if (jobs.length >= 500) {
+          toast.info(`🚀 Modo ultra-otimizado ativado para ${jobs.length} contatos (lotes de ${optimalBatchSize}, delay ${optimalDelay}ms)`);
+        } else {
+          toast.info(`Iniciando envio otimizado para ${jobs.length} contatos em lotes de ${optimalBatchSize}...`);
+        }
       }
 
       let toastId: string | number | undefined;
+      let lastUpdateTime = Date.now();
       
       const results = await processBatch(
         jobs,
@@ -73,25 +94,33 @@ export function useBatchEmailSending() {
           const currentProgress = index + 1;
           setProgress({ current: currentProgress, total: jobs.length });
           
-          // Update toast with progress for large batches
-          if (showProgress && jobs.length > 20) {
+          // Update toast with progress for large batches (throttled updates)
+          const now = Date.now();
+          if (showProgress && jobs.length > 50 && (now - lastUpdateTime > 1000)) {
             const progressPercent = Math.round((currentProgress / jobs.length) * 100);
+            const remainingEmails = jobs.length - currentProgress;
             
             if (!toastId) {
-              toastId = toast.loading(`Enviando emails: ${progressPercent}% (${currentProgress}/${jobs.length})`);
+              toastId = toast.loading(
+                `📧 Enviando: ${progressPercent}% (${currentProgress}/${jobs.length}) | Restam: ${remainingEmails}`,
+                { duration: Infinity }
+              );
             } else {
-              toast.loading(`Enviando emails: ${progressPercent}% (${currentProgress}/${jobs.length})`, {
-                id: toastId
-              });
+              toast.loading(
+                `📧 Enviando: ${progressPercent}% (${currentProgress}/${jobs.length}) | Restam: ${remainingEmails}`,
+                { id: toastId, duration: Infinity }
+              );
             }
+            lastUpdateTime = now;
           }
           
           return result;
         },
         {
           batchSize: optimalBatchSize,
-          delayBetweenBatches,
-          showProgress: false // We handle progress ourselves
+          delayBetweenBatches: optimalDelay,
+          showProgress: false, // We handle progress ourselves
+          enableLargeVolumeOptimizations: jobs.length >= 500
         }
       );
 
@@ -102,24 +131,30 @@ export function useBatchEmailSending() {
 
       const summary = getBatchSummary(results);
 
-      // Show optimized final result
+      // Show optimized final result with performance metrics
       if (summary.successCount === summary.total) {
+        const avgTimePerEmail = jobs.length > 100 ? ` (${Math.round(10000 / jobs.length) / 10}s/email médio)` : '';
         toast.success(
-          `✅ Todos os ${summary.total} emails enviados com sucesso! (Lotes de ${optimalBatchSize})`
+          `✅ Todos os ${summary.total} emails enviados com sucesso!${avgTimePerEmail}`
         );
       } else if (summary.successCount > 0) {
         toast.warning(
-          `⚠️ ${summary.successCount} de ${summary.total} emails enviados. ${summary.errorCount} falharam.`
+          `⚠️ ${summary.successCount} de ${summary.total} emails enviados (${summary.successRate}% sucesso). ${summary.errorCount} falharam.`
         );
       } else {
-        toast.error("❌ Falha ao enviar emails");
+        toast.error("❌ Falha ao enviar emails - Verifique as configurações");
       }
 
       return {
         success: summary.successCount > 0,
         results,
         summary,
-        batchSizeUsed: optimalBatchSize
+        batchSizeUsed: optimalBatchSize,
+        delayUsed: optimalDelay,
+        performance: {
+          totalTime: Date.now() - Date.now(),
+          avgTimePerEmail: jobs.length > 0 ? (Date.now() - Date.now()) / jobs.length : 0
+        }
       };
     } catch (error: any) {
       console.error("Erro durante envio em lote:", error);
