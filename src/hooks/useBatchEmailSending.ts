@@ -15,25 +15,46 @@ export function useBatchEmailSending() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const { sendEmail } = useEnvios();
 
-  // Optimized batch size calculation for large volumes
-  const calculateOptimalBatchSize = (totalEmails: number): number => {
-    if (totalEmails <= 10) return 5;
-    if (totalEmails <= 50) return 15;
-    if (totalEmails <= 200) return 30;
-    if (totalEmails <= 500) return 50;
-    if (totalEmails <= 1000) return 75;
-    if (totalEmails <= 2000) return 100;
-    return 150; // For very large batches
-  };
+  // Parallel email sending with simultaneous processing
+  const sendParallelEmails = async (jobs: EmailJob[]): Promise<BatchResult<any>[]> => {
+    console.log(`🚀 Starting parallel email sending for ${jobs.length} emails`);
+    
+    // Create all email promises simultaneously
+    const emailPromises = jobs.map(async (job, index) => {
+      try {
+        const result = await sendEmail({
+          contato_id: job.contactId,
+          template_id: job.templateId,
+          contato_nome: job.contactName
+        });
+        
+        // Update progress atomically
+        setProgress(prev => ({ current: prev.current + 1, total: prev.total }));
+        
+        return {
+          success: true,
+          result,
+          index,
+          id: job.contactId
+        } as BatchResult<any>;
+      } catch (error: any) {
+        // Update progress atomically for errors too
+        setProgress(prev => ({ current: prev.current + 1, total: prev.total }));
+        
+        return {
+          success: false,
+          error: error.message || 'Erro desconhecido',
+          index,
+          id: job.contactId
+        } as BatchResult<any>;
+      }
+    });
 
-  // Optimized delay calculation for large volumes
-  const calculateOptimalDelay = (totalEmails: number): number => {
-    if (totalEmails <= 50) return 300;
-    if (totalEmails <= 200) return 200;
-    if (totalEmails <= 500) return 150;
-    if (totalEmails <= 1000) return 100;
-    if (totalEmails <= 2000) return 50;
-    return 25; // Minimal delay for very large batches
+    // Execute all emails simultaneously
+    const results = await Promise.all(emailPromises);
+    console.log(`✅ Parallel processing completed: ${results.length} emails processed`);
+    
+    return results;
   };
 
   const sendBatchEmails = async (
@@ -43,6 +64,7 @@ export function useBatchEmailSending() {
       delayBetweenBatches?: number;
       showProgress?: boolean;
       enableOptimizations?: boolean;
+      useParallelSending?: boolean;
     } = {}
   ) => {
     if (jobs.length === 0) {
@@ -55,74 +77,67 @@ export function useBatchEmailSending() {
     
     try {
       const {
-        batchSize: customBatchSize,
-        delayBetweenBatches: customDelay,
         showProgress = true,
-        enableOptimizations = true
+        useParallelSending = true // Enable parallel sending by default
       } = options;
 
-      // Use optimized settings for large volumes
-      const optimalBatchSize = enableOptimizations && !customBatchSize 
-        ? calculateOptimalBatchSize(jobs.length)
-        : customBatchSize || 5;
-
-      const optimalDelay = enableOptimizations && !customDelay
-        ? calculateOptimalDelay(jobs.length)
-        : customDelay || 300;
+      const startTime = Date.now();
 
       if (showProgress) {
-        if (jobs.length >= 500) {
-          toast.info(`🚀 Modo ultra-otimizado ativado para ${jobs.length} contatos (lotes de ${optimalBatchSize}, delay ${optimalDelay}ms)`);
+        if (useParallelSending && jobs.length >= 50) {
+          toast.info(`🚀 Enviando ${jobs.length} emails simultaneamente...`);
+        } else if (jobs.length >= 500) {
+          toast.info(`🚀 Modo ultra-otimizado ativado para ${jobs.length} contatos`);
         } else {
-          toast.info(`Iniciando envio otimizado para ${jobs.length} contatos em lotes de ${optimalBatchSize}...`);
+          toast.info(`Iniciando envio para ${jobs.length} contatos...`);
         }
       }
 
+      let results: BatchResult<any>[];
       let toastId: string | number | undefined;
-      let lastUpdateTime = Date.now();
       
-      const results = await processBatch(
-        jobs,
-        async (job, index) => {
-          const result = await sendEmail({
-            contato_id: job.contactId,
-            template_id: job.templateId,
-            contato_nome: job.contactName
-          });
-          
-          // Update progress
-          const currentProgress = index + 1;
-          setProgress({ current: currentProgress, total: jobs.length });
-          
-          // Update toast with progress for large batches (throttled updates)
-          const now = Date.now();
-          if (showProgress && jobs.length > 50 && (now - lastUpdateTime > 1000)) {
-            const progressPercent = Math.round((currentProgress / jobs.length) * 100);
-            const remainingEmails = jobs.length - currentProgress;
-            
-            if (!toastId) {
-              toastId = toast.loading(
-                `📧 Enviando: ${progressPercent}% (${currentProgress}/${jobs.length}) | Restam: ${remainingEmails}`,
-                { duration: Infinity }
-              );
-            } else {
-              toast.loading(
-                `📧 Enviando: ${progressPercent}% (${currentProgress}/${jobs.length}) | Restam: ${remainingEmails}`,
-                { id: toastId, duration: Infinity }
-              );
-            }
-            lastUpdateTime = now;
-          }
-          
-          return result;
-        },
-        {
-          batchSize: optimalBatchSize,
-          delayBetweenBatches: optimalDelay,
-          showProgress: false, // We handle progress ourselves
-          enableLargeVolumeOptimizations: jobs.length >= 500
+      if (useParallelSending && jobs.length <= 2000) {
+        // Use parallel sending for simultaneous processing
+        if (showProgress) {
+          toastId = toast.loading(
+            `📧 Processando ${jobs.length} emails simultaneamente...`,
+            { duration: Infinity }
+          );
         }
-      );
+        
+        results = await sendParallelEmails(jobs);
+      } else {
+        // Fallback to optimized batch processing for very large volumes
+        const optimalBatchSize = jobs.length >= 1000 ? 150 : jobs.length >= 500 ? 100 : 50;
+        const optimalDelay = jobs.length >= 1000 ? 25 : jobs.length >= 500 ? 50 : 100;
+
+        if (showProgress) {
+          toastId = toast.loading(
+            `📧 Processando ${jobs.length} emails em lotes otimizados...`,
+            { duration: Infinity }
+          );
+        }
+
+        results = await processBatch(
+          jobs,
+          async (job, index) => {
+            const result = await sendEmail({
+              contato_id: job.contactId,
+              template_id: job.templateId,
+              contato_nome: job.contactName
+            });
+            
+            setProgress({ current: index + 1, total: jobs.length });
+            return result;
+          },
+          {
+            batchSize: optimalBatchSize,
+            delayBetweenBatches: optimalDelay,
+            showProgress: false,
+            enableLargeVolumeOptimizations: jobs.length >= 500
+          }
+        );
+      }
 
       // Dismiss progress toast
       if (toastId) {
@@ -130,35 +145,67 @@ export function useBatchEmailSending() {
       }
 
       const summary = getBatchSummary(results);
+      const processingTime = Date.now() - startTime;
+      const avgTimePerEmail = processingTime / jobs.length;
 
-      // Show optimized final result with performance metrics
+      // Enhanced success/error alerts with detailed feedback
       if (summary.successCount === summary.total) {
-        const avgTimePerEmail = jobs.length > 100 ? ` (${Math.round(10000 / jobs.length) / 10}s/email médio)` : '';
-        toast.success(
-          `✅ Todos os ${summary.total} emails enviados com sucesso!${avgTimePerEmail}`
-        );
+        const throughput = Math.round((jobs.length / processingTime) * 1000);
+        const alertMessage = useParallelSending 
+          ? `✅ Todos os ${summary.total} emails enviados simultaneamente! (${throughput} emails/s)`
+          : `✅ Todos os ${summary.total} emails enviados com sucesso! (${Math.round(avgTimePerEmail)}ms/email médio)`;
+        
+        // Create dismissible success alert
+        const successToastId = toast.success(alertMessage, {
+          duration: 10000,
+          action: {
+            label: "✕",
+            onClick: () => toast.dismiss(successToastId)
+          }
+        });
       } else if (summary.successCount > 0) {
-        toast.warning(
-          `⚠️ ${summary.successCount} de ${summary.total} emails enviados (${summary.successRate}% sucesso). ${summary.errorCount} falharam.`
-        );
+        const alertMessage = `⚠️ ${summary.successCount} de ${summary.total} emails enviados (${summary.successRate}% sucesso). ${summary.errorCount} falharam.`;
+        
+        // Create dismissible warning alert
+        const warningToastId = toast.warning(alertMessage, {
+          duration: 15000,
+          action: {
+            label: "✕",
+            onClick: () => toast.dismiss(warningToastId)
+          }
+        });
       } else {
-        toast.error("❌ Falha ao enviar emails - Verifique as configurações");
+        // Create dismissible error alert
+        const errorToastId = toast.error("❌ Falha ao enviar emails - Verifique as configurações", {
+          duration: 15000,
+          action: {
+            label: "✕",
+            onClick: () => toast.dismiss(errorToastId)
+          }
+        });
       }
 
       return {
         success: summary.successCount > 0,
         results,
         summary,
-        batchSizeUsed: optimalBatchSize,
-        delayUsed: optimalDelay,
-        performance: {
-          totalTime: Date.now() - Date.now(),
-          avgTimePerEmail: jobs.length > 0 ? (Date.now() - Date.now()) / jobs.length : 0
-        }
+        processingTime,
+        avgTimePerEmail: Math.round(avgTimePerEmail),
+        throughput: Math.round((jobs.length / processingTime) * 1000),
+        parallelProcessing: useParallelSending && jobs.length <= 2000
       };
     } catch (error: any) {
       console.error("Erro durante envio em lote:", error);
-      toast.error(`Erro durante envio em lote: ${error.message}`);
+      
+      // Create dismissible error alert
+      const errorToastId = toast.error(`Erro durante envio em lote: ${error.message}`, {
+        duration: 15000,
+        action: {
+          label: "✕",
+          onClick: () => toast.dismiss(errorToastId)
+        }
+      });
+      
       return {
         success: false,
         results: [],

@@ -40,7 +40,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [optimizationEnabled, setOptimizationEnabled] = useState(true);
+  const [parallelSendingEnabled, setParallelSendingEnabled] = useState(true);
   const [estimatedTime, setEstimatedTime] = useState<{minutes: number, hours: number} | null>(null);
   
   const { createSchedule, updateSchedule } = useSchedules();
@@ -73,7 +73,11 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   // Calculate estimated processing time for large volumes
   useEffect(() => {
     if (selectedContacts.length >= 100) {
-      const avgTimePerEmail = 500; // 500ms per email average
+      // Adjust estimation based on parallel vs sequential sending
+      const avgTimePerEmail = parallelSendingEnabled && selectedContacts.length <= 2000 
+        ? 100 // Much faster with parallel sending
+        : 500; // Traditional sequential estimation
+      
       const totalMs = selectedContacts.length * avgTimePerEmail;
       const minutes = Math.round(totalMs / (1000 * 60));
       const hours = Math.round(minutes / 60 * 10) / 10;
@@ -81,7 +85,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     } else {
       setEstimatedTime(null);
     }
-  }, [selectedContacts.length]);
+  }, [selectedContacts.length, parallelSendingEnabled]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,11 +174,16 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       return;
     }
 
-    // Enhanced warning and confirmation for large volumes
+    // Enhanced confirmation for large volumes with parallel sending info
     if (selectedContacts.length >= 1000) {
+      const sendingMethod = parallelSendingEnabled ? "simultâneo" : "sequencial";
+      const estimatedTimeText = parallelSendingEnabled 
+        ? `poucos segundos` 
+        : `${estimatedTime?.minutes || 'vários'} minutos`;
+      
       const proceed = window.confirm(
-        `Você está prestes a enviar ${selectedContacts.length} emails. ` +
-        `Isto pode levar ${estimatedTime?.minutes || 'vários'} minutos. ` +
+        `Você está prestes a enviar ${selectedContacts.length} emails de forma ${sendingMethod}. ` +
+        `Isto deve levar ${estimatedTimeText}. ` +
         `Deseja continuar?`
       );
       if (!proceed) return;
@@ -182,7 +191,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
 
     try {
       if (bulkMode && selectedContacts.length > 1) {
-        // Use the ultra-optimized batch email sending
+        // Use the enhanced batch email sending with parallel processing
         const emailJobs = selectedContacts.map(contactId => {
           const contact = contacts.find(c => c.id === contactId);
           return {
@@ -192,14 +201,17 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
           };
         });
 
-        // Show optimization info for large batches
-        if (selectedContacts.length >= 500) {
-          toast.info(`🚀 Modo ultra-otimizado ativado para ${selectedContacts.length} emails (ETA: ${estimatedTime?.minutes || '?'} min)`);
+        // Show enhanced info for parallel sending
+        if (selectedContacts.length >= 50 && parallelSendingEnabled) {
+          toast.info(`🚀 Enviando ${selectedContacts.length} emails simultaneamente...`);
+        } else if (selectedContacts.length >= 500) {
+          toast.info(`🚀 Modo ultra-otimizado ativado para ${selectedContacts.length} emails`);
         }
 
         const result = await sendBatchEmails(emailJobs, {
           showProgress: true,
-          enableOptimizations: optimizationEnabled
+          enableOptimizations: !parallelSendingEnabled,
+          useParallelSending: parallelSendingEnabled
         });
         
         if (result.success) {
@@ -236,10 +248,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
         return prev.filter(id => id !== contactId);
       } else {
         if (!bulkMode) {
-          // In single mode, replace the selection
           return [contactId];
         }
-        // In bulk mode, add to selection
         return [...prev, contactId];
       }
     });
@@ -248,7 +258,6 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const toggleBulkMode = (checked: boolean | "indeterminate") => {
     const isChecked = checked === true;
     setBulkMode(isChecked);
-    // When switching to single mode, keep only the first selection
     if (!isChecked && selectedContacts.length > 1) {
       setSelectedContacts([selectedContacts[0]]);
     }
@@ -272,20 +281,18 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     
     const allContactIds = filteredContacts.map(contact => contact.id);
     setSelectedContacts(allContactIds);
-    setBulkMode(true); // Automatically enable bulk mode when selecting all
+    setBulkMode(true);
     toast.success(`${allContactIds.length} contatos selecionados`);
   };
   
   // Filter contacts based on search query and selected tags
   const filteredContacts = contacts.filter(contact => {
-    // Search filter
     const matchesSearch = searchQuery === '' || 
       contact.nome.toLowerCase().includes(searchQuery.toLowerCase()) || 
       contact.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (contact.telefone && contact.telefone.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (contact.razao_social && contact.razao_social.toLowerCase().includes(searchQuery.toLowerCase()));
       
-    // Tag filter
     const matchesTags = selectedTags.length === 0 || 
       (contact.tags && selectedTags.some(tag => contact.tags && contact.tags.includes(tag)));
       
@@ -294,8 +301,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
 
   const progressPercent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
-  const handleOptimizationToggle = (checked: boolean | "indeterminate") => {
-    setOptimizationEnabled(checked === true);
+  const handleParallelSendingToggle = (checked: boolean | "indeterminate") => {
+    setParallelSendingEnabled(checked === true);
   };
 
   return (
@@ -318,29 +325,40 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             </div>
             
             {selectedContacts.length >= 50 && (
-              <div className="flex items-center space-x-2">
-                <Zap className="h-4 w-4 text-orange-500" />
-                <Checkbox 
-                  id="optimizationEnabled" 
-                  checked={optimizationEnabled} 
-                  onCheckedChange={handleOptimizationToggle}
-                />
-                <label htmlFor="optimizationEnabled" className="text-sm font-medium text-orange-600">
-                  Otimizações para lotes grandes
-                </label>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Zap className="h-4 w-4 text-blue-500" />
+                  <Checkbox 
+                    id="parallelSendingEnabled" 
+                    checked={parallelSendingEnabled} 
+                    onCheckedChange={handleParallelSendingToggle}
+                  />
+                  <label htmlFor="parallelSendingEnabled" className="text-sm font-medium text-blue-600">
+                    Envio simultâneo (paralelo)
+                  </label>
+                </div>
               </div>
             )}
           </div>
           
-          {/* Enhanced progress bar and performance metrics */}
+          {/* Enhanced progress bar with parallel processing indicator */}
           {isProcessing && progress.total > 0 && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Enviando emails...</span>
+                <span>
+                  {parallelSendingEnabled && selectedContacts.length <= 2000 
+                    ? 'Enviando emails simultaneamente...' 
+                    : 'Enviando emails...'}
+                </span>
                 <span>{progress.current}/{progress.total} ({progressPercent}%)</span>
               </div>
               <Progress value={progressPercent} className="w-full" />
-              {progress.total >= 500 && (
+              {parallelSendingEnabled && selectedContacts.length <= 2000 && (
+                <div className="text-xs text-blue-600">
+                  ⚡ Processamento paralelo ativo - Máxima velocidade
+                </div>
+              )}
+              {progress.total >= 500 && !parallelSendingEnabled && (
                 <div className="text-xs text-muted-foreground">
                   ⚡ Modo otimizado ativo para volumes grandes
                 </div>
@@ -348,18 +366,19 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             </div>
           )}
 
-          {/* Large volume estimation display */}
+          {/* Enhanced volume estimation with parallel sending info */}
           {estimatedTime && selectedContacts.length >= 100 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className={`border rounded-md p-3 ${parallelSendingEnabled ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'}`}>
               <div className="flex items-center space-x-2">
-                <Zap className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-medium text-blue-800">
+                <Zap className={`h-4 w-4 ${parallelSendingEnabled ? 'text-blue-500' : 'text-orange-500'}`} />
+                <span className={`text-sm font-medium ${parallelSendingEnabled ? 'text-blue-800' : 'text-orange-800'}`}>
                   Volume estimado: {selectedContacts.length} emails
+                  {parallelSendingEnabled ? ' (Simultâneo)' : ' (Sequencial)'}
                 </span>
               </div>
-              <div className="text-xs text-blue-600 mt-1">
-                Tempo estimado: ~{estimatedTime.minutes} minutos
-                {selectedContacts.length >= 1000 && ` (${estimatedTime.hours}h)`}
+              <div className={`text-xs mt-1 ${parallelSendingEnabled ? 'text-blue-600' : 'text-orange-600'}`}>
+                Tempo estimado: {parallelSendingEnabled ? '~poucos segundos' : `~${estimatedTime.minutes} minutos`}
+                {selectedContacts.length >= 1000 && !parallelSendingEnabled && ` (${estimatedTime.hours}h)`}
               </div>
             </div>
           )}
@@ -509,13 +528,16 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             >
               {isProcessing ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : selectedContacts.length >= 500 && optimizationEnabled ? (
+              ) : parallelSendingEnabled && selectedContacts.length >= 50 ? (
+                <Zap className="mr-2 h-4 w-4" />
+              ) : selectedContacts.length >= 500 ? (
                 <Zap className="mr-2 h-4 w-4" />
               ) : (
                 <SendHorizontal className="mr-2 h-4 w-4" />
               )}
               {isProcessing ? 'Processando...' : 
-               selectedContacts.length >= 500 && optimizationEnabled ? 'Envio Ultra-otimizado' : 
+               parallelSendingEnabled && selectedContacts.length >= 50 ? 'Envio Simultâneo' :
+               selectedContacts.length >= 500 ? 'Envio Ultra-otimizado' : 
                selectedContacts.length >= 100 ? 'Envio Otimizado' : 'Enviar Agora'}
             </Button>
             <Button 
