@@ -74,6 +74,128 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
   });
 
+  // Inject global styles for dark mode support
+  useEffect(() => {
+    const styleId = 'rich-text-editor-styles';
+    
+    // Remove existing styles if any
+    const existingStyle = document.getElementById(styleId);
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+
+    // Create and inject new styles
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .rich-text-editor-content .ProseMirror {
+        outline: none !important;
+        color: inherit !important;
+        background: transparent !important;
+        min-height: ${minHeight};
+      }
+      
+      .rich-text-editor-content .ProseMirror p {
+        color: inherit !important;
+        margin: 0.5em 0;
+      }
+      
+      .rich-text-editor-content .ProseMirror h1,
+      .rich-text-editor-content .ProseMirror h2,
+      .rich-text-editor-content .ProseMirror h3,
+      .rich-text-editor-content .ProseMirror h4,
+      .rich-text-editor-content .ProseMirror h5,
+      .rich-text-editor-content .ProseMirror h6 {
+        color: inherit !important;
+      }
+      
+      .rich-text-editor-content .ProseMirror ul,
+      .rich-text-editor-content .ProseMirror ol {
+        color: inherit !important;
+      }
+      
+      .rich-text-editor-content .ProseMirror a {
+        color: hsl(var(--primary)) !important;
+      }
+      
+      .rich-text-editor-content .ProseMirror blockquote {
+        border-left: 4px solid hsl(var(--border));
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: inherit !important;
+      }
+      
+      .rich-text-editor-content .ProseMirror code {
+        background: hsl(var(--muted));
+        color: inherit !important;
+        padding: 0.2rem 0.4rem;
+        border-radius: 0.25rem;
+        font-size: 0.875em;
+      }
+      
+      /* Dark mode specific improvements */
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror,
+      .dark .rich-text-editor-content .ProseMirror {
+        color: #e0e0e0 !important;
+      }
+      
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror p,
+      .dark .rich-text-editor-content .ProseMirror p {
+        color: #e0e0e0 !important;
+      }
+      
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror h1,
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror h2,
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror h3,
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror h4,
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror h5,
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror h6,
+      .dark .rich-text-editor-content .ProseMirror h1,
+      .dark .rich-text-editor-content .ProseMirror h2,
+      .dark .rich-text-editor-content .ProseMirror h3,
+      .dark .rich-text-editor-content .ProseMirror h4,
+      .dark .rich-text-editor-content .ProseMirror h5,
+      .dark .rich-text-editor-content .ProseMirror h6 {
+        color: #ffffff !important;
+      }
+      
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror ul,
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror ol,
+      .dark .rich-text-editor-content .ProseMirror ul,
+      .dark .rich-text-editor-content .ProseMirror ol {
+        color: #e0e0e0 !important;
+      }
+      
+      /* Placeholder styling for dark mode */
+      [data-theme="dark"] .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before,
+      .dark .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before {
+        color: #aaaaaa !important;
+        content: attr(data-placeholder);
+        float: left;
+        height: 0;
+        pointer-events: none;
+      }
+      
+      .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before {
+        color: #999999;
+        content: attr(data-placeholder);
+        float: left;
+        height: 0;
+        pointer-events: none;
+      }
+    `;
+    
+    document.head.appendChild(style);
+
+    // Cleanup function to remove styles when component unmounts
+    return () => {
+      const styleElement = document.getElementById(styleId);
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, [minHeight]);
+
   useEffect(() => {
     if (editor && onEditorInit) {
       onEditorInit(editor);
@@ -292,105 +414,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           className="rich-text-editor-content"
         />
       </div>
-
-      {/* Global styles for better dark mode support */}
-      <style jsx global>{`
-        .rich-text-editor-content .ProseMirror {
-          outline: none !important;
-          color: inherit !important;
-          background: transparent !important;
-          min-height: ${minHeight};
-        }
-        
-        .rich-text-editor-content .ProseMirror p {
-          color: inherit !important;
-          margin: 0.5em 0;
-        }
-        
-        .rich-text-editor-content .ProseMirror h1,
-        .rich-text-editor-content .ProseMirror h2,
-        .rich-text-editor-content .ProseMirror h3,
-        .rich-text-editor-content .ProseMirror h4,
-        .rich-text-editor-content .ProseMirror h5,
-        .rich-text-editor-content .ProseMirror h6 {
-          color: inherit !important;
-        }
-        
-        .rich-text-editor-content .ProseMirror ul,
-        .rich-text-editor-content .ProseMirror ol {
-          color: inherit !important;
-        }
-        
-        .rich-text-editor-content .ProseMirror a {
-          color: hsl(var(--primary)) !important;
-        }
-        
-        .rich-text-editor-content .ProseMirror blockquote {
-          border-left: 4px solid hsl(var(--border));
-          padding-left: 1rem;
-          margin: 1rem 0;
-          color: inherit !important;
-        }
-        
-        .rich-text-editor-content .ProseMirror code {
-          background: hsl(var(--muted));
-          color: inherit !important;
-          padding: 0.2rem 0.4rem;
-          border-radius: 0.25rem;
-          font-size: 0.875em;
-        }
-        
-        /* Dark mode specific improvements */
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror,
-        .dark .rich-text-editor-content .ProseMirror {
-          color: #e0e0e0 !important;
-        }
-        
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror p,
-        .dark .rich-text-editor-content .ProseMirror p {
-          color: #e0e0e0 !important;
-        }
-        
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror h1,
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror h2,
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror h3,
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror h4,
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror h5,
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror h6,
-        .dark .rich-text-editor-content .ProseMirror h1,
-        .dark .rich-text-editor-content .ProseMirror h2,
-        .dark .rich-text-editor-content .ProseMirror h3,
-        .dark .rich-text-editor-content .ProseMirror h4,
-        .dark .rich-text-editor-content .ProseMirror h5,
-        .dark .rich-text-editor-content .ProseMirror h6 {
-          color: #ffffff !important;
-        }
-        
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror ul,
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror ol,
-        .dark .rich-text-editor-content .ProseMirror ul,
-        .dark .rich-text-editor-content .ProseMirror ol {
-          color: #e0e0e0 !important;
-        }
-        
-        /* Placeholder styling for dark mode */
-        [data-theme="dark"] .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before,
-        .dark .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before {
-          color: #aaaaaa !important;
-          content: attr(data-placeholder);
-          float: left;
-          height: 0;
-          pointer-events: none;
-        }
-        
-        .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before {
-          color: #999999;
-          content: attr(data-placeholder);
-          float: left;
-          height: 0;
-          pointer-events: none;
-        }
-      `}</style>
     </div>
   );
 };
