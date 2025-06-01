@@ -60,6 +60,13 @@ export function useTemplates() {
         user_id: user.id
       };
       
+      // Update default welcome template content
+      if (templateData.nome === 'Template de Boas-vindas' || templateData.conteudo.includes('Seja bem-vindo ao DisparoPro')) {
+        templateData.conteudo = templateData.conteudo
+          .replace(/DisparoPro/g, 'RocketMail')
+          .replace(/Equipe DisparoPro/g, 'Equipe RocketMail');
+      }
+      
       // Ensure attachments is properly formatted and stored
       if (templateData.attachments) {
         // Se for um array, converter para string JSON
@@ -101,6 +108,13 @@ export function useTemplates() {
         ...formData, 
         canal: 'email'
       };
+      
+      // Update default welcome template content
+      if (templateData.nome === 'Template de Boas-vindas' || templateData.conteudo.includes('Seja bem-vindo ao DisparoPro')) {
+        templateData.conteudo = templateData.conteudo
+          .replace(/DisparoPro/g, 'RocketMail')
+          .replace(/Equipe DisparoPro/g, 'Equipe RocketMail');
+      }
       
       // Ensure attachments is properly formatted and stored
       if (templateData.attachments) {

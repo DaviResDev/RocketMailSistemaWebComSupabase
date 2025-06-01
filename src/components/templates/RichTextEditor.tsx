@@ -8,9 +8,10 @@ import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import TextStyle from '@tiptap/extension-text-style';
 import FontFamily from '@tiptap/extension-font-family';
+import FontSize from '@tiptap/extension-font-size';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Button } from '@/components/ui/button';
-import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable } from 'lucide-react';
+import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const VARIABLES = [
@@ -25,6 +26,32 @@ const VARIABLES = [
   { key: 'produto', label: 'Produto' },
   { key: 'valor', label: 'Valor' },
   { key: 'vencimento', label: 'Vencimento' }
+];
+
+const FONT_SIZES = [
+  { value: '12px', label: '12px' },
+  { value: '14px', label: '14px' },
+  { value: '16px', label: '16px' },
+  { value: '18px', label: '18px' },
+  { value: '20px', label: '20px' },
+  { value: '24px', label: '24px' },
+  { value: '28px', label: '28px' },
+  { value: '32px', label: '32px' },
+  { value: '36px', label: '36px' },
+  { value: '48px', label: '48px' }
+];
+
+const FONT_FAMILIES = [
+  { value: 'Arial, sans-serif', label: 'Arial' },
+  { value: 'Helvetica, sans-serif', label: 'Helvetica' },
+  { value: 'Times New Roman, serif', label: 'Times New Roman' },
+  { value: 'Georgia, serif', label: 'Georgia' },
+  { value: 'Verdana, sans-serif', label: 'Verdana' },
+  { value: 'Roboto, sans-serif', label: 'Roboto' },
+  { value: 'Open Sans, sans-serif', label: 'Open Sans' },
+  { value: 'Lato, sans-serif', label: 'Lato' },
+  { value: 'Montserrat, sans-serif', label: 'Montserrat' },
+  { value: 'Poppins, sans-serif', label: 'Poppins' }
 ];
 
 interface RichTextEditorProps {
@@ -57,6 +84,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       Underline,
       TextStyle,
       FontFamily,
+      FontSize,
       Placeholder.configure({
         placeholder,
         emptyNodeClass: 'is-editor-empty',
@@ -214,6 +242,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
+  const setFontSize = (size: string) => {
+    if (editor) {
+      editor.chain().focus().setFontSize(size).run();
+    }
+  };
+
+  const setFontFamily = (fontFamily: string) => {
+    if (editor) {
+      editor.chain().focus().setFontFamily(fontFamily).run();
+    }
+  };
+
   const addLink = () => {
     const url = window.prompt('URL');
     if (url) {
@@ -276,6 +316,73 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         >
           <UnderlineIcon className="h-4 w-4" />
         </Button>
+
+        <div className="w-px h-6 bg-border mx-1" />
+
+        {/* Font Size Selector */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="min-w-[60px]"
+            >
+              <Type className="h-4 w-4 mr-1" />
+              Tamanho
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-40">
+            <div className="grid gap-1">
+              <div className="text-sm font-medium mb-2">Tamanho da Fonte</div>
+              {FONT_SIZES.map((size) => (
+                <Button
+                  key={size.value}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start text-xs"
+                  onClick={() => setFontSize(size.value)}
+                >
+                  {size.label}
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Font Family Selector */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="min-w-[60px]"
+            >
+              <Palette className="h-4 w-4 mr-1" />
+              Fonte
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48">
+            <div className="grid gap-1">
+              <div className="text-sm font-medium mb-2">Família da Fonte</div>
+              {FONT_FAMILIES.map((font) => (
+                <Button
+                  key={font.value}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start text-xs"
+                  style={{ fontFamily: font.value }}
+                  onClick={() => setFontFamily(font.value)}
+                >
+                  {font.label}
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
 
         <div className="w-px h-6 bg-border mx-1" />
 
