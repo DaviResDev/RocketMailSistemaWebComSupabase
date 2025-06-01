@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -83,8 +82,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }),
       Underline,
       TextStyle,
-      FontFamily,
-      FontSize,
+      FontFamily.configure({
+        types: ['textStyle'],
+      }),
+      FontSize.configure({
+        types: ['textStyle'],
+      }),
       Placeholder.configure({
         placeholder,
         emptyNodeClass: 'is-editor-empty',
@@ -242,15 +245,33 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
+  // FIXED: Corrected font size function
   const setFontSize = (size: string) => {
     if (editor) {
-      editor.chain().focus().setFontSize(size).run();
+      const { from, to } = editor.state.selection;
+      
+      if (from === to) {
+        // No text selected, set for new text
+        editor.chain().focus().setFontSize(size).run();
+      } else {
+        // Text selected, apply to selection
+        editor.chain().focus().setMark('textStyle', { fontSize: size }).run();
+      }
     }
   };
 
+  // FIXED: Corrected font family function
   const setFontFamily = (fontFamily: string) => {
     if (editor) {
-      editor.chain().focus().setFontFamily(fontFamily).run();
+      const { from, to } = editor.state.selection;
+      
+      if (from === to) {
+        // No text selected, set for new text
+        editor.chain().focus().setFontFamily(fontFamily).run();
+      } else {
+        // Text selected, apply to selection
+        editor.chain().focus().setMark('textStyle', { fontFamily: fontFamily }).run();
+      }
     }
   };
 

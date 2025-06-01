@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -60,11 +59,14 @@ export function useTemplates() {
         user_id: user.id
       };
       
-      // Update default welcome template content
-      if (templateData.nome === 'Template de Boas-vindas' || templateData.conteudo.includes('Seja bem-vindo ao DisparoPro')) {
-        templateData.conteudo = templateData.conteudo
-          .replace(/DisparoPro/g, 'RocketMail')
-          .replace(/Equipe DisparoPro/g, 'Equipe RocketMail');
+      // Update default welcome template content - NEW CONTENT
+      if (templateData.nome === 'Template de Boas-vindas' || templateData.conteudo.includes('Seja bem-vindo ao')) {
+        templateData.conteudo = `Olá {nome},
+
+Seja bem-vindo ao RocketMail!
+
+Atenciosamente,
+Equipe RocketMail`;
       }
       
       // Ensure attachments is properly formatted and stored
@@ -109,11 +111,14 @@ export function useTemplates() {
         canal: 'email'
       };
       
-      // Update default welcome template content
-      if (templateData.nome === 'Template de Boas-vindas' || templateData.conteudo.includes('Seja bem-vindo ao DisparoPro')) {
-        templateData.conteudo = templateData.conteudo
-          .replace(/DisparoPro/g, 'RocketMail')
-          .replace(/Equipe DisparoPro/g, 'Equipe RocketMail');
+      // Update default welcome template content - NEW CONTENT
+      if (templateData.nome === 'Template de Boas-vindas' || templateData.conteudo.includes('Seja bem-vindo ao')) {
+        templateData.conteudo = `Olá {nome},
+
+Seja bem-vindo ao RocketMail!
+
+Atenciosamente,
+Equipe RocketMail`;
       }
       
       // Ensure attachments is properly formatted and stored
