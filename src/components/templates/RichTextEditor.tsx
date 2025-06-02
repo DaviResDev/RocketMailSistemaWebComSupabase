@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -7,11 +8,31 @@ import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import TextStyle from '@tiptap/extension-text-style';
 import FontFamily from '@tiptap/extension-font-family';
-import FontSize from '@tiptap/extension-font-size';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+// Custom FontSize extension with better compatibility
+const FontSize = TextStyle.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      fontSize: {
+        default: null,
+        parseHTML: element => element.style.fontSize?.replace(/['"]+/g, ''),
+        renderHTML: attributes => {
+          if (!attributes.fontSize) {
+            return {};
+          }
+          return {
+            style: `font-size: ${attributes.fontSize}`,
+          };
+        },
+      },
+    };
+  },
+});
 
 const VARIABLES = [
   { key: 'nome', label: 'Nome' },
@@ -81,17 +102,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         types: ['heading', 'paragraph'],
       }),
       Underline,
-      TextStyle.configure({
-        HTMLAttributes: {
-          class: 'custom-text-style',
-        },
-      }),
+      TextStyle,
       FontFamily.configure({
         types: ['textStyle'],
       }),
-      FontSize.configure({
-        types: ['textStyle'],
-      }),
+      FontSize,
       Placeholder.configure({
         placeholder,
         emptyNodeClass: 'is-editor-empty',
@@ -168,16 +183,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         font-size: 0.875em;
       }
       
-      /* Font styling support */
-      .rich-text-editor-content .ProseMirror [style*="font-size"] {
+      /* FIXED: Better font styling support */
+      .rich-text-editor-content .ProseMirror span[style*="font-size"],
+      .rich-text-editor-content .ProseMirror span[style*="font-family"] {
         display: inline !important;
       }
       
-      .rich-text-editor-content .ProseMirror [style*="font-family"] {
+      .rich-text-editor-content .ProseMirror [data-font-size] {
         display: inline !important;
       }
       
-      .rich-text-editor-content .ProseMirror span[style] {
+      .rich-text-editor-content .ProseMirror [data-font-family] {
         display: inline !important;
       }
       
@@ -262,7 +278,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // FIXED: Improved font size function with proper selection handling and debug logs
+  // FIXED: Improved font size function with proper mark application
   const setFontSize = (size: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -282,13 +298,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       editor.chain().focus().setMark('textStyle', { fontSize: size }).run();
     }
 
-    // Log the current state after applying
+    // Force update
     setTimeout(() => {
       console.log('Editor HTML after fontSize change:', editor.getHTML());
+      onChange(editor.getHTML());
     }, 100);
   };
 
-  // FIXED: Improved font family function with proper selection handling and debug logs
+  // FIXED: Improved font family function with proper mark application
   const setFontFamily = (fontFamily: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -308,9 +325,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       editor.chain().focus().setMark('textStyle', { fontFamily: fontFamily }).run();
     }
 
-    // Log the current state after applying
+    // Force update
     setTimeout(() => {
       console.log('Editor HTML after fontFamily change:', editor.getHTML());
+      onChange(editor.getHTML());
     }, 100);
   };
 
@@ -379,7 +397,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* Font Size Selector with improved functionality */}
+        {/* FIXED: Font Size Selector with improved functionality */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -414,7 +432,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </PopoverContent>
         </Popover>
 
-        {/* Font Family Selector with improved functionality */}
+        {/* FIXED: Font Family Selector with improved functionality */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
