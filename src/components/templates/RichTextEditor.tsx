@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -12,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// FIXED: Proper FontSize extension using TextStyle
+// Custom FontSize extension that properly extends TextStyle
 const FontSize = TextStyle.extend({
   addAttributes() {
     return {
@@ -190,7 +191,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         font-size: 0.875em;
       }
       
-      /* FIXED: Proper font and size styling */
+      /* Font family and size styling */
       .rich-text-content .ProseMirror span[style*="font-family"] {
         display: inline !important;
       }
@@ -287,7 +288,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // FIXED: Completely rewritten font family function with proper selection handling
+  // FIXED: Improved font family function with proper TipTap command chain
   const setFontFamily = (fontFamily: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -300,17 +301,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const hasSelection = from !== to;
     
     if (!hasSelection) {
-      console.log('No text selected');
+      console.log('No text selected - prompting user to select text first');
+      alert('Por favor, selecione o texto que deseja alterar a fonte primeiro.');
       return;
     }
 
-    // Apply the font family using TipTap's textStyle mark
-    editor.chain()
+    // Use TipTap's chain commands for better control
+    const success = editor
+      .chain()
       .focus()
-      .setMark('textStyle', { fontFamily: fontFamily })
+      .setFontFamily(fontFamily)
       .run();
     
-    // Force update after applying the mark
+    console.log('Font family command result:', success);
+    
+    // Force update
     setTimeout(() => {
       const newHTML = editor.getHTML();
       console.log('Updated HTML after fontFamily:', newHTML);
@@ -318,7 +323,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }, 100);
   };
 
-  // FIXED: Completely rewritten font size function with proper selection handling
+  // FIXED: Improved font size function with proper TipTap command chain
   const setFontSize = (size: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -331,17 +336,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const hasSelection = from !== to;
     
     if (!hasSelection) {
-      console.log('No text selected');
+      console.log('No text selected - prompting user to select text first');
+      alert('Por favor, selecione o texto que deseja alterar o tamanho primeiro.');
       return;
     }
 
-    // Apply the font size using TipTap's textStyle mark
-    editor.chain()
+    // Use mark with fontSize attribute
+    const success = editor
+      .chain()
       .focus()
       .setMark('textStyle', { fontSize: size })
       .run();
     
-    // Force update after applying the mark
+    console.log('Font size command result:', success);
+    
+    // Force update
     setTimeout(() => {
       const newHTML = editor.getHTML();
       console.log('Updated HTML after fontSize:', newHTML);
@@ -414,14 +423,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* FIXED: Font Size Selector with improved functionality */}
+        {/* Font Size Selector */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="min-w-[60px]"
+              className="min-w-[80px]"
             >
               <Type className="h-4 w-4 mr-1" />
               Tamanho
@@ -449,14 +458,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </PopoverContent>
         </Popover>
 
-        {/* FIXED: Font Family Selector with improved functionality */}
+        {/* Font Family Selector */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="min-w-[60px]"
+              className="min-w-[70px]"
             >
               <Palette className="h-4 w-4 mr-1" />
               Fonte
