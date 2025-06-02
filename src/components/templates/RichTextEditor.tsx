@@ -1,4 +1,5 @@
 
+
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -13,20 +14,22 @@ import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Custom FontSize extension with better compatibility
+// FIXED: Custom FontSize extension properly configured
 const FontSize = TextStyle.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
       fontSize: {
         default: null,
-        parseHTML: element => element.style.fontSize?.replace(/['"]+/g, ''),
+        parseHTML: element => {
+          return element.style.fontSize?.replace(/['"]+/g, '') || null;
+        },
         renderHTML: attributes => {
           if (!attributes.fontSize) {
             return {};
           }
           return {
-            style: `font-size: ${attributes.fontSize}`,
+            style: `font-size: ${attributes.fontSize};`,
           };
         },
       },
@@ -183,17 +186,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         font-size: 0.875em;
       }
       
-      /* FIXED: Better font styling support */
-      .rich-text-editor-content .ProseMirror span[style*="font-size"],
+      /* FIXED: Better font styling support for spans with inline styles */
+      .rich-text-editor-content .ProseMirror span[style*="font-size"] {
+        display: inline !important;
+      }
+      
       .rich-text-editor-content .ProseMirror span[style*="font-family"] {
-        display: inline !important;
-      }
-      
-      .rich-text-editor-content .ProseMirror [data-font-size] {
-        display: inline !important;
-      }
-      
-      .rich-text-editor-content .ProseMirror [data-font-family] {
         display: inline !important;
       }
       
@@ -278,58 +276,44 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // FIXED: Improved font size function with proper mark application
+  // FIXED: Completely rewritten font size function with proper TipTap mark handling
   const setFontSize = (size: string) => {
     if (!editor) {
       console.log('Editor not available');
       return;
     }
 
-    const { from, to } = editor.state.selection;
-    console.log('Setting font size:', size, 'Selection:', { from, to });
-
-    if (from === to) {
-      // No text selected - set for next typed text
-      console.log('No selection, setting fontSize for next input');
-      editor.chain().focus().setMark('textStyle', { fontSize: size }).run();
-    } else {
-      // Text is selected - apply to selection
-      console.log('Text selected, applying fontSize to selection');
-      editor.chain().focus().setMark('textStyle', { fontSize: size }).run();
-    }
-
-    // Force update
+    console.log('Setting font size:', size);
+    
+    // Use TipTap's command chain to properly apply the fontSize attribute
+    editor.chain().focus().setMark('textStyle', { fontSize: size }).run();
+    
+    // Force a re-render and update
     setTimeout(() => {
-      console.log('Editor HTML after fontSize change:', editor.getHTML());
-      onChange(editor.getHTML());
-    }, 100);
+      const newHTML = editor.getHTML();
+      console.log('Updated HTML after fontSize:', newHTML);
+      onChange(newHTML);
+    }, 50);
   };
 
-  // FIXED: Improved font family function with proper mark application
+  // FIXED: Completely rewritten font family function with proper TipTap mark handling
   const setFontFamily = (fontFamily: string) => {
     if (!editor) {
       console.log('Editor not available');
       return;
     }
 
-    const { from, to } = editor.state.selection;
-    console.log('Setting font family:', fontFamily, 'Selection:', { from, to });
-
-    if (from === to) {
-      // No text selected - set for next typed text
-      console.log('No selection, setting fontFamily for next input');
-      editor.chain().focus().setMark('textStyle', { fontFamily: fontFamily }).run();
-    } else {
-      // Text is selected - apply to selection
-      console.log('Text selected, applying fontFamily to selection');
-      editor.chain().focus().setMark('textStyle', { fontFamily: fontFamily }).run();
-    }
-
-    // Force update
+    console.log('Setting font family:', fontFamily);
+    
+    // Use TipTap's command chain to properly apply the fontFamily attribute
+    editor.chain().focus().setMark('textStyle', { fontFamily: fontFamily }).run();
+    
+    // Force a re-render and update
     setTimeout(() => {
-      console.log('Editor HTML after fontFamily change:', editor.getHTML());
-      onChange(editor.getHTML());
-    }, 100);
+      const newHTML = editor.getHTML();
+      console.log('Updated HTML after fontFamily:', newHTML);
+      onChange(newHTML);
+    }, 50);
   };
 
   const addLink = () => {
@@ -397,7 +381,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* FIXED: Font Size Selector with improved functionality */}
+        {/* FIXED: Font Size Selector with corrected functionality */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -432,7 +416,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </PopoverContent>
         </Popover>
 
-        {/* FIXED: Font Family Selector with improved functionality */}
+        {/* FIXED: Font Family Selector with corrected functionality */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -608,3 +592,4 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     </div>
   );
 };
+
