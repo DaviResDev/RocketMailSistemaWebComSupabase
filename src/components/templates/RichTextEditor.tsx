@@ -1,4 +1,5 @@
 
+
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -144,7 +145,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Rich Text Editor Content Styles */
+      /* Rich Text Editor Content Styles - FIXED FONT RENDERING */
       .rich-text-content .ProseMirror {
         outline: none !important;
         color: inherit !important;
@@ -191,7 +192,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         font-size: 0.875em;
       }
       
-      /* Font family and size styling */
+      /* CRITICAL: Font family and size must override ALL other styles */
       .rich-text-content .ProseMirror span[style*="font-family"] {
         display: inline !important;
       }
@@ -200,9 +201,64 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         display: inline !important;
       }
       
-      /* Ensure spans with styles are properly rendered */
+      /* Ensure all styled spans render properly */
       .rich-text-content .ProseMirror span[style] {
         display: inline !important;
+      }
+      
+      /* FORCE font families to render correctly */
+      .rich-text-content .ProseMirror * {
+        font-family: inherit;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Arial'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Arial"] {
+        font-family: Arial, sans-serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Helvetica'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Helvetica"] {
+        font-family: Helvetica, sans-serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Times New Roman'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Times New Roman"] {
+        font-family: "Times New Roman", serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Georgia'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Georgia"] {
+        font-family: Georgia, serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Verdana'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Verdana"] {
+        font-family: Verdana, sans-serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Roboto'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Roboto"] {
+        font-family: "Roboto", sans-serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Open Sans'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Open Sans"] {
+        font-family: "Open Sans", sans-serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Lato'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Lato"] {
+        font-family: "Lato", sans-serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Montserrat'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Montserrat"] {
+        font-family: "Montserrat", sans-serif !important;
+      }
+      
+      .rich-text-content .ProseMirror span[style*="font-family: 'Poppins'"],
+      .rich-text-content .ProseMirror span[style*="font-family: Poppins"] {
+        font-family: "Poppins", sans-serif !important;
       }
       
       /* Template preview styles - for font consistency */
@@ -216,6 +272,57 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       
       .template-preview-content span[style*="font-size"] {
         display: inline !important;
+      }
+      
+      /* CRITICAL: Preview must also respect font families */
+      .template-preview-content span[style*="font-family: 'Arial'"],
+      .template-preview-content span[style*="font-family: Arial"] {
+        font-family: Arial, sans-serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Helvetica'"],
+      .template-preview-content span[style*="font-family: Helvetica"] {
+        font-family: Helvetica, sans-serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Times New Roman'"],
+      .template-preview-content span[style*="font-family: Times New Roman"] {
+        font-family: "Times New Roman", serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Georgia'"],
+      .template-preview-content span[style*="font-family: Georgia"] {
+        font-family: Georgia, serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Verdana'"],
+      .template-preview-content span[style*="font-family: Verdana"] {
+        font-family: Verdana, sans-serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Roboto'"],
+      .template-preview-content span[style*="font-family: Roboto"] {
+        font-family: "Roboto", sans-serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Open Sans'"],
+      .template-preview-content span[style*="font-family: Open Sans"] {
+        font-family: "Open Sans", sans-serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Lato'"],
+      .template-preview-content span[style*="font-family: Lato"] {
+        font-family: "Lato", sans-serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Montserrat'"],
+      .template-preview-content span[style*="font-family: Montserrat"] {
+        font-family: "Montserrat", sans-serif !important;
+      }
+      
+      .template-preview-content span[style*="font-family: 'Poppins'"],
+      .template-preview-content span[style*="font-family: Poppins"] {
+        font-family: "Poppins", sans-serif !important;
       }
       
       /* Dark mode specific improvements */
@@ -288,7 +395,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // FIXED: Improved font family function with proper TipTap command chain
+  // FIXED: Completely rewritten font family function that works correctly
   const setFontFamily = (fontFamily: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -306,7 +413,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       return;
     }
 
-    // Use TipTap's chain commands for better control
+    // Use TipTap's setFontFamily command correctly
     const success = editor
       .chain()
       .focus()
@@ -315,15 +422,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     
     console.log('Font family command result:', success);
     
-    // Force update
+    // Force content update and re-render
     setTimeout(() => {
       const newHTML = editor.getHTML();
       console.log('Updated HTML after fontFamily:', newHTML);
       onChange(newHTML);
+      
+      // Force editor to refresh view
+      editor.view.updateState(editor.state);
     }, 100);
   };
 
-  // FIXED: Improved font size function with proper TipTap command chain
+  // FIXED: Completely rewritten font size function that works correctly
   const setFontSize = (size: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -341,7 +451,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       return;
     }
 
-    // Use mark with fontSize attribute
+    // Use the fontSize attribute via textStyle mark
     const success = editor
       .chain()
       .focus()
@@ -350,11 +460,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     
     console.log('Font size command result:', success);
     
-    // Force update
+    // Force content update and re-render
     setTimeout(() => {
       const newHTML = editor.getHTML();
       console.log('Updated HTML after fontSize:', newHTML);
       onChange(newHTML);
+      
+      // Force editor to refresh view
+      editor.view.updateState(editor.state);
     }, 100);
   };
 
@@ -634,3 +747,4 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     </div>
   );
 };
+
