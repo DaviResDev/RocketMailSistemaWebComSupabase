@@ -1,5 +1,3 @@
-
-
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -14,22 +12,20 @@ import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// FIXED: Custom FontSize extension properly configured
+// FIXED: Proper FontSize extension using TextStyle
 const FontSize = TextStyle.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
       fontSize: {
         default: null,
-        parseHTML: element => {
-          return element.style.fontSize?.replace(/['"]+/g, '') || null;
-        },
+        parseHTML: element => element.style.fontSize?.replace(/['"]+/g, '') || null,
         renderHTML: attributes => {
           if (!attributes.fontSize) {
             return {};
           }
           return {
-            style: `font-size: ${attributes.fontSize};`,
+            style: `font-size: ${attributes.fontSize}`,
           };
         },
       },
@@ -121,13 +117,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
     editorProps: {
       attributes: {
-        class: `prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none`,
+        class: `prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none rich-text-content`,
         style: `min-height: ${minHeight}; color: inherit; background: transparent;`,
       },
     },
   });
 
-  // Inject global styles for dark mode support and font styling
+  // Inject Google Fonts and styles for proper font rendering
   useEffect(() => {
     const styleId = 'rich-text-editor-styles';
     
@@ -137,48 +133,56 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       existingStyle.remove();
     }
 
-    // Create and inject new styles
+    // Add Google Fonts
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Poppins:wght@400;700&display=swap';
+    document.head.appendChild(fontLink);
+
+    // Create and inject styles
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      .rich-text-editor-content .ProseMirror {
+      /* Rich Text Editor Content Styles */
+      .rich-text-content .ProseMirror {
         outline: none !important;
         color: inherit !important;
         background: transparent !important;
         min-height: ${minHeight};
+        padding: 16px;
       }
       
-      .rich-text-editor-content .ProseMirror p {
+      .rich-text-content .ProseMirror p {
         color: inherit !important;
         margin: 0.5em 0;
       }
       
-      .rich-text-editor-content .ProseMirror h1,
-      .rich-text-editor-content .ProseMirror h2,
-      .rich-text-editor-content .ProseMirror h3,
-      .rich-text-editor-content .ProseMirror h4,
-      .rich-text-editor-content .ProseMirror h5,
-      .rich-text-editor-content .ProseMirror h6 {
+      .rich-text-content .ProseMirror h1,
+      .rich-text-content .ProseMirror h2,
+      .rich-text-content .ProseMirror h3,
+      .rich-text-content .ProseMirror h4,
+      .rich-text-content .ProseMirror h5,
+      .rich-text-content .ProseMirror h6 {
         color: inherit !important;
       }
       
-      .rich-text-editor-content .ProseMirror ul,
-      .rich-text-editor-content .ProseMirror ol {
+      .rich-text-content .ProseMirror ul,
+      .rich-text-content .ProseMirror ol {
         color: inherit !important;
       }
       
-      .rich-text-editor-content .ProseMirror a {
+      .rich-text-content .ProseMirror a {
         color: hsl(var(--primary)) !important;
       }
       
-      .rich-text-editor-content .ProseMirror blockquote {
+      .rich-text-content .ProseMirror blockquote {
         border-left: 4px solid hsl(var(--border));
         padding-left: 1rem;
         margin: 1rem 0;
         color: inherit !important;
       }
       
-      .rich-text-editor-content .ProseMirror code {
+      .rich-text-content .ProseMirror code {
         background: hsl(var(--muted));
         color: inherit !important;
         padding: 0.2rem 0.4rem;
@@ -186,70 +190,77 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         font-size: 0.875em;
       }
       
-      /* FIXED: Better font styling support for spans with inline styles */
-      .rich-text-editor-content .ProseMirror span[style*="font-size"] {
+      /* FIXED: Proper font and size styling */
+      .rich-text-content .ProseMirror span[style*="font-family"] {
         display: inline !important;
       }
       
-      .rich-text-editor-content .ProseMirror span[style*="font-family"] {
+      .rich-text-content .ProseMirror span[style*="font-size"] {
+        display: inline !important;
+      }
+      
+      /* Ensure spans with styles are properly rendered */
+      .rich-text-content .ProseMirror span[style] {
+        display: inline !important;
+      }
+      
+      /* Template preview styles - for font consistency */
+      .template-preview-content {
+        font-family: inherit;
+      }
+      
+      .template-preview-content span[style*="font-family"] {
+        display: inline !important;
+      }
+      
+      .template-preview-content span[style*="font-size"] {
         display: inline !important;
       }
       
       /* Dark mode specific improvements */
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror,
-      .dark .rich-text-editor-content .ProseMirror {
+      [data-theme="dark"] .rich-text-content .ProseMirror,
+      .dark .rich-text-content .ProseMirror {
         color: #e0e0e0 !important;
       }
       
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror p,
-      .dark .rich-text-editor-content .ProseMirror p {
+      [data-theme="dark"] .rich-text-content .ProseMirror p,
+      .dark .rich-text-content .ProseMirror p {
         color: #e0e0e0 !important;
       }
       
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror h1,
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror h2,
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror h3,
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror h4,
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror h5,
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror h6,
-      .dark .rich-text-editor-content .ProseMirror h1,
-      .dark .rich-text-editor-content .ProseMirror h2,
-      .dark .rich-text-editor-content .ProseMirror h3,
-      .dark .rich-text-editor-content .ProseMirror h4,
-      .dark .rich-text-editor-content .ProseMirror h5,
-      .dark .rich-text-editor-content .ProseMirror h6 {
+      [data-theme="dark"] .rich-text-content .ProseMirror h1,
+      [data-theme="dark"] .rich-text-content .ProseMirror h2,
+      [data-theme="dark"] .rich-text-content .ProseMirror h3,
+      [data-theme="dark"] .rich-text-content .ProseMirror h4,
+      [data-theme="dark"] .rich-text-content .ProseMirror h5,
+      [data-theme="dark"] .rich-text-content .ProseMirror h6,
+      .dark .rich-text-content .ProseMirror h1,
+      .dark .rich-text-content .ProseMirror h2,
+      .dark .rich-text-content .ProseMirror h3,
+      .dark .rich-text-content .ProseMirror h4,
+      .dark .rich-text-content .ProseMirror h5,
+      .dark .rich-text-content .ProseMirror h6 {
         color: #ffffff !important;
       }
       
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror ul,
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror ol,
-      .dark .rich-text-editor-content .ProseMirror ul,
-      .dark .rich-text-editor-content .ProseMirror ol {
-        color: #e0e0e0 !important;
-      }
-      
-      /* Placeholder styling for dark mode */
-      [data-theme="dark"] .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before,
-      .dark .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before {
-        color: #aaaaaa !important;
-        content: attr(data-placeholder);
-        float: left;
-        height: 0;
-        pointer-events: none;
-      }
-      
-      .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before {
+      /* Placeholder styling */
+      .rich-text-content .ProseMirror p.is-editor-empty:first-child::before {
         color: #999999;
         content: attr(data-placeholder);
         float: left;
         height: 0;
         pointer-events: none;
       }
+      
+      [data-theme="dark"] .rich-text-content .ProseMirror p.is-editor-empty:first-child::before,
+      .dark .rich-text-content .ProseMirror p.is-editor-empty:first-child::before {
+        color: #aaaaaa !important;
+      }
     `;
     
     document.head.appendChild(style);
 
-    // Cleanup function to remove styles when component unmounts
+    // Cleanup function
     return () => {
       const styleElement = document.getElementById(styleId);
       if (styleElement) {
@@ -276,27 +287,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // FIXED: Completely rewritten font size function with proper TipTap mark handling
-  const setFontSize = (size: string) => {
-    if (!editor) {
-      console.log('Editor not available');
-      return;
-    }
-
-    console.log('Setting font size:', size);
-    
-    // Use TipTap's command chain to properly apply the fontSize attribute
-    editor.chain().focus().setMark('textStyle', { fontSize: size }).run();
-    
-    // Force a re-render and update
-    setTimeout(() => {
-      const newHTML = editor.getHTML();
-      console.log('Updated HTML after fontSize:', newHTML);
-      onChange(newHTML);
-    }, 50);
-  };
-
-  // FIXED: Completely rewritten font family function with proper TipTap mark handling
+  // FIXED: Completely rewritten font family function with proper selection handling
   const setFontFamily = (fontFamily: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -305,15 +296,57 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     console.log('Setting font family:', fontFamily);
     
-    // Use TipTap's command chain to properly apply the fontFamily attribute
-    editor.chain().focus().setMark('textStyle', { fontFamily: fontFamily }).run();
+    const { from, to } = editor.state.selection;
+    const hasSelection = from !== to;
     
-    // Force a re-render and update
+    if (!hasSelection) {
+      console.log('No text selected');
+      return;
+    }
+
+    // Apply the font family using TipTap's textStyle mark
+    editor.chain()
+      .focus()
+      .setMark('textStyle', { fontFamily: fontFamily })
+      .run();
+    
+    // Force update after applying the mark
     setTimeout(() => {
       const newHTML = editor.getHTML();
       console.log('Updated HTML after fontFamily:', newHTML);
       onChange(newHTML);
-    }, 50);
+    }, 100);
+  };
+
+  // FIXED: Completely rewritten font size function with proper selection handling
+  const setFontSize = (size: string) => {
+    if (!editor) {
+      console.log('Editor not available');
+      return;
+    }
+
+    console.log('Setting font size:', size);
+    
+    const { from, to } = editor.state.selection;
+    const hasSelection = from !== to;
+    
+    if (!hasSelection) {
+      console.log('No text selected');
+      return;
+    }
+
+    // Apply the font size using TipTap's textStyle mark
+    editor.chain()
+      .focus()
+      .setMark('textStyle', { fontSize: size })
+      .run();
+    
+    // Force update after applying the mark
+    setTimeout(() => {
+      const newHTML = editor.getHTML();
+      console.log('Updated HTML after fontSize:', newHTML);
+      onChange(newHTML);
+    }, 100);
   };
 
   const addLink = () => {
@@ -381,7 +414,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* FIXED: Font Size Selector with corrected functionality */}
+        {/* FIXED: Font Size Selector with improved functionality */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -416,7 +449,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </PopoverContent>
         </Popover>
 
-        {/* FIXED: Font Family Selector with corrected functionality */}
+        {/* FIXED: Font Family Selector with improved functionality */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -582,14 +615,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </Button>
       </div>
 
-      {/* Editor Content with improved dark mode styles */}
-      <div className="p-4">
+      {/* Editor Content */}
+      <div className="p-0">
         <EditorContent 
           editor={editor} 
-          className="rich-text-editor-content"
+          className="rich-text-content"
         />
       </div>
     </div>
   );
 };
-

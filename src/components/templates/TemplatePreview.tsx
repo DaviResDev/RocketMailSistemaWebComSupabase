@@ -14,6 +14,17 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
   const { getSignatureUrl } = useEmailSignature();
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   
+  // Add Google Fonts for preview consistency
+  useEffect(() => {
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Poppins:wght@400;700&display=swap';
+    
+    if (!document.querySelector(`link[href="${fontLink.href}"]`)) {
+      document.head.appendChild(fontLink);
+    }
+  }, []);
+  
   // Load signature image on component mount
   useEffect(() => {
     const loadSignatureImage = async () => {
@@ -129,11 +140,15 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
           </div>
         )}
         
-        {/* Main content with explicit LTR direction */}
+        {/* FIXED: Main content with proper font rendering and explicit styles */}
         <div 
-          className="prose max-w-none"
+          className="prose max-w-none template-preview-content"
           dir="ltr"
-          style={{ direction: 'ltr', textAlign: 'left' }}
+          style={{ 
+            direction: 'ltr', 
+            textAlign: 'left',
+            fontFamily: 'inherit'
+          }}
           dangerouslySetInnerHTML={{ 
             __html: createPreviewContent()
           }} 
