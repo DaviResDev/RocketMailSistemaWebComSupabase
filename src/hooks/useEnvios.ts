@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -68,7 +67,7 @@ export function useEnvios() {
     return processedContent;
   };
 
-  // Send email to single recipient
+  // Send email to single recipient with improved error handling
   const sendEmail = async (formData: EnvioFormData) => {
     setSending(true);
     
@@ -241,7 +240,7 @@ export function useEnvios() {
     }
   };
 
-  // Send emails to multiple recipients in batches
+  // Send emails to multiple recipients in optimized batches
   const sendBatchEmails = async (emailsData: any[]) => {
     setSending(true);
     
@@ -305,16 +304,28 @@ export function useEnvios() {
         
         const { summary, results } = responseData;
         
-        // Show detailed results
+        // Show detailed results with better error handling
         if (summary.successful > 0) {
           toast.success(`${summary.successful} emails enviados com sucesso!`);
         }
         
         if (summary.failed > 0) {
-          toast.error(`${summary.failed} emails falharam no envio. Taxa de sucesso: ${summary.successRate}%`);
+          const failedEmails = results.filter((r: any) => !r.success);
+          const errorMessages = [...new Set(failedEmails.map((r: any) => r.error))].slice(0, 3); // Show unique errors, max 3
+          
+          toast.error(
+            `${summary.failed} emails falharam no envio. Taxa de sucesso: ${summary.successRate}%`,
+            {
+              description: errorMessages.length > 0 ? `Erros: ${errorMessages.join('; ')}` : undefined,
+              duration: 10000, // Show longer for failed emails
+              action: {
+                label: "x",
+                onClick: () => toast.dismiss()
+              }
+            }
+          );
           
           // Log failed emails for debugging
-          const failedEmails = results.filter(r => !r.success);
           console.warn("Failed emails:", failedEmails);
         }
         
@@ -323,8 +334,8 @@ export function useEnvios() {
           try {
             const { data: user } = await supabase.auth.getUser();
             if (user.user) {
-              const successfulResults = results.filter(r => r.success);
-              const envioRecords = successfulResults.map(result => {
+              const successfulResults = results.filter((r: any) => r.success);
+              const envioRecords = successfulResults.map((result: any) => {
                 const emailData = emailsData.find(e => e.to === result.to.replace(/^".*" <(.+)>$/, '$1'));
                 return {
                   contato_id: emailData?.contato_id,
@@ -350,7 +361,12 @@ export function useEnvios() {
       } catch (err: any) {
         console.error('Erro no envio em lote:', err);
         toast.dismiss(loadingToastId);
-        toast.error(`Erro no envio em lote: ${err.message || 'Erro desconhecido'}`);
+        toast.error(`Erro no envio em lote: ${err.message || 'Erro desconhecido'}`, {
+          action: {
+            label: "x",
+            onClick: () => toast.dismiss()
+          }
+        });
         return false;
       }
     } finally {

@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import nodemailer from "https://esm.sh/nodemailer@6.9.12";
 
 // Set up CORS headers
 const corsHeaders = {
@@ -9,6 +9,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+/**
+ * Simple HTML to plain text converter
+ */
+function stripHtml(html: string): string {
+  if (!html) return '';
+  
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<p.*?>/gi, '\n')
+    .replace(/<li.*?>/gi, '\n- ')
+    .replace(/<.*?>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n\s*\n/g, '\n\n')
+    .trim();
+}
 
 /**
  * Validate and sanitize attachment data
@@ -48,7 +69,7 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
           return false;
         }
         
-        // Skip URL-based attachments for Resend
+        // Skip URL-based attachments for Resend unless they have base64 content
         if (isResend && (attachment.url || attachment.path) && !attachment.content) {
           console.warn("Skipping URL-based attachment for Resend:", attachment.filename || attachment.name);
           return false;
@@ -69,42 +90,65 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via SMTP using Nodemailer
+ * Create SMTP transporter with proper error handling
  */
-async function sendEmailViaSMTP(config, payload) {
-  console.log("SMTP Configuration:", {
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: { user: config.user, pass: "***" },
-    name: config.name || ''
-  });
-  
+async function createSMTPTransporter(config: any) {
   try {
-    // FIXED: Use proper nodemailer import
-    const transporter = nodemailer.createTransport({
+    // Import nodemailer dynamically to handle Buffer issues
+    const nodemailer = await import("https://esm.sh/nodemailer@6.9.12");
+    
+    const transportConfig = {
       host: config.host,
-      port: config.port,
+      port: parseInt(config.port) || 587,
       secure: config.secure || config.port === 465,
       auth: {
         user: config.user,
         pass: config.pass,
       },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
       socketTimeout: 30000,
-      logger: false,
-      debug: false,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 10,
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
+        ciphers: 'SSLv3'
       },
+    };
+    
+    console.log("Creating SMTP transporter with config:", {
+      host: config.host,
+      port: transportConfig.port,
+      secure: transportConfig.secure,
+      user: config.user
     });
+    
+    const transporter = nodemailer.default.createTransporter(transportConfig);
+    
+    // Verify SMTP connection
+    await transporter.verify();
+    console.log("SMTP connection verified successfully");
+    
+    return transporter;
+  } catch (error) {
+    console.error("Failed to create/verify SMTP transporter:", error);
+    throw new Error(`SMTP configuration error: ${error.message}`);
+  }
+}
+
+/**
+ * Send email via SMTP using Nodemailer
+ */
+async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
+  try {
+    const transporter = await createSMTPTransporter(config);
     
     const fromName = config.name || config.user.split('@')[0];
     const fromEmail = config.user;
     const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
     
-    const mailOptions = {
+    const mailOptions: any = {
       from: from,
       to: payload.to,
       subject: payload.subject,
@@ -112,7 +156,7 @@ async function sendEmailViaSMTP(config, payload) {
       text: stripHtml(payload.html),
       headers: {
         'MIME-Version': '1.0',
-        'X-Mailer': 'RocketMail',
+        'X-Mailer': 'RocketMail SMTP',
       }
     };
 
@@ -131,15 +175,6 @@ async function sendEmailViaSMTP(config, payload) {
       if (validatedAttachments.length > 0) {
         mailOptions.attachments = validatedAttachments.map(attachment => {
           console.log(`Processing SMTP attachment: ${attachment.filename}`);
-          
-          if (attachment.content instanceof Uint8Array) {
-            return {
-              filename: attachment.filename,
-              content: attachment.content,
-              contentType: attachment.contentType,
-              encoding: 'base64'
-            };
-          }
           
           if (attachment.content && typeof attachment.content === 'string') {
             const base64Content = attachment.content.includes('base64,') ? 
@@ -169,49 +204,46 @@ async function sendEmailViaSMTP(config, payload) {
       }
     }
 
-    console.log(`Sending email via SMTP: ${config.host}:${config.port}`);
-    console.log(`From: ${mailOptions.from} To: ${payload.to}`);
-    console.log(`Subject: ${payload.subject}`);
-    
-    // Verify SMTP configuration
-    try {
-      await transporter.verify();
-      console.log("SMTP verification successful");
-    } catch (verifyError) {
-      console.error("SMTP verification failed:", verifyError);
-      throw new Error(`SMTP verification failed: ${verifyError.message}`);
-    }
+    console.log(`Sending email via SMTP to: ${payload.to}`);
     
     // Send email
     const info = await transporter.sendMail(mailOptions);
     console.log("Email sent successfully via SMTP:", info.messageId);
+    
+    // Close transporter
+    transporter.close();
     
     return {
       success: true,
       id: info.messageId,
       provider: "smtp",
       from: from,
-      reply_to: fromEmail,
+      to: payload.to,
       response: info.response
     };
   } catch (error) {
-    console.error("SMTP Error:", error);
-    throw error;
+    console.error("SMTP Error details:", {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+    throw new Error(`SMTP send failed: ${error.message || 'Unknown SMTP error'}`);
   }
 }
 
 /**
  * Send email via Resend API
  */
-async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
+async function sendEmailViaResend(resendApiKey: string, fromName: string, replyTo: string, payload: any): Promise<any> {
   try {
     const resend = new Resend(resendApiKey);
     
-    if (!resendApiKey) {
-      throw new Error("Missing Resend API key");
+    if (!resendApiKey || resendApiKey.trim() === '') {
+      throw new Error("Missing or invalid Resend API key");
     }
     
-    const emailData = {
+    const emailData: any = {
       from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
       to: [payload.to],
       subject: payload.subject,
@@ -231,7 +263,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
       emailData.bcc = payload.bcc;
     }
     
-    // Process attachments - skip URL-based ones for Resend
+    // Process attachments - only base64 content for Resend
     if (payload.attachments && payload.attachments.length > 0) {
       const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, true);
       
@@ -241,9 +273,7 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
           
           let content = '';
           
-          if (attachment.content instanceof Uint8Array) {
-            content = Buffer.from(attachment.content).toString('base64');
-          } else if (typeof attachment.content === 'string') {
+          if (typeof attachment.content === 'string') {
             content = attachment.content.includes('base64,') 
               ? attachment.content.split('base64,')[1] 
               : attachment.content;
@@ -263,15 +293,10 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
         });
         
         console.log(`Adding ${emailData.attachments.length} validated attachments to Resend email`);
-      } else {
-        console.log("No valid attachments for Resend after filtering");
       }
     }
     
-    console.log(`Sending email via Resend`);
-    console.log(`From: ${emailData.from} To: ${payload.to}`);
-    console.log(`Subject: ${payload.subject}`);
-    console.log(`HTML content length: ${payload.html?.length || 0} characters`);
+    console.log(`Sending email via Resend to: ${payload.to}`);
     
     const result = await resend.emails.send(emailData);
     
@@ -279,47 +304,26 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
       throw new Error(result.error.message || "Unknown Resend error");
     }
     
-    console.log("Email sent successfully via Resend:", result.id);
+    console.log("Email sent successfully via Resend:", result.data?.id);
     return {
       success: true,
-      id: result.id,
+      id: result.data?.id,
       provider: "resend",
       from: emailData.from,
+      to: payload.to,
       reply_to: emailData.reply_to,
     };
   } catch (error) {
-    console.error("Failed to send email via Resend:", error);
-    throw error;
+    console.error("Resend Error details:", error);
+    throw new Error(`Resend send failed: ${error.message || 'Unknown Resend error'}`);
   }
 }
 
 /**
- * Simple HTML to plain text converter
+ * Send single email with improved error handling
  */
-function stripHtml(html) {
-  if (!html) return '';
-  
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<p.*?>/gi, '\n')
-    .replace(/<li.*?>/gi, '\n- ')
-    .replace(/<.*?>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n\s*\n/g, '\n\n')
-    .trim();
-}
-
-/**
- * Send single email with improved error handling and rate limiting
- */
-async function sendSingleEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
-  // Add delay to respect rate limits
-  await new Promise(resolve => setTimeout(resolve, 100));
+async function sendSingleEmail(payload: any, useSmtp: boolean, smtpConfig: any, resendApiKey: string, fromName: string): Promise<any> {
+  let lastError: Error | null = null;
   
   // Try SMTP first if configured
   if (useSmtp && smtpConfig && smtpConfig.host && smtpConfig.port && 
@@ -329,9 +333,10 @@ async function sendSingleEmail(payload, useSmtp, smtpConfig, resendApiKey, fromN
       return await sendEmailViaSMTP(smtpConfig, payload);
     } catch (smtpError) {
       console.error("SMTP send failed:", smtpError.message);
+      lastError = smtpError;
       
       // Fallback to Resend if available
-      if (resendApiKey) {
+      if (resendApiKey && resendApiKey.trim() !== '') {
         console.log("SMTP failed. Trying Resend as fallback...");
         try {
           const result = await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
@@ -342,14 +347,14 @@ async function sendSingleEmail(payload, useSmtp, smtpConfig, resendApiKey, fromN
           throw new Error(`SMTP error: ${smtpError.message}. Resend fallback failed: ${resendError.message}`);
         }
       } else {
-        throw new Error(`SMTP error: ${smtpError.message}. No fallback available.`);
+        throw new Error(`SMTP error: ${smtpError.message}. No fallback available (missing Resend API key).`);
       }
     }
   }
   
-  // Use Resend if SMTP not configured
-  if (!resendApiKey) {
-    throw new Error("No email sending method available. Configure SMTP or Resend API key.");
+  // Use Resend if SMTP not configured or failed
+  if (!resendApiKey || resendApiKey.trim() === '') {
+    throw new Error("No email sending method available. Configure SMTP or provide valid Resend API key.");
   }
   
   console.log("Using Resend for email delivery");
@@ -357,12 +362,12 @@ async function sendSingleEmail(payload, useSmtp, smtpConfig, resendApiKey, fromN
 }
 
 /**
- * Process multiple emails in controlled batches
+ * Process multiple emails in controlled batches with better error handling
  */
-async function processBatchEmails(emailRequests, useSmtp, smtpConfig, resendApiKey, fromName) {
-  const batchSize = 5; // Smaller batch size for better control
-  const delayBetweenBatches = 2000; // 2 seconds between batches
-  const results = [];
+async function processBatchEmails(emailRequests: any[], useSmtp: boolean, smtpConfig: any, resendApiKey: string, fromName: string): Promise<any> {
+  const batchSize = 50; // Increased batch size as requested
+  const delayBetweenBatches = 1000; // 1 second between batches
+  const results: any[] = [];
   
   console.log(`Processing ${emailRequests.length} emails in batches of ${batchSize}`);
   
@@ -373,10 +378,10 @@ async function processBatchEmails(emailRequests, useSmtp, smtpConfig, resendApiK
     
     console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
     
-    // Process batch with Promise.allSettled for better error handling
+    // Process batch with Promise.all for better performance
     const batchPromises = batch.map(async (emailData, index) => {
+      const globalIndex = i + index;
       try {
-        const globalIndex = i + index;
         console.log(`Sending email ${globalIndex + 1}/${emailRequests.length} to: ${emailData.to}`);
         
         const result = await sendSingleEmail(
@@ -391,34 +396,23 @@ async function processBatchEmails(emailRequests, useSmtp, smtpConfig, resendApiK
           success: true,
           result: result,
           to: emailData.to,
-          index: globalIndex
+          index: globalIndex,
+          provider: result.provider
         };
       } catch (error) {
-        console.error(`Failed to send email to ${emailData.to}:`, error.message);
+        console.error(`Failed to send email ${globalIndex + 1} to ${emailData.to}:`, error.message);
         return {
           success: false,
           error: error.message,
           to: emailData.to,
-          index: i + index
+          index: globalIndex
         };
       }
     });
     
-    const batchResults = await Promise.allSettled(batchPromises);
-    
-    // Process results and add to main results array
-    batchResults.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        results.push(result.value);
-      } else {
-        results.push({
-          success: false,
-          error: result.reason?.message || 'Unknown batch processing error',
-          to: 'unknown',
-          index: results.length
-        });
-      }
-    });
+    // Wait for all emails in this batch to complete
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults);
     
     // Add delay between batches (except for the last batch)
     if (i + batchSize < emailRequests.length) {
@@ -438,9 +432,38 @@ async function processBatchEmails(emailRequests, useSmtp, smtpConfig, resendApiK
       total: emailRequests.length,
       successful: successCount,
       failed: failureCount,
-      successRate: emailRequests.length > 0 ? (successCount / emailRequests.length * 100).toFixed(1) : 0
+      successRate: emailRequests.length > 0 ? ((successCount / emailRequests.length) * 100).toFixed(1) : "0"
     }
   };
+}
+
+/**
+ * Optimize payload size to prevent 1MB limit issues
+ */
+function optimizeEmailPayload(emailData: any): any {
+  const optimized = { ...emailData };
+  
+  // Limit content size if too large
+  if (optimized.content && optimized.content.length > 500000) { // 500KB limit for content
+    console.warn(`Content too large (${optimized.content.length} chars), truncating...`);
+    optimized.content = optimized.content.substring(0, 500000) + "\n\n[Conteúdo truncado devido ao tamanho]";
+  }
+  
+  // Optimize attachments
+  if (optimized.attachments && Array.isArray(optimized.attachments)) {
+    optimized.attachments = optimized.attachments.filter(attachment => {
+      if (attachment.content && typeof attachment.content === 'string') {
+        const sizeEstimate = attachment.content.length * 0.75; // Base64 overhead
+        if (sizeEstimate > 5000000) { // 5MB limit per attachment
+          console.warn(`Attachment ${attachment.filename} too large, skipping...`);
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+  
+  return optimized;
 }
 
 serve(async (req) => {
@@ -451,19 +474,6 @@ serve(async (req) => {
     }
     
     const apiKey = Deno.env.get("RESEND_API_KEY");
-    if (!apiKey) {
-      console.error("RESEND_API_KEY is not configured");
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "RESEND_API_KEY is not configured"
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 500,
-        }
-      );
-    }
     
     let requestData;
     try {
@@ -486,7 +496,10 @@ serve(async (req) => {
     if (requestData.batch && Array.isArray(requestData.emails)) {
       console.log(`Received batch email request for ${requestData.emails.length} recipients`);
       
+      // Optimize each email payload
       const emailRequests = requestData.emails.map(emailData => {
+        const optimizedData = optimizeEmailPayload(emailData);
+        
         // Build email HTML with proper structure
         let finalContent = `
 <!DOCTYPE html>
@@ -494,27 +507,27 @@ serve(async (req) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${emailData.subject || "Email"}</title>
+  <title>${optimizedData.subject || "Email"}</title>
 </head>
 <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
   <div style="max-width: 600px; margin: 0 auto;">`;
         
-        if (emailData.image_url) {
+        if (optimizedData.image_url) {
           finalContent += `
     <div style="margin-bottom: 20px;">
-      <img src="${emailData.image_url}" alt="Header image" style="max-width: 100%; height: auto;" />
+      <img src="${optimizedData.image_url}" alt="Header image" style="max-width: 100%; height: auto;" />
     </div>`;
         }
         
         finalContent += `
     <div style="margin-bottom: 20px;">
-      ${emailData.content || ""}
+      ${optimizedData.content || ""}
     </div>`;
         
-        if (emailData.signature_image && emailData.signature_image !== 'no_signature') {
+        if (optimizedData.signature_image && optimizedData.signature_image !== 'no_signature') {
           finalContent += `
     <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
-      <img src="${emailData.signature_image}" alt="Assinatura" style="max-height: 100px;" />
+      <img src="${optimizedData.signature_image}" alt="Assinatura" style="max-height: 100px;" />
     </div>`;
         }
         
@@ -523,13 +536,13 @@ serve(async (req) => {
 </body>
 </html>`;
         
-        const toAddress = emailData.contato_nome ? `"${emailData.contato_nome}" <${emailData.to}>` : emailData.to;
+        const toAddress = optimizedData.contato_nome ? `"${optimizedData.contato_nome}" <${optimizedData.to}>` : optimizedData.to;
         
         return {
           to: toAddress,
-          subject: emailData.subject || "Sem assunto",
+          subject: optimizedData.subject || "Sem assunto",
           html: finalContent,
-          attachments: emailData.attachments || []
+          attachments: optimizedData.attachments || []
         };
       });
       
@@ -545,8 +558,8 @@ serve(async (req) => {
             pass: requestData.smtp_settings.password,
             name: requestData.smtp_settings.from_name
           } : null,
-          apiKey,
-          requestData.smtp_settings?.from_name
+          apiKey || "",
+          requestData.smtp_settings?.from_name || "RocketMail"
         );
         
         console.log("Batch email processing completed:", batchResult.summary);
@@ -560,7 +573,8 @@ serve(async (req) => {
               to: r.to,
               success: r.success,
               error: r.error || null,
-              id: r.result?.id || null
+              id: r.result?.id || null,
+              provider: r.provider || null
             }))
           }),
           {
@@ -583,7 +597,7 @@ serve(async (req) => {
       }
     }
     
-    // Handle single email sending (existing logic)
+    // Handle single email sending
     const { 
       to, 
       subject, 
@@ -618,6 +632,9 @@ serve(async (req) => {
       );
     }
     
+    // Optimize payload
+    const optimizedRequest = optimizeEmailPayload(requestData);
+    
     // Build email HTML with proper structure
     let finalContent = `
 <!DOCTYPE html>
@@ -639,7 +656,7 @@ serve(async (req) => {
     
     finalContent += `
     <div style="margin-bottom: 20px;">
-      ${content || ""}
+      ${optimizedRequest.content || ""}
     </div>`;
     
     if (signature_image && signature_image !== 'no_signature') {
@@ -655,10 +672,10 @@ serve(async (req) => {
 </html>`;
     
     // Process and validate attachments
-    let emailAttachments = [];
-    if (attachments) {
+    let emailAttachments: any[] = [];
+    if (optimizedRequest.attachments) {
       try {
-        emailAttachments = validateAndSanitizeAttachments(attachments, !smtp_settings);
+        emailAttachments = validateAndSanitizeAttachments(optimizedRequest.attachments, !smtp_settings);
         console.log(`Processed ${emailAttachments.length} valid attachments`);
       } catch (error) {
         console.error("Error processing attachments:", error);
@@ -693,8 +710,8 @@ serve(async (req) => {
           emailPayload,
           true,
           smtpConfig,
-          apiKey,
-          smtp_settings.from_name
+          apiKey || "",
+          smtp_settings.from_name || "RocketMail"
         );
       } else {
         console.log("Using Resend for single email delivery");
@@ -702,8 +719,8 @@ serve(async (req) => {
           emailPayload,
           false,
           null,
-          apiKey,
-          null
+          apiKey || "",
+          "RocketMail"
         );
       }
       
