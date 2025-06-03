@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { createTransport } from "https://esm.sh/nodemailer@6.9.12";
 
 // Set up CORS headers
 const corsHeaders = {
@@ -70,6 +69,20 @@ function stripHtml(html: string): string {
 }
 
 /**
+ * Sanitize subject line for email providers
+ */
+function sanitizeSubject(subject: string): string {
+  if (!subject) return '';
+  
+  return subject
+    .replace(/\n/g, ' ')
+    .replace(/\r/g, ' ')
+    .replace(/\t/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Validate and sanitize attachment data
  */
 function validateAndSanitizeAttachments(attachments: any, isResend: boolean = false): any[] {
@@ -128,11 +141,11 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via native SMTP using nodemailer
+ * Send email via native SMTP using Deno's native APIs
  */
 async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
   try {
-    console.log("🔄 Attempting native SMTP delivery with nodemailer");
+    console.log("🔄 Attempting native SMTP delivery");
     
     // Extract and validate recipient email
     const recipientEmail = extractEmailAddress(payload.to);
@@ -149,64 +162,175 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
     }
     
     const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+    const sanitizedSubject = sanitizeSubject(payload.subject);
     
-    console.log(`📧 Configuring SMTP transport: ${smtpConfig.host}:${smtpConfig.port}`);
+    console.log(`📧 Connecting to SMTP: ${smtpConfig.host}:${smtpConfig.port}`);
     
-    // Create nodemailer transport
-    const transporter = createTransport({
-      host: smtpConfig.host,
+    // Connect to SMTP server using Deno's native TCP
+    const conn = await Deno.connect({
+      hostname: smtpConfig.host,
       port: smtpConfig.port,
-      secure: smtpConfig.port === 465, // true for 465, false for other ports
-      auth: {
-        user: smtpConfig.email_usuario,
-        pass: smtpConfig.password,
-      },
     });
     
-    // Prepare email data for nodemailer
-    const mailOptions: any = {
-      from: from,
-      to: recipientEmail,
-      subject: payload.subject,
-      html: payload.html,
-      text: stripHtml(payload.html),
-    };
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
     
-    if (payload.cc && payload.cc.length > 0) {
-      mailOptions.cc = payload.cc;
+    let buffer = new Uint8Array(1024);
+    
+    // Read SMTP greeting
+    const bytesRead = await conn.read(buffer);
+    if (bytesRead === null) throw new Error("Failed to read SMTP greeting");
+    const greeting = decoder.decode(buffer.subarray(0, bytesRead));
+    console.log("SMTP greeting:", greeting);
+    
+    if (!greeting.startsWith('220')) {
+      throw new Error(`SMTP connection failed: ${greeting}`);
     }
     
-    if (payload.bcc && payload.bcc.length > 0) {
-      mailOptions.bcc = payload.bcc;
-    }
+    // Send EHLO
+    const ehloCommand = `EHLO ${smtpConfig.host}\r\n`;
+    await conn.write(encoder.encode(ehloCommand));
     
-    // Process attachments for nodemailer
-    if (payload.attachments && payload.attachments.length > 0) {
-      const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, false);
+    buffer = new Uint8Array(1024);
+    const ehloResponse = await conn.read(buffer);
+    if (ehloResponse === null) throw new Error("Failed to read EHLO response");
+    const ehloText = decoder.decode(buffer.subarray(0, ehloResponse));
+    console.log("EHLO response:", ehloText);
+    
+    // Start TLS if needed (port 587)
+    if (smtpConfig.port === 587) {
+      await conn.write(encoder.encode("STARTTLS\r\n"));
       
-      if (validatedAttachments.length > 0) {
-        mailOptions.attachments = validatedAttachments.map(attachment => ({
-          filename: attachment.filename,
-          content: attachment.content || undefined,
-          path: attachment.url || undefined,
-          contentType: attachment.contentType
-        }));
-        console.log(`📎 Adding ${mailOptions.attachments.length} attachments to SMTP email`);
+      buffer = new Uint8Array(1024);
+      const tlsResponse = await conn.read(buffer);
+      if (tlsResponse === null) throw new Error("Failed to read STARTTLS response");
+      const tlsText = decoder.decode(buffer.subarray(0, tlsResponse));
+      console.log("STARTTLS response:", tlsText);
+      
+      if (!tlsText.startsWith('220')) {
+        throw new Error(`STARTTLS failed: ${tlsText}`);
       }
+      
+      // Close current connection and establish TLS connection
+      conn.close();
+      
+      // For now, we'll throw an error for TLS as it requires more complex implementation
+      throw new Error("TLS/STARTTLS não suportado ainda - use porta 25 sem TLS ou aguarde implementação completa");
     }
     
-    console.log(`📤 Sending email via native SMTP to: ${recipientEmail}`);
+    // AUTH LOGIN (Base64 encoded)
+    const username = btoa(smtpConfig.email_usuario);
+    const password = btoa(smtpConfig.password);
     
-    // Send email using nodemailer
-    const result = await transporter.sendMail(mailOptions);
+    await conn.write(encoder.encode("AUTH LOGIN\r\n"));
+    buffer = new Uint8Array(1024);
+    let authResponse = await conn.read(buffer);
+    if (authResponse === null) throw new Error("Failed to read AUTH response");
+    let authText = decoder.decode(buffer.subarray(0, authResponse));
+    console.log("AUTH response:", authText);
     
-    console.log("✅ Email sent successfully via native SMTP:", result.messageId);
+    if (!authText.startsWith('334')) {
+      throw new Error(`AUTH LOGIN failed: ${authText}`);
+    }
+    
+    // Send username
+    await conn.write(encoder.encode(`${username}\r\n`));
+    buffer = new Uint8Array(1024);
+    authResponse = await conn.read(buffer);
+    if (authResponse === null) throw new Error("Failed to read username response");
+    authText = decoder.decode(buffer.subarray(0, authResponse));
+    
+    if (!authText.startsWith('334')) {
+      throw new Error(`Username authentication failed: ${authText}`);
+    }
+    
+    // Send password
+    await conn.write(encoder.encode(`${password}\r\n`));
+    buffer = new Uint8Array(1024);
+    authResponse = await conn.read(buffer);
+    if (authResponse === null) throw new Error("Failed to read password response");
+    authText = decoder.decode(buffer.subarray(0, authResponse));
+    
+    if (!authText.startsWith('235')) {
+      throw new Error(`Password authentication failed: ${authText}`);
+    }
+    
+    console.log("✅ SMTP Authentication successful");
+    
+    // Send MAIL FROM
+    await conn.write(encoder.encode(`MAIL FROM:<${fromEmail}>\r\n`));
+    buffer = new Uint8Array(1024);
+    const mailFromResponse = await conn.read(buffer);
+    if (mailFromResponse === null) throw new Error("Failed to read MAIL FROM response");
+    const mailFromText = decoder.decode(buffer.subarray(0, mailFromResponse));
+    
+    if (!mailFromText.startsWith('250')) {
+      throw new Error(`MAIL FROM failed: ${mailFromText}`);
+    }
+    
+    // Send RCPT TO
+    await conn.write(encoder.encode(`RCPT TO:<${recipientEmail}>\r\n`));
+    buffer = new Uint8Array(1024);
+    const rcptResponse = await conn.read(buffer);
+    if (rcptResponse === null) throw new Error("Failed to read RCPT TO response");
+    const rcptText = decoder.decode(buffer.subarray(0, rcptResponse));
+    
+    if (!rcptText.startsWith('250')) {
+      throw new Error(`RCPT TO failed: ${rcptText}`);
+    }
+    
+    // Send DATA
+    await conn.write(encoder.encode("DATA\r\n"));
+    buffer = new Uint8Array(1024);
+    const dataResponse = await conn.read(buffer);
+    if (dataResponse === null) throw new Error("Failed to read DATA response");
+    const dataText = decoder.decode(buffer.subarray(0, dataResponse));
+    
+    if (!dataText.startsWith('354')) {
+      throw new Error(`DATA command failed: ${dataText}`);
+    }
+    
+    // Build email content
+    const emailContent = [
+      `From: ${from}`,
+      `To: ${recipientEmail}`,
+      `Subject: ${sanitizedSubject}`,
+      `Date: ${new Date().toUTCString()}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: text/html; charset=UTF-8`,
+      `Content-Transfer-Encoding: 8bit`,
+      ``,
+      payload.html,
+      ``,
+      `.`,
+      ``
+    ].join('\r\n');
+    
+    // Send email content
+    await conn.write(encoder.encode(emailContent));
+    
+    buffer = new Uint8Array(1024);
+    const sendResponse = await conn.read(buffer);
+    if (sendResponse === null) throw new Error("Failed to read send response");
+    const sendText = decoder.decode(buffer.subarray(0, sendResponse));
+    
+    if (!sendText.startsWith('250')) {
+      throw new Error(`Email send failed: ${sendText}`);
+    }
+    
+    // Send QUIT
+    await conn.write(encoder.encode("QUIT\r\n"));
+    conn.close();
+    
+    console.log("✅ Email sent successfully via native SMTP");
+    
+    const messageId = `smtp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     return {
       success: true,
-      id: result.messageId,
+      id: messageId,
       provider: "smtp",
-      method: "Native SMTP",
+      method: "Native SMTP (Deno)",
       from: fromEmail,
       to: recipientEmail,
     };
@@ -233,10 +357,13 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
       throw new Error(`Email inválido: ${payload.to}`);
     }
     
+    // Sanitize subject to remove newlines and other problematic characters
+    const sanitizedSubject = sanitizeSubject(payload.subject);
+    
     const emailData: any = {
       from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
       to: [recipientEmail],
-      subject: payload.subject,
+      subject: sanitizedSubject,
       html: payload.html,
       text: stripHtml(payload.html),
     };
@@ -518,7 +645,7 @@ serve(async (req) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${emailData.subject || "Email"}</title>
+  <title>${sanitizeSubject(emailData.subject || "Email")}</title>
 </head>
 <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
   <div style="max-width: 600px; margin: 0 auto;">`;
@@ -555,7 +682,7 @@ serve(async (req) => {
         
         return {
           to: toAddress,
-          subject: emailData.subject || "Sem assunto",
+          subject: sanitizeSubject(emailData.subject || "Sem assunto"),
           html: finalContent,
           attachments: emailData.attachments || []
         };
@@ -714,7 +841,7 @@ serve(async (req) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject || "Email"}</title>
+  <title>${sanitizeSubject(subject || "Email")}</title>
 </head>
 <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
   <div style="max-width: 600px; margin: 0 auto;">`;
@@ -763,7 +890,7 @@ serve(async (req) => {
     
     const emailPayload = {
       to: toAddress,
-      subject: subject || "Sem assunto",
+      subject: sanitizeSubject(subject || "Sem assunto"),
       html: finalContent,
       attachments: emailAttachments
     };
