@@ -19,8 +19,8 @@ interface BatchResult<T> {
 async function processBatch<T, R>(
   items: T[],
   processor: (item: T, index: number) => Promise<R>,
-  batchSize: number = 3, // Reduced from 10 for better stability
-  delayBetweenBatches: number = 2000 // Increased to 2 seconds for better rate limiting
+  batchSize: number = 3,
+  delayBetweenBatches: number = 2000
 ): Promise<BatchResult<R>[]> {
   const results: BatchResult<R>[] = [];
   const totalBatches = Math.ceil(items.length / batchSize);
@@ -117,7 +117,7 @@ serve(async (req) => {
       `)
       .eq('status', 'pendente')
       .lte('data_envio', now)
-      .limit(50); // Limit to prevent overwhelming the system
+      .limit(50);
       
     if (agendamentosError) {
       console.error("Error fetching scheduled emails:", agendamentosError);
@@ -173,10 +173,10 @@ serve(async (req) => {
         
         console.log(`Processing scheduled email for ${agendamento.contato.email}`);
         
-        // Get user settings for signature
+        // Get user settings for signature and SMTP
         const { data: userSettings, error: settingsError } = await supabaseAdmin
           .from('configuracoes')
-          .select('signature_image')
+          .select('*')
           .eq('user_id', agendamento.user_id)
           .single();
           
@@ -186,12 +186,11 @@ serve(async (req) => {
         
         const signatureImage = userSettings?.signature_image || agendamento.template.signature_image;
         
-        // Process attachments safely
+        // Process attachments safely - filter out URL-based attachments for Resend
         let attachments = null;
         if (agendamento.template.attachments) {
           try {
             if (typeof agendamento.template.attachments === 'string') {
-              // Only parse if it's not an empty string or empty array
               if (agendamento.template.attachments.trim() && agendamento.template.attachments !== '[]') {
                 attachments = JSON.parse(agendamento.template.attachments);
               }
@@ -201,7 +200,7 @@ serve(async (req) => {
               attachments = agendamento.template.attachments;
             }
             
-            // Validate attachment structure
+            // Validate attachment structure and filter for email sending
             if (attachments && Array.isArray(attachments)) {
               attachments = attachments.filter(att => {
                 if (!att || typeof att !== 'object') return false;
@@ -211,6 +210,13 @@ serve(async (req) => {
                   console.warn(`Filtering out invalid attachment:`, att);
                   return false;
                 }
+                
+                // If using Resend (no SMTP settings), filter out URL-based attachments
+                if (!userSettings?.use_smtp && (att.url || att.path) && !att.content) {
+                  console.warn(`Filtering out URL-based attachment for Resend:`, att.name || att.filename);
+                  return false;
+                }
+                
                 return true;
               });
               
@@ -223,6 +229,9 @@ serve(async (req) => {
               const hasContent = attachments.content || attachments.url || attachments.path;
               if (!hasName || !hasContent) {
                 console.warn(`Invalid single attachment:`, attachments);
+                attachments = null;
+              } else if (!userSettings?.use_smtp && (attachments.url || attachments.path) && !attachments.content) {
+                console.warn(`Filtering out URL-based single attachment for Resend:`, attachments.name || attachments.filename);
                 attachments = null;
               }
             }
@@ -255,6 +264,16 @@ serve(async (req) => {
           try {
             console.log(`Attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
             
+            // Prepare SMTP settings if user has configured them
+            const smtpSettings = userSettings?.use_smtp ? {
+              host: userSettings.email_smtp,
+              port: userSettings.email_porta,
+              secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+              password: userSettings.email_senha,
+              from_name: userSettings.smtp_nome || '',
+              from_email: userSettings.email_usuario || ''
+            } : null;
+            
             const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
               body: {
                 to: agendamento.contato.email,
@@ -266,7 +285,8 @@ serve(async (req) => {
                 user_id: agendamento.user_id,
                 signature_image: signatureImage,
                 attachments: attachments,
-                image_url: agendamento.template.image_url
+                image_url: agendamento.template.image_url,
+                smtp_settings: smtpSettings
               },
             });
             

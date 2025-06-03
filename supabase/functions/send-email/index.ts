@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import nodemailer from "npm:nodemailer@6.9.12";
+import nodemailer from "https://esm.sh/nodemailer@6.9.12";
 
 // Set up CORS headers
 const corsHeaders = {
@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 // Rate limiting configuration
-const RATE_LIMIT_PER_SECOND = 1; // Reduced from 2 to 1 for better stability
+const RATE_LIMIT_PER_SECOND = 1;
 const rateLimitQueue: Array<() => Promise<any>> = [];
 let isProcessingQueue = false;
 
@@ -32,9 +32,8 @@ async function processRateLimitedQueue() {
         console.error("Error processing queued task:", error);
       }
       
-      // Wait between requests to respect rate limit
       if (rateLimitQueue.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1100)); // 1.1 seconds between requests
+        await new Promise(resolve => setTimeout(resolve, 1100));
       }
     }
   }
@@ -43,15 +42,14 @@ async function processRateLimitedQueue() {
 }
 
 /**
- * Validate and sanitize attachment data
+ * Validate and sanitize attachment data - Skip URL-based attachments for Resend
  */
-function validateAndSanitizeAttachments(attachments: any): any[] {
+function validateAndSanitizeAttachments(attachments: any, isResend: boolean = false): any[] {
   if (!attachments) return [];
   
   try {
     let attachmentArray: any[] = [];
     
-    // Handle different attachment formats
     if (typeof attachments === 'string') {
       if (attachments.trim() === '' || attachments === '[]') return [];
       try {
@@ -66,7 +64,6 @@ function validateAndSanitizeAttachments(attachments: any): any[] {
       attachmentArray = [attachments];
     }
     
-    // Validate and sanitize each attachment
     return attachmentArray
       .filter(attachment => {
         if (!attachment || typeof attachment !== 'object') return false;
@@ -77,9 +74,14 @@ function validateAndSanitizeAttachments(attachments: any): any[] {
         if (!hasName || !hasContent) {
           console.warn("Skipping invalid attachment:", {
             hasName: !!hasName,
-            hasContent: !!hasContent,
-            attachment: JSON.stringify(attachment)
+            hasContent: !!hasContent
           });
+          return false;
+        }
+        
+        // Skip URL-based attachments for Resend
+        if (isResend && (attachment.url || attachment.path) && !attachment.content) {
+          console.warn("Skipping URL-based attachment for Resend:", attachment.filename || attachment.name);
           return false;
         }
         
@@ -98,7 +100,7 @@ function validateAndSanitizeAttachments(attachments: any): any[] {
 }
 
 /**
- * Send email via SMTP using Nodemailer with improved error handling
+ * Send email via SMTP using Nodemailer with corrected import
  */
 async function sendEmailViaSMTP(config, payload) {
   console.log("SMTP Configuration:", {
@@ -110,7 +112,7 @@ async function sendEmailViaSMTP(config, payload) {
   });
   
   try {
-    // Create transporter with improved timeout settings
+    // Create transporter with corrected nodemailer usage
     const transporter = nodemailer.createTransporter({
       host: config.host,
       port: config.port,
@@ -119,9 +121,9 @@ async function sendEmailViaSMTP(config, payload) {
         user: config.user,
         pass: config.pass,
       },
-      connectionTimeout: 10000, // 10 seconds
+      connectionTimeout: 10000,
       greetingTimeout: 10000,
-      socketTimeout: 20000, // 20 seconds
+      socketTimeout: 20000,
       logger: false,
       debug: false,
       tls: {
@@ -133,7 +135,6 @@ async function sendEmailViaSMTP(config, payload) {
     const fromEmail = config.user;
     const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
     
-    // Prepare email data with improved structure
     const mailOptions = {
       from: from,
       to: payload.to,
@@ -146,7 +147,6 @@ async function sendEmailViaSMTP(config, payload) {
       }
     };
 
-    // Add CC and BCC if provided
     if (payload.cc && payload.cc.length > 0) {
       mailOptions.cc = payload.cc;
     }
@@ -155,9 +155,9 @@ async function sendEmailViaSMTP(config, payload) {
       mailOptions.bcc = payload.bcc;
     }
     
-    // Process attachments with better validation
+    // Process attachments for SMTP (supports both content and URL-based)
     if (payload.attachments && payload.attachments.length > 0) {
-      const validatedAttachments = validateAndSanitizeAttachments(payload.attachments);
+      const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, false);
       
       if (validatedAttachments.length > 0) {
         mailOptions.attachments = validatedAttachments.map(attachment => {
@@ -232,7 +232,7 @@ async function sendEmailViaSMTP(config, payload) {
 }
 
 /**
- * Send email via Resend API with improved attachment handling
+ * Send email via Resend API with URL attachment filtering
  */
 async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
   return new Promise((resolve, reject) => {
@@ -264,15 +264,14 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
           emailData.bcc = payload.bcc;
         }
         
-        // Process attachments with enhanced validation
+        // Process attachments - skip URL-based ones for Resend
         if (payload.attachments && payload.attachments.length > 0) {
-          const validatedAttachments = validateAndSanitizeAttachments(payload.attachments);
+          const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, true);
           
           if (validatedAttachments.length > 0) {
             emailData.attachments = validatedAttachments.map(attachment => {
               console.log(`Processing Resend attachment: ${attachment.filename}`);
               
-              // Ensure we have valid content for Resend
               let content = '';
               
               if (attachment.content instanceof Uint8Array) {
@@ -281,9 +280,6 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
                 content = attachment.content.includes('base64,') 
                   ? attachment.content.split('base64,')[1] 
                   : attachment.content;
-              } else if (attachment.url) {
-                // For URL-based attachments, we need to fetch the content
-                throw new Error(`URL-based attachments not supported for Resend: ${attachment.filename}`);
               } else {
                 throw new Error(`Invalid attachment content for: ${attachment.filename}`);
               }
@@ -300,6 +296,8 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
             });
             
             console.log(`Adding ${emailData.attachments.length} validated attachments to Resend email`);
+          } else {
+            console.log("No valid attachments for Resend after filtering");
           }
         }
         
@@ -328,7 +326,6 @@ async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
       }
     };
     
-    // Add to rate-limited queue
     rateLimitQueue.push(task);
     processRateLimitedQueue();
   });
@@ -479,7 +476,6 @@ serve(async (req) => {
 <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
   <div style="max-width: 600px; margin: 0 auto;">`;
     
-    // Add header image if available
     if (image_url) {
       finalContent += `
     <div style="margin-bottom: 20px;">
@@ -487,13 +483,11 @@ serve(async (req) => {
     </div>`;
     }
     
-    // Add main content
     finalContent += `
     <div style="margin-bottom: 20px;">
       ${content || ""}
     </div>`;
     
-    // Add signature if available
     if (signature_image && signature_image !== 'no_signature') {
       finalContent += `
     <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
@@ -510,7 +504,7 @@ serve(async (req) => {
     let emailAttachments = [];
     if (attachments) {
       try {
-        emailAttachments = validateAndSanitizeAttachments(attachments);
+        emailAttachments = validateAndSanitizeAttachments(attachments, !smtp_settings);
         console.log(`Processed ${emailAttachments.length} valid attachments`);
       } catch (error) {
         console.error("Error processing attachments:", error);
