@@ -34,6 +34,43 @@ interface BatchProgress {
   total: number;
 }
 
+/**
+ * Enhanced email validation function
+ */
+function isValidEmail(email: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  
+  // Handle both formats: "Name <email@domain.com>" and "email@domain.com"
+  const emailRegex = /^(?:"?([^"]*)"?\s*<([^>]+)>|([^<>\s]+))$/;
+  const match = email.match(emailRegex);
+  
+  if (!match) return false;
+  
+  // Extract the actual email address
+  const actualEmail = match[2] || match[3];
+  if (!actualEmail) return false;
+  
+  // Validate the email format
+  const validEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return validEmailRegex.test(actualEmail.trim());
+}
+
+/**
+ * Extract email address from formatted string
+ */
+function extractEmailAddress(email: string): string {
+  if (!email) return '';
+  
+  const emailRegex = /^(?:"?([^"]*)"?\s*<([^>]+)>|([^<>\s]+))$/;
+  const match = email.match(emailRegex);
+  
+  if (match) {
+    return match[2] || match[3] || '';
+  }
+  
+  return email.trim();
+}
+
 export function useBatchEmailSending() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<BatchProgress>({ current: 0, total: 0 });
@@ -94,13 +131,18 @@ export function useBatchEmailSending() {
         }
       }
 
-      // Validate emails before processing
+      // Validate emails before processing with enhanced validation
       const validContacts = selectedContacts.filter(contato => {
-        const isValidEmail = /\S+@\S+\.\S+/.test(contato.email);
-        if (!isValidEmail) {
-          console.warn(`Email inválido ignorado: ${contato.email}`);
+        if (!contato.email) {
+          console.warn(`Contato sem email ignorado: ${contato.nome}`);
+          return false;
         }
-        return isValidEmail;
+        
+        const isValid = isValidEmail(contato.email);
+        if (!isValid) {
+          console.warn(`Email inválido ignorado: ${contato.email} (${contato.nome})`);
+        }
+        return isValid;
       });
 
       if (validContacts.length !== selectedContacts.length) {
@@ -120,8 +162,11 @@ export function useBatchEmailSending() {
         
         const emailSubject = customSubject || templateData.descricao || templateData.nome || "Sem assunto";
 
+        // Extract clean email address
+        const cleanEmail = extractEmailAddress(contato.email);
+
         return {
-          to: contato.email,
+          to: cleanEmail,
           contato_nome: contato.nome,
           contato_id: contato.id,
           template_id: templateId,
@@ -198,13 +243,19 @@ export function useBatchEmailSending() {
     setProgress({ current: 0, total: emailJobs.length });
 
     try {
-      // Validate email jobs before processing
+      // Enhanced validation of email jobs before processing
       const validEmailJobs = emailJobs.filter(job => {
-        const isValidEmail = /\S+@\S+\.\S+/.test(job.contactEmail || '');
-        if (!isValidEmail) {
+        // Check if contactEmail exists and is valid
+        if (!job.contactEmail) {
+          console.warn(`Job sem email de contato ignorado:`, job);
+          return false;
+        }
+        
+        const isValid = isValidEmail(job.contactEmail);
+        if (!isValid) {
           console.warn(`Email inválido no job ignorado: ${job.contactEmail}`);
         }
-        return isValidEmail && job.contactEmail;
+        return isValid;
       });
 
       if (validEmailJobs.length !== emailJobs.length) {
@@ -217,18 +268,25 @@ export function useBatchEmailSending() {
         return { success: false };
       }
 
-      // Map emailJobs to the expected format
-      const emailsData = validEmailJobs.map(job => ({
-        to: job.contactEmail,
-        contato_nome: job.contactName || '',
-        contato_id: job.contactId || '',
-        template_id: job.templateId || '',
-        subject: job.subject || 'Sem assunto',
-        content: job.content || '',
-        signature_image: job.signatureImage || null,
-        image_url: job.imageUrl || null,
-        attachments: job.attachments || null
-      }));
+      // Map emailJobs to the expected format with enhanced data validation
+      const emailsData = validEmailJobs.map(job => {
+        // Extract clean email address
+        const cleanEmail = extractEmailAddress(job.contactEmail);
+        
+        return {
+          to: cleanEmail,
+          contato_nome: job.contactName || '',
+          contato_id: job.contactId || '',
+          template_id: job.templateId || '',
+          subject: job.subject || 'Sem assunto',
+          content: job.content || '',
+          signature_image: job.signatureImage || null,
+          image_url: job.imageUrl || null,
+          attachments: job.attachments || null
+        };
+      });
+
+      console.log(`Processando ${emailsData.length} emails válidos para envio em lote`);
 
       const result = await originalSendBatchEmails(emailsData);
 

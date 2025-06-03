@@ -23,6 +23,27 @@ interface ScheduleFormProps {
   onSuccess?: () => void;
 }
 
+/**
+ * Enhanced email validation function
+ */
+function isValidEmail(email: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  
+  // Handle both formats: "Name <email@domain.com>" and "email@domain.com"
+  const emailRegex = /^(?:"?([^"]*)"?\s*<([^>]+)>|([^<>\s]+))$/;
+  const match = email.match(emailRegex);
+  
+  if (!match) return false;
+  
+  // Extract the actual email address
+  const actualEmail = match[2] || match[3];
+  if (!actualEmail) return false;
+  
+  // Validate the email format
+  const validEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return validEmailRegex.test(actualEmail.trim());
+}
+
 export function ScheduleForm({ onCancel, initialData, isEditing = false, onSuccess }: ScheduleFormProps) {
   const [formData, setFormData] = useState<ScheduleFormData>(
     initialData || {
@@ -191,27 +212,43 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       return;
     }
 
+    // Validate that selected contacts have valid emails
+    const contactsWithValidEmails = selectedContacts.filter(contactId => {
+      const contact = contacts.find(c => c.id === contactId);
+      return contact && contact.email && isValidEmail(contact.email);
+    });
+
+    if (contactsWithValidEmails.length === 0) {
+      toast.error("Nenhum contato selecionado possui email válido");
+      return;
+    }
+
+    if (contactsWithValidEmails.length !== selectedContacts.length) {
+      const invalidCount = selectedContacts.length - contactsWithValidEmails.length;
+      toast.warning(`${invalidCount} contatos com emails inválidos serão ignorados`);
+    }
+
     // Ultra-enhanced confirmation for large volumes with ultra-parallel info
-    if (selectedContacts.length >= 10000) {
+    if (contactsWithValidEmails.length >= 10000) {
       const sendingMethod = parallelSendingEnabled ? "ultra-paralelo (simultâneo)" : "sequencial";
       const estimatedTimeText = parallelSendingEnabled 
         ? `pouquíssimos segundos` 
         : `${estimatedTime?.minutes || 'muitos'} minutos`;
       
       const proceed = window.confirm(
-        `Você está prestes a enviar ${selectedContacts.length.toLocaleString()} emails de forma ${sendingMethod}. ` +
+        `Você está prestes a enviar ${contactsWithValidEmails.length.toLocaleString()} emails de forma ${sendingMethod}. ` +
         `Isto deve levar ${estimatedTimeText}. ` +
         `Deseja continuar?`
       );
       if (!proceed) return;
-    } else if (selectedContacts.length >= 1000) {
+    } else if (contactsWithValidEmails.length >= 1000) {
       const sendingMethod = parallelSendingEnabled ? "simultâneo" : "sequencial";
       const estimatedTimeText = parallelSendingEnabled 
         ? `poucos segundos` 
         : `${estimatedTime?.minutes || 'vários'} minutos`;
       
       const proceed = window.confirm(
-        `Você está prestes a enviar ${selectedContacts.length.toLocaleString()} emails de forma ${sendingMethod}. ` +
+        `Você está prestes a enviar ${contactsWithValidEmails.length.toLocaleString()} emails de forma ${sendingMethod}. ` +
         `Isto deve levar ${estimatedTimeText}. ` +
         `Deseja continuar?`
       );
@@ -219,23 +256,37 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
     }
 
     try {
-      if (bulkMode && selectedContacts.length > 1) {
-        const emailJobs = selectedContacts.map(contactId => {
+      if (bulkMode && contactsWithValidEmails.length > 1) {
+        // Create email jobs with enhanced validation
+        const emailJobs = contactsWithValidEmails.map(contactId => {
           const contact = contacts.find(c => c.id === contactId);
+          if (!contact || !contact.email) {
+            console.warn(`Contato não encontrado ou sem email: ${contactId}`);
+            return null;
+          }
+          
           return {
             contactId,
             templateId: formData.template_id,
-            contactName: contact?.nome
+            contactName: contact.nome,
+            contactEmail: contact.email
           };
-        });
+        }).filter(job => job !== null); // Remove null entries
+
+        if (emailJobs.length === 0) {
+          toast.error("Nenhum job de email válido foi criado");
+          return;
+        }
+
+        console.log(`Criados ${emailJobs.length} jobs de email válidos para envio`);
 
         // Ultra-enhanced info for parallel sending
-        if (selectedContacts.length >= 10000 && parallelSendingEnabled) {
-          toast.info(`⚡ Enviando ${selectedContacts.length.toLocaleString()} emails simultaneamente (modo ultra-paralelo)...`);
-        } else if (selectedContacts.length >= 1000 && parallelSendingEnabled) {
-          toast.info(`🚀 Enviando ${selectedContacts.length.toLocaleString()} emails simultaneamente...`);
-        } else if (selectedContacts.length >= 500) {
-          toast.info(`🚀 Modo ultra-otimizado ativado para ${selectedContacts.length.toLocaleString()} emails`);
+        if (emailJobs.length >= 10000 && parallelSendingEnabled) {
+          toast.info(`⚡ Enviando ${emailJobs.length.toLocaleString()} emails simultaneamente (modo ultra-paralelo)...`);
+        } else if (emailJobs.length >= 1000 && parallelSendingEnabled) {
+          toast.info(`🚀 Enviando ${emailJobs.length.toLocaleString()} emails simultaneamente...`);
+        } else if (emailJobs.length >= 500) {
+          toast.info(`🚀 Modo ultra-otimizado ativado para ${emailJobs.length.toLocaleString()} emails`);
         }
 
         const result = await sendBatchEmails(emailJobs, {
@@ -253,12 +304,17 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       }
       
       // Single send
-      const selectedContact = contacts.find(c => c.id === selectedContacts[0]);
+      const selectedContact = contacts.find(c => c.id === contactsWithValidEmails[0]);
       
-      toast.info(`Iniciando envio para ${selectedContact?.nome || 'contato selecionado'}...`);
+      if (!selectedContact || !selectedContact.email) {
+        toast.error("Contato selecionado não possui email válido");
+        return;
+      }
+
+      toast.info(`Iniciando envio para ${selectedContact.nome}...`);
       
       const result = await sendEmail({
-        contato_id: selectedContacts[0],
+        contato_id: contactsWithValidEmails[0],
         template_id: formData.template_id
       });
       
@@ -314,10 +370,26 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       return;
     }
     
-    const allContactIds = filteredContacts.map(contact => contact.id);
+    // Filter contacts that have valid emails
+    const contactsWithEmails = filteredContacts.filter(contact => 
+      contact.email && isValidEmail(contact.email)
+    );
+    
+    if (contactsWithEmails.length === 0) {
+      toast.error("Nenhum contato com email válido encontrado");
+      return;
+    }
+    
+    const allContactIds = contactsWithEmails.map(contact => contact.id);
     setSelectedContacts(allContactIds);
     setBulkMode(true);
-    toast.success(`${allContactIds.length.toLocaleString()} contatos selecionados`);
+    
+    if (contactsWithEmails.length !== filteredContacts.length) {
+      const invalidCount = filteredContacts.length - contactsWithEmails.length;
+      toast.warning(`${allContactIds.length.toLocaleString()} contatos com emails válidos selecionados. ${invalidCount} contatos sem emails válidos foram ignorados.`);
+    } else {
+      toast.success(`${allContactIds.length.toLocaleString()} contatos selecionados`);
+    }
   };
   
   // Filter contacts based on search query and selected tags
@@ -508,32 +580,40 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
             </div>
             <ScrollArea className="h-40 border rounded-md p-2 mt-2">
               {filteredContacts.length > 0 ? (
-                filteredContacts.map((contact) => (
-                  <div key={contact.id} className="flex items-center mb-2">
-                    <Checkbox
-                      id={`contact-${contact.id}`}
-                      checked={selectedContacts.includes(contact.id)}
-                      onCheckedChange={() => handleContactSelection(contact.id)}
-                      className="mr-2"
-                    />
-                    <label htmlFor={`contact-${contact.id}`} className="text-sm">
-                      <span className="font-medium">{contact.nome}</span>
-                      <span className="text-muted-foreground ml-2">({contact.email})</span>
-                      {contact.tags && contact.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {contact.tags.map((tag, i) => (
-                            <span 
-                              key={i}
-                              className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded-full text-xs"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </label>
-                  </div>
-                ))
+                filteredContacts.map((contact) => {
+                  const hasValidEmail = contact.email && isValidEmail(contact.email);
+                  return (
+                    <div key={contact.id} className="flex items-center mb-2">
+                      <Checkbox
+                        id={`contact-${contact.id}`}
+                        checked={selectedContacts.includes(contact.id)}
+                        onCheckedChange={() => handleContactSelection(contact.id)}
+                        className="mr-2"
+                        disabled={!hasValidEmail}
+                      />
+                      <label htmlFor={`contact-${contact.id}`} className={`text-sm ${!hasValidEmail ? 'opacity-50' : ''}`}>
+                        <span className="font-medium">{contact.nome}</span>
+                        <span className="text-muted-foreground ml-2">
+                          ({contact.email || 'sem email'})
+                          {!hasValidEmail && contact.email && <span className="text-red-500"> - email inválido</span>}
+                          {!contact.email && <span className="text-red-500"> - sem email</span>}
+                        </span>
+                        {contact.tags && contact.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {contact.tags.map((tag, i) => (
+                              <span 
+                                key={i}
+                                className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded-full text-xs"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  );
+                })
               ) : (
                 <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
                   Nenhum contato encontrado

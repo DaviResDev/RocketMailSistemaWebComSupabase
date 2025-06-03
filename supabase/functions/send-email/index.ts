@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
@@ -18,7 +19,37 @@ const corsHeaders = {
  * Email validation function
  */
 function isValidEmail(email: string): boolean {
-  return /\S+@\S+\.\S+/.test(email);
+  if (!email || typeof email !== 'string') return false;
+  
+  // Handle both formats: "Name <email@domain.com>" and "email@domain.com"
+  const emailRegex = /^(?:"?([^"]*)"?\s*<([^>]+)>|([^<>\s]+))$/;
+  const match = email.match(emailRegex);
+  
+  if (!match) return false;
+  
+  // Extract the actual email address
+  const actualEmail = match[2] || match[3];
+  if (!actualEmail) return false;
+  
+  // Validate the email format
+  const validEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return validEmailRegex.test(actualEmail.trim());
+}
+
+/**
+ * Extract email address from formatted string
+ */
+function extractEmailAddress(email: string): string {
+  if (!email) return '';
+  
+  const emailRegex = /^(?:"?([^"]*)"?\s*<([^>]+)>|([^<>\s]+))$/;
+  const match = email.match(emailRegex);
+  
+  if (match) {
+    return match[2] || match[3] || '';
+  }
+  
+  return email.trim();
 }
 
 /**
@@ -112,7 +143,7 @@ async function createSMTPTransporter(config: any) {
       user: config.user
     });
     
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: config.host,
       port: parseInt(config.port) || 587,
       secure: config.secure || config.port === 465,
@@ -160,14 +191,15 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
     const fromEmail = config.user;
     const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
     
-    // Validate recipient email
-    if (!isValidEmail(payload.to)) {
+    // Extract and validate recipient email
+    const recipientEmail = extractEmailAddress(payload.to);
+    if (!isValidEmail(recipientEmail)) {
       throw new Error(`Email inválido: ${payload.to}`);
     }
     
     const mailOptions: any = {
       from: from,
-      to: payload.to,
+      to: recipientEmail,
       subject: payload.subject,
       html: payload.html,
       text: stripHtml(payload.html),
@@ -220,7 +252,7 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
       }
     }
 
-    console.log(`Sending email via SMTP to: ${payload.to}`);
+    console.log(`Sending email via SMTP to: ${recipientEmail}`);
     
     // Send email
     const info = await transporter.sendMail(mailOptions);
@@ -234,7 +266,7 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
       id: info.messageId,
       provider: "smtp",
       from: from,
-      to: payload.to,
+      to: recipientEmail,
       response: info.response
     };
   } catch (error) {
@@ -273,14 +305,15 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
       throw new Error("Chave da API Resend não configurada");
     }
     
-    // Validate recipient email
-    if (!isValidEmail(payload.to)) {
+    // Extract and validate recipient email
+    const recipientEmail = extractEmailAddress(payload.to);
+    if (!isValidEmail(recipientEmail)) {
       throw new Error(`Email inválido: ${payload.to}`);
     }
     
     const emailData: any = {
       from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
-      to: [payload.to],
+      to: [recipientEmail],
       subject: payload.subject,
       html: payload.html,
       text: stripHtml(payload.html),
@@ -331,7 +364,7 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
       }
     }
     
-    console.log(`Sending email via Resend to: ${payload.to}`);
+    console.log(`Sending email via Resend to: ${recipientEmail}`);
     
     const result = await resend.emails.send(emailData);
     
@@ -345,7 +378,7 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
       id: result.data?.id,
       provider: "resend",
       from: emailData.from,
-      to: payload.to,
+      to: recipientEmail,
       reply_to: emailData.reply_to,
     };
   } catch (error) {
@@ -563,7 +596,11 @@ serve(async (req) => {
 </body>
 </html>`;
         
-        const toAddress = optimizedData.contato_nome ? `"${optimizedData.contato_nome}" <${optimizedData.to}>` : optimizedData.to;
+        // Format the recipient email properly
+        let toAddress = optimizedData.to;
+        if (optimizedData.contato_nome && !toAddress.includes('<')) {
+          toAddress = `"${optimizedData.contato_nome}" <${optimizedData.to}>`;
+        }
         
         return {
           to: toAddress,
@@ -668,6 +705,20 @@ serve(async (req) => {
       );
     }
     
+    // Validate recipient email
+    if (!isValidEmail(to)) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Email inválido: ${to}`
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
+    }
+    
     // Optimize payload
     const optimizedRequest = optimizeEmailPayload(requestData);
     
@@ -719,7 +770,11 @@ serve(async (req) => {
       }
     }
     
-    const toAddress = contato_nome ? `"${contato_nome}" <${to}>` : to;
+    // Format the recipient email properly
+    let toAddress = to;
+    if (contato_nome && !to.includes('<')) {
+      toAddress = `"${contato_nome}" <${to}>`;
+    }
     
     const emailPayload = {
       to: toAddress,
