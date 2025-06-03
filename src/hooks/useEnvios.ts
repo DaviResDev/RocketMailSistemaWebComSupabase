@@ -1,7 +1,8 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Envio, EnvioFormData, parseAttachments } from '@/types/envios';
+import { Envio, EnvioFormData } from '@/types/envios';
 
 export function useEnvios() {
   const [envios, setEnvios] = useState<Envio[]>([]);
@@ -38,13 +39,12 @@ export function useEnvios() {
     }
   };
 
-  // Optimized template variable processing with memoization
+  // Optimized template variable processing
   const processTemplateVariables = (content: string, contatoData: any) => {
     const currentDate = new Date();
     const formattedDate = currentDate.toLocaleDateString('pt-BR');
     const formattedTime = currentDate.toLocaleTimeString('pt-BR');
     
-    // Create replacements object once
     const replacements: Record<string, string> = {
       '{{nome}}': contatoData?.nome || '',
       '{{email}}': contatoData?.email || '',
@@ -57,32 +57,18 @@ export function useEnvios() {
       '{{valor}}': contatoData?.valor || 'Valor',
       '{{vencimento}}': contatoData?.vencimento || 'Vencimento',
       '{{data}}': formattedDate,
-      '{{hora}}': formattedTime,
-      // Legacy format support
-      '{nome}': contatoData?.nome || '',
-      '{email}': contatoData?.email || '',
-      '{telefone}': contatoData?.telefone || '',
-      '{razao_social}': contatoData?.razao_social || '',
-      '{cliente}': contatoData?.cliente || '',
-      '{empresa}': contatoData?.razao_social || 'Empresa',
-      '{cargo}': contatoData?.cargo || 'Cargo',
-      '{produto}': contatoData?.produto || 'Produto',
-      '{valor}': contatoData?.valor || 'Valor',
-      '{vencimento}': contatoData?.vencimento || 'Vencimento',
-      '{data}': formattedDate,
-      '{hora}': formattedTime
+      '{{hora}}': formattedTime
     };
     
-    // Use a single pass replacement for better performance - replace replaceAll with split/join
     let processedContent = content;
     Object.entries(replacements).forEach(([variable, value]) => {
-      // Use split and join instead of replaceAll for compatibility
       processedContent = processedContent.split(variable).join(value);
     });
     
     return processedContent;
   };
 
+  // Send email to single recipient
   const sendEmail = async (formData: EnvioFormData) => {
     setSending(true);
     
@@ -116,8 +102,7 @@ export function useEnvios() {
         return false;
       }
       
-      // Show initial progress toast - return the ID for later dismissal
-      const loadingToastId = toast.loading(`Iniciando envio para ${contatoNome || contatoEmail}...`);
+      const loadingToastId = toast.loading(`Enviando email para ${contatoNome || contatoEmail}...`);
       
       try {
         // Get template and user settings in parallel
@@ -137,13 +122,13 @@ export function useEnvios() {
         const templateData = templateResult.data;
         const userSettings = userSettingsResult.data;
 
-        // Process template content with contact data for placeholders if not already provided
+        // Process template content
         let processedContent = formData.content;
         if (!processedContent && templateData) {
           processedContent = processTemplateVariables(templateData.conteudo, contatoData);
         }
         
-        // Handle attachments more efficiently
+        // Handle attachments
         let parsedAttachments = formData.attachments;
         if (!parsedAttachments && templateData?.attachments) {
           try {
@@ -172,11 +157,6 @@ export function useEnvios() {
           from_email: userSettings.email_usuario || ''
         } : null;
         
-        // Update toast with processing status
-        toast.loading(`Processando envio para ${contatoNome || contatoEmail}...`, {
-          id: loadingToastId
-        });
-        
         const emailSubject = formData.subject || templateData?.descricao || templateData?.nome || "Sem assunto";
         
         const dataToSend = {
@@ -193,15 +173,12 @@ export function useEnvios() {
           smtp_settings: smtpSettings
         };
         
-        console.log("Sending email with data:", { 
+        console.log("Sending single email with data:", { 
           to: contatoEmail,
           template_id: formData.template_id,
           contato_id: formData.contato_id,
           has_attachments: !!parsedAttachments,
-          has_image: !!templateData?.image_url,
           subject: emailSubject,
-          content_length: processedContent?.length,
-          signature_image: !!signatureImage,
           use_smtp: !!userSettings?.use_smtp
         });
         
@@ -264,6 +241,123 @@ export function useEnvios() {
     }
   };
 
+  // Send emails to multiple recipients in batches
+  const sendBatchEmails = async (emailsData: any[]) => {
+    setSending(true);
+    
+    try {
+      console.log(`Iniciando envio em lote para ${emailsData.length} destinatários`);
+      
+      const loadingToastId = toast.loading(`Preparando envio para ${emailsData.length} destinatários...`);
+      
+      try {
+        // Get user settings
+        const { data: userSettings } = await supabase
+          .from('configuracoes')
+          .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
+          .single();
+        
+        // Prepare SMTP settings if configured
+        const smtpSettings = userSettings?.use_smtp ? {
+          host: userSettings.email_smtp,
+          port: userSettings.email_porta,
+          secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+          password: userSettings.email_senha,
+          from_name: userSettings.smtp_nome || '',
+          from_email: userSettings.email_usuario || ''
+        } : null;
+        
+        // Update toast
+        toast.loading(`Processando envio em lotes para ${emailsData.length} destinatários...`, {
+          id: loadingToastId
+        });
+        
+        const batchRequestData = {
+          batch: true,
+          emails: emailsData,
+          smtp_settings: smtpSettings
+        };
+        
+        console.log("Sending batch email request with data:", {
+          batch: true,
+          total_emails: emailsData.length,
+          use_smtp: !!smtpSettings
+        });
+        
+        const response = await supabase.functions.invoke('send-email', {
+          body: batchRequestData
+        });
+        
+        if (response.error) {
+          console.error("Batch email edge function error:", response.error);
+          throw new Error(`Erro na função de envio em lote: ${response.error.message || response.error}`);
+        }
+        
+        const responseData = response.data;
+        if (!responseData || !responseData.success) {
+          console.error("Failed batch email response:", responseData);
+          throw new Error(responseData?.error || "Falha no envio em lote");
+        }
+        
+        console.log('Envio em lote concluído:', responseData);
+        
+        toast.dismiss(loadingToastId);
+        
+        const { summary, results } = responseData;
+        
+        // Show detailed results
+        if (summary.successful > 0) {
+          toast.success(`${summary.successful} emails enviados com sucesso!`);
+        }
+        
+        if (summary.failed > 0) {
+          toast.error(`${summary.failed} emails falharam no envio. Taxa de sucesso: ${summary.successRate}%`);
+          
+          // Log failed emails for debugging
+          const failedEmails = results.filter(r => !r.success);
+          console.warn("Failed emails:", failedEmails);
+        }
+        
+        // Create entries in envios table for successful sends
+        if (summary.successful > 0) {
+          try {
+            const { data: user } = await supabase.auth.getUser();
+            if (user.user) {
+              const successfulResults = results.filter(r => r.success);
+              const envioRecords = successfulResults.map(result => {
+                const emailData = emailsData.find(e => e.to === result.to.replace(/^".*" <(.+)>$/, '$1'));
+                return {
+                  contato_id: emailData?.contato_id,
+                  template_id: emailData?.template_id,
+                  status: 'enviado',
+                  user_id: user.user.id,
+                  data_envio: new Date().toISOString()
+                };
+              }).filter(record => record.contato_id && record.template_id);
+              
+              if (envioRecords.length > 0) {
+                await supabase.from('envios').insert(envioRecords);
+              }
+            }
+          } catch (err) {
+            console.error("Error saving batch envios to database:", err);
+          }
+        }
+        
+        await fetchEnvios();
+        return responseData;
+        
+      } catch (err: any) {
+        console.error('Erro no envio em lote:', err);
+        toast.dismiss(loadingToastId);
+        toast.error(`Erro no envio em lote: ${err.message || 'Erro desconhecido'}`);
+        return false;
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
   const resendEnvio = async (id: string) => {
     setSending(true);
     
@@ -279,10 +373,9 @@ export function useEnvios() {
       
       if (envioError) throw envioError;
       
-      // Show resending toast
       const loadingToastId = toast.loading(`Reenviando email para ${envio.contato.nome}...`);
       
-      // Get template data to include attachments
+      // Get template data
       const { data: templateData, error: templateError } = await supabase
         .from('templates')
         .select('*')
@@ -296,13 +389,7 @@ export function useEnvios() {
         .from('configuracoes')
         .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
         .single();
-      
-      // Update toast with processing status
-      toast.loading(`Processando reenvio para ${envio.contato.nome}...`, {
-        id: loadingToastId
-      });
 
-      // Parse attachments for proper handling
       let parsedAttachments = null;
       if (templateData.attachments) {
         try {
@@ -323,13 +410,11 @@ export function useEnvios() {
         template_id: envio.template_id,
         attachments: parsedAttachments,
         signature_image: userSettings?.signature_image || templateData.signature_image,
-        // Always use template description as subject if available, otherwise use template name
         subject: templateData.descricao || templateData.nome
       });
       
       toast.dismiss(loadingToastId);
       
-      // Atualizar status do envio original
       if (result) {
         await supabase
           .from('envios')
@@ -349,7 +434,6 @@ export function useEnvios() {
     }
   };
 
-  // Fetch envios when the component mounts
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getUser();
@@ -370,6 +454,7 @@ export function useEnvios() {
     sending,
     fetchEnvios,
     sendEmail,
+    sendBatchEmails,
     resendEnvio,
     processTemplateVariables
   };

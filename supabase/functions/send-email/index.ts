@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 /**
- * Validate and sanitize attachment data - Skip URL-based attachments for Resend
+ * Validate and sanitize attachment data
  */
 function validateAndSanitizeAttachments(attachments: any, isResend: boolean = false): any[] {
   if (!attachments) return [];
@@ -69,7 +69,7 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via SMTP using Nodemailer - FIXED IMPORT
+ * Send email via SMTP using Nodemailer
  */
 async function sendEmailViaSMTP(config, payload) {
   console.log("SMTP Configuration:", {
@@ -81,8 +81,8 @@ async function sendEmailViaSMTP(config, payload) {
   });
   
   try {
-    // FIXED: Use nodemailer.default.createTransport instead of nodemailer.createTransporter
-    const transporter = nodemailer.default.createTransport({
+    // FIXED: Use proper nodemailer import
+    const transporter = nodemailer.createTransport({
       host: config.host,
       port: config.port,
       secure: config.secure || config.port === 465,
@@ -90,9 +90,9 @@ async function sendEmailViaSMTP(config, payload) {
         user: config.user,
         pass: config.pass,
       },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 20000,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 30000,
       logger: false,
       debug: false,
       tls: {
@@ -124,7 +124,7 @@ async function sendEmailViaSMTP(config, payload) {
       mailOptions.bcc = payload.bcc;
     }
     
-    // Process attachments for SMTP (supports both content and URL-based)
+    // Process attachments for SMTP
     if (payload.attachments && payload.attachments.length > 0) {
       const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, false);
       
@@ -315,9 +315,12 @@ function stripHtml(html) {
 }
 
 /**
- * Send single email with improved error handling and fallback logic
+ * Send single email with improved error handling and rate limiting
  */
 async function sendSingleEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
+  // Add delay to respect rate limits
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
   // Try SMTP first if configured
   if (useSmtp && smtpConfig && smtpConfig.host && smtpConfig.port && 
       smtpConfig.user && smtpConfig.pass) {
@@ -351,6 +354,93 @@ async function sendSingleEmail(payload, useSmtp, smtpConfig, resendApiKey, fromN
   
   console.log("Using Resend for email delivery");
   return await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
+}
+
+/**
+ * Process multiple emails in controlled batches
+ */
+async function processBatchEmails(emailRequests, useSmtp, smtpConfig, resendApiKey, fromName) {
+  const batchSize = 5; // Smaller batch size for better control
+  const delayBetweenBatches = 2000; // 2 seconds between batches
+  const results = [];
+  
+  console.log(`Processing ${emailRequests.length} emails in batches of ${batchSize}`);
+  
+  for (let i = 0; i < emailRequests.length; i += batchSize) {
+    const batch = emailRequests.slice(i, i + batchSize);
+    const batchNumber = Math.floor(i / batchSize) + 1;
+    const totalBatches = Math.ceil(emailRequests.length / batchSize);
+    
+    console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
+    
+    // Process batch with Promise.allSettled for better error handling
+    const batchPromises = batch.map(async (emailData, index) => {
+      try {
+        const globalIndex = i + index;
+        console.log(`Sending email ${globalIndex + 1}/${emailRequests.length} to: ${emailData.to}`);
+        
+        const result = await sendSingleEmail(
+          emailData, 
+          useSmtp, 
+          smtpConfig, 
+          resendApiKey, 
+          fromName
+        );
+        
+        return {
+          success: true,
+          result: result,
+          to: emailData.to,
+          index: globalIndex
+        };
+      } catch (error) {
+        console.error(`Failed to send email to ${emailData.to}:`, error.message);
+        return {
+          success: false,
+          error: error.message,
+          to: emailData.to,
+          index: i + index
+        };
+      }
+    });
+    
+    const batchResults = await Promise.allSettled(batchPromises);
+    
+    // Process results and add to main results array
+    batchResults.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        results.push(result.value);
+      } else {
+        results.push({
+          success: false,
+          error: result.reason?.message || 'Unknown batch processing error',
+          to: 'unknown',
+          index: results.length
+        });
+      }
+    });
+    
+    // Add delay between batches (except for the last batch)
+    if (i + batchSize < emailRequests.length) {
+      console.log(`Waiting ${delayBetweenBatches}ms before next batch...`);
+      await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+  }
+  
+  const successCount = results.filter(r => r.success).length;
+  const failureCount = results.filter(r => !r.success).length;
+  
+  console.log(`Batch processing complete: ${successCount} successful, ${failureCount} failed`);
+  
+  return {
+    results,
+    summary: {
+      total: emailRequests.length,
+      successful: successCount,
+      failed: failureCount,
+      successRate: emailRequests.length > 0 ? (successCount / emailRequests.length * 100).toFixed(1) : 0
+    }
+  };
 }
 
 serve(async (req) => {
@@ -392,6 +482,108 @@ serve(async (req) => {
       );
     }
     
+    // Handle batch email sending
+    if (requestData.batch && Array.isArray(requestData.emails)) {
+      console.log(`Received batch email request for ${requestData.emails.length} recipients`);
+      
+      const emailRequests = requestData.emails.map(emailData => {
+        // Build email HTML with proper structure
+        let finalContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${emailData.subject || "Email"}</title>
+</head>
+<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
+  <div style="max-width: 600px; margin: 0 auto;">`;
+        
+        if (emailData.image_url) {
+          finalContent += `
+    <div style="margin-bottom: 20px;">
+      <img src="${emailData.image_url}" alt="Header image" style="max-width: 100%; height: auto;" />
+    </div>`;
+        }
+        
+        finalContent += `
+    <div style="margin-bottom: 20px;">
+      ${emailData.content || ""}
+    </div>`;
+        
+        if (emailData.signature_image && emailData.signature_image !== 'no_signature') {
+          finalContent += `
+    <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+      <img src="${emailData.signature_image}" alt="Assinatura" style="max-height: 100px;" />
+    </div>`;
+        }
+        
+        finalContent += `
+  </div>
+</body>
+</html>`;
+        
+        const toAddress = emailData.contato_nome ? `"${emailData.contato_nome}" <${emailData.to}>` : emailData.to;
+        
+        return {
+          to: toAddress,
+          subject: emailData.subject || "Sem assunto",
+          html: finalContent,
+          attachments: emailData.attachments || []
+        };
+      });
+      
+      try {
+        const batchResult = await processBatchEmails(
+          emailRequests,
+          !!requestData.smtp_settings,
+          requestData.smtp_settings ? {
+            host: requestData.smtp_settings.host || "",
+            port: parseInt(requestData.smtp_settings.port) || 587,
+            secure: requestData.smtp_settings.secure || false,
+            user: requestData.smtp_settings.from_email,
+            pass: requestData.smtp_settings.password,
+            name: requestData.smtp_settings.from_name
+          } : null,
+          apiKey,
+          requestData.smtp_settings?.from_name
+        );
+        
+        console.log("Batch email processing completed:", batchResult.summary);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Batch email processing completed",
+            summary: batchResult.summary,
+            results: batchResult.results.map(r => ({
+              to: r.to,
+              success: r.success,
+              error: r.error || null,
+              id: r.result?.id || null
+            }))
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      } catch (error) {
+        console.error("Batch email processing failed:", error);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error.message || "Batch email processing failed"
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          }
+        );
+      }
+    }
+    
+    // Handle single email sending (existing logic)
     const { 
       to, 
       subject, 
@@ -403,7 +595,7 @@ serve(async (req) => {
       smtp_settings
     } = requestData;
     
-    console.log("Received email request:", { 
+    console.log("Received single email request:", { 
       to, 
       subject, 
       contentLength: content?.length,
@@ -486,7 +678,7 @@ serve(async (req) => {
     try {
       let result;
       if (smtp_settings && smtp_settings.from_email) {
-        console.log("Using SMTP for email delivery");
+        console.log("Using SMTP for single email delivery");
         
         const smtpConfig = {
           host: smtp_settings.host || "",
@@ -505,7 +697,7 @@ serve(async (req) => {
           smtp_settings.from_name
         );
       } else {
-        console.log("Using Resend for email delivery");
+        console.log("Using Resend for single email delivery");
         result = await sendSingleEmail(
           emailPayload,
           false,
@@ -515,7 +707,7 @@ serve(async (req) => {
         );
       }
       
-      console.log("Email sent successfully:", result);
+      console.log("Single email sent successfully:", result);
       
       return new Response(
         JSON.stringify({
@@ -530,7 +722,7 @@ serve(async (req) => {
         }
       );
     } catch (error) {
-      console.error("Failed to send email:", error);
+      console.error("Failed to send single email:", error);
       return new Response(
         JSON.stringify({
           success: false,

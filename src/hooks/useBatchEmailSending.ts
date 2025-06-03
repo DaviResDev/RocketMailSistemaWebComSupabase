@@ -1,266 +1,141 @@
 
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { processBatch, getBatchSummary, BatchResult } from '@/utils/batchProcessing';
-import useEnvios from './useEnvios';
+import { useEnvios } from './useEnvios';
 
-interface EmailJob {
-  contactId: string;
-  templateId: string;
-  contactName?: string;
+interface BatchEmailData {
+  contato_id: string;
+  template_id: string;
+  contato: {
+    nome: string;
+    email: string;
+    telefone?: string;
+    razao_social?: string;
+    cliente?: string;
+  };
+  template: {
+    nome: string;
+    conteudo: string;
+    signature_image?: string;
+    image_url?: string;
+    attachments?: any;
+  };
 }
 
 export function useBatchEmailSending() {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const { sendEmail } = useEnvios();
+  const [isSending, setIsSending] = useState(false);
+  const { sendBatchEmails, processTemplateVariables } = useEnvios();
 
-  // Ultra-fast parallel email sending with optimized batch processing
-  const sendUltraParallelEmails = async (jobs: EmailJob[]): Promise<BatchResult<any>[]> => {
-    console.log(`🚀 Starting ultra-parallel email sending for ${jobs.length} emails`);
-    
-    // For ultra-large volumes (10k+), use chunked parallel processing
-    const chunkSize = Math.min(1000, Math.max(100, Math.floor(jobs.length / 30))); // Dynamic chunk size
-    const chunks = [];
-    
-    for (let i = 0; i < jobs.length; i += chunkSize) {
-      chunks.push(jobs.slice(i, i + chunkSize));
-    }
-    
-    console.log(`📦 Processing ${jobs.length} emails in ${chunks.length} ultra-parallel chunks of ~${chunkSize} each`);
-    
-    const allResults: BatchResult<any>[] = [];
-    let processedCount = 0;
-    
-    // Process all chunks simultaneously with Promise.all for maximum speed
-    const chunkPromises = chunks.map(async (chunk, chunkIndex) => {
-      console.log(`⚡ Processing ultra-parallel chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} emails`);
-      
-      // Process all emails in this chunk simultaneously
-      const emailPromises = chunk.map(async (job, index) => {
-        try {
-          const result = await sendEmail({
-            contato_id: job.contactId,
-            template_id: job.templateId,
-            contato_nome: job.contactName
-          });
-          
-          // Update progress atomically
-          processedCount++;
-          setProgress(prev => ({ current: processedCount, total: prev.total }));
-          
-          return {
-            success: true,
-            result,
-            index: chunkIndex * chunkSize + index,
-            id: job.contactId
-          } as BatchResult<any>;
-        } catch (error: any) {
-          processedCount++;
-          setProgress(prev => ({ current: processedCount, total: prev.total }));
-          
-          return {
-            success: false,
-            error: error.message || 'Erro desconhecido',
-            index: chunkIndex * chunkSize + index,
-            id: job.contactId
-          } as BatchResult<any>;
-        }
-      });
-
-      // Execute all emails in this chunk simultaneously
-      return await Promise.all(emailPromises);
-    });
-
-    // Execute all chunks simultaneously for maximum throughput
-    const chunkResults = await Promise.all(chunkPromises);
-    
-    // Flatten results from all chunks
-    chunkResults.forEach(chunkResult => {
-      allResults.push(...chunkResult);
-    });
-    
-    console.log(`✅ Ultra-parallel processing completed: ${allResults.length} emails processed`);
-    return allResults;
-  };
-
-  const sendBatchEmails = async (
-    jobs: EmailJob[],
-    options: {
-      batchSize?: number;
-      delayBetweenBatches?: number;
-      showProgress?: boolean;
-      enableOptimizations?: boolean;
-      useParallelSending?: boolean;
-    } = {}
+  const sendEmailsInBatch = async (
+    selectedContacts: any[],
+    templateId: string,
+    customSubject?: string,
+    customContent?: string
   ) => {
-    if (jobs.length === 0) {
-      toast.error("Nenhum email para enviar");
-      return { success: false, results: [] };
+    if (!selectedContacts.length || !templateId) {
+      toast.error('Selecione contatos e um template para envio em lote');
+      return false;
     }
 
-    setIsProcessing(true);
-    setProgress({ current: 0, total: jobs.length });
-    
+    setIsSending(true);
+
     try {
-      const {
-        showProgress = true,
-        useParallelSending = true
-      } = options;
+      console.log(`Iniciando preparação de envio em lote para ${selectedContacts.length} contatos`);
 
-      const startTime = Date.now();
+      // Get template data
+      const { data: templateData, error: templateError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
 
-      if (showProgress) {
-        if (jobs.length >= 10000) {
-          toast.info(`🚀 Modo ultra-paralelo ativado para ${jobs.length.toLocaleString()} contatos - Envio simultâneo!`);
-        } else if (jobs.length >= 1000) {
-          toast.info(`⚡ Modo super-otimizado ativado para ${jobs.length.toLocaleString()} contatos`);
-        } else if (jobs.length >= 50) {
-          toast.info(`🚀 Enviando ${jobs.length} emails simultaneamente...`);
-        } else {
-          toast.info(`Iniciando envio para ${jobs.length} contatos...`);
+      if (templateError) {
+        console.error('Erro ao buscar template:', templateError);
+        toast.error('Erro ao buscar dados do template');
+        return false;
+      }
+
+      // Get user settings for signature
+      const { data: userSettings } = await supabase
+        .from('configuracoes')
+        .select('signature_image')
+        .single();
+
+      const signatureImage = userSettings?.signature_image || templateData.signature_image;
+
+      // Process attachments
+      let parsedAttachments = null;
+      if (templateData.attachments) {
+        try {
+          if (typeof templateData.attachments === 'string' && templateData.attachments !== '[]') {
+            parsedAttachments = JSON.parse(templateData.attachments);
+          } else if (Array.isArray(templateData.attachments)) {
+            parsedAttachments = templateData.attachments;
+          } else if (templateData.attachments && typeof templateData.attachments === 'object') {
+            parsedAttachments = [templateData.attachments];
+          }
+        } catch (err) {
+          console.error('Erro ao analisar anexos do template:', err);
+          parsedAttachments = null;
         }
       }
 
-      let results: BatchResult<any>[];
-      let toastId: string | number | undefined;
-      
-      if (useParallelSending && jobs.length <= 30000) {
-        // Use ultra-parallel sending for maximum speed
-        if (showProgress) {
-          const processingMessage = jobs.length >= 10000 
-            ? `⚡ Processando ${jobs.length.toLocaleString()} emails em modo ultra-paralelo...`
-            : `📧 Processando ${jobs.length.toLocaleString()} emails simultaneamente...`;
-          
-          toastId = toast.loading(processingMessage, { 
-            duration: Infinity,
-            action: {
-              label: "✕",
-              onClick: () => toast.dismiss(toastId)
-            }
-          });
-        }
+      // Prepare email data for batch sending
+      const emailsData = selectedContacts.map(contato => {
+        // Process template content with contact variables
+        const processedContent = customContent || processTemplateVariables(templateData.conteudo, contato);
         
-        results = await sendUltraParallelEmails(jobs);
-      } else {
-        // Fallback to optimized batch processing for very large volumes
-        const optimalBatchSize = jobs.length >= 20000 ? 500 : jobs.length >= 10000 ? 300 : jobs.length >= 1000 ? 150 : 50;
-        const optimalDelay = jobs.length >= 20000 ? 10 : jobs.length >= 10000 ? 20 : jobs.length >= 1000 ? 25 : 50;
+        const emailSubject = customSubject || templateData.descricao || templateData.nome || "Sem assunto";
 
-        if (showProgress) {
-          toastId = toast.loading(
-            `📧 Processando ${jobs.length.toLocaleString()} emails em lotes ultra-otimizados...`,
-            { 
-              duration: Infinity,
-              action: {
-                label: "✕",
-                onClick: () => toast.dismiss(toastId)
-              }
-            }
-          );
-        }
-
-        results = await processBatch(
-          jobs,
-          async (job, index) => {
-            const result = await sendEmail({
-              contato_id: job.contactId,
-              template_id: job.templateId,
-              contato_nome: job.contactName
-            });
-            
-            setProgress({ current: index + 1, total: jobs.length });
-            return result;
-          },
-          {
-            batchSize: optimalBatchSize,
-            delayBetweenBatches: optimalDelay,
-            showProgress: false,
-            enableLargeVolumeOptimizations: jobs.length >= 1000
-          }
-        );
-      }
-
-      // Dismiss progress toast
-      if (toastId) {
-        toast.dismiss(toastId);
-      }
-
-      const summary = getBatchSummary(results);
-      const processingTime = Date.now() - startTime;
-      const avgTimePerEmail = processingTime / jobs.length;
-      const throughput = Math.round((jobs.length / processingTime) * 1000);
-
-      // Enhanced success/error alerts with dismissible close buttons
-      if (summary.successCount === summary.total) {
-        const alertMessage = jobs.length >= 10000
-          ? `✅ Todos os ${summary.total.toLocaleString()} emails enviados simultaneamente! (Ultra-paralelo: ${throughput} emails/s)`
-          : jobs.length >= 1000
-          ? `✅ Todos os ${summary.total.toLocaleString()} emails enviados com sucesso! (${throughput} emails/s)`
-          : `✅ Todos os ${summary.total} emails enviados simultaneamente! (${throughput} emails/s)`;
-        
-        toast.success(alertMessage, {
-          duration: 15000,
-          action: {
-            label: "✕",
-            onClick: () => {}
-          }
-        });
-      } else if (summary.successCount > 0) {
-        const alertMessage = `⚠️ ${summary.successCount.toLocaleString()} de ${summary.total.toLocaleString()} emails enviados (${summary.successRate}% sucesso). ${summary.errorCount.toLocaleString()} falharam.`;
-        
-        toast.warning(alertMessage, {
-          duration: 20000,
-          action: {
-            label: "✕",
-            onClick: () => {}
-          }
-        });
-      } else {
-        toast.error("❌ Falha ao enviar emails - Verifique as configurações", {
-          duration: 20000,
-          action: {
-            label: "✕",
-            onClick: () => {}
-          }
-        });
-      }
-
-      return {
-        success: summary.successCount > 0,
-        results,
-        summary,
-        processingTime,
-        avgTimePerEmail: Math.round(avgTimePerEmail),
-        throughput,
-        parallelProcessing: useParallelSending && jobs.length <= 30000,
-        ultraParallel: jobs.length >= 1000
-      };
-    } catch (error: any) {
-      console.error("Erro durante envio em lote:", error);
-      
-      toast.error(`Erro durante envio em lote: ${error.message}`, {
-        duration: 20000,
-        action: {
-          label: "✕",
-          onClick: () => {}
-        }
+        return {
+          to: contato.email,
+          contato_nome: contato.nome,
+          contato_id: contato.id,
+          template_id: templateId,
+          subject: emailSubject,
+          content: processedContent,
+          signature_image: signatureImage,
+          image_url: templateData.image_url,
+          attachments: parsedAttachments
+        };
       });
-      
-      return {
-        success: false,
-        results: [],
-        error: error.message
-      };
+
+      console.log(`Preparados ${emailsData.length} emails para envio em lote`);
+
+      // Send emails using the batch function
+      const result = await sendBatchEmails(emailsData);
+
+      if (result && result.summary) {
+        console.log('Resultado do envio em lote:', result.summary);
+        
+        if (result.summary.successful === emailsData.length) {
+          toast.success(`Todos os ${result.summary.successful} emails foram enviados com sucesso! 🎉`);
+        } else if (result.summary.successful > 0) {
+          toast.success(`${result.summary.successful} de ${result.summary.total} emails enviados com sucesso (${result.summary.successRate}% de taxa de sucesso)`);
+        } else {
+          toast.error('Nenhum email foi enviado com sucesso. Verifique as configurações.');
+        }
+
+        return result;
+      } else {
+        toast.error('Erro no envio em lote dos emails');
+        return false;
+      }
+
+    } catch (error: any) {
+      console.error('Erro no envio em lote:', error);
+      toast.error(`Erro no envio em lote: ${error.message || 'Erro desconhecido'}`);
+      return false;
     } finally {
-      setIsProcessing(false);
-      setProgress({ current: 0, total: 0 });
+      setIsSending(false);
     }
   };
 
   return {
-    sendBatchEmails,
-    isProcessing,
-    progress
+    isSending,
+    sendEmailsInBatch
   };
 }
+
+export default useBatchEmailSending;
