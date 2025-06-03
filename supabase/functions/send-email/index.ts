@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import nodemailer from "https://esm.sh/nodemailer@6.9.12";
 
 // Set up CORS headers
 const corsHeaders = {
@@ -9,6 +10,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+/**
+ * Email validation function
+ */
+function isValidEmail(email: string): boolean {
+  return /\S+@\S+\.\S+/.test(email);
+}
 
 /**
  * Simple HTML to plain text converter
@@ -90,14 +98,18 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Create SMTP transporter with proper error handling
+ * Create SMTP transporter with corrected Nodemailer usage
  */
 async function createSMTPTransporter(config: any) {
   try {
-    // Import nodemailer dynamically to handle Buffer issues
-    const nodemailer = await import("https://esm.sh/nodemailer@6.9.12");
+    console.log("Creating SMTP transporter with config:", {
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      user: config.user
+    });
     
-    const transportConfig = {
+    const transporter = nodemailer.createTransport({
       host: config.host,
       port: parseInt(config.port) || 587,
       secure: config.secure || config.port === 465,
@@ -115,16 +127,7 @@ async function createSMTPTransporter(config: any) {
         rejectUnauthorized: false,
         ciphers: 'SSLv3'
       },
-    };
-    
-    console.log("Creating SMTP transporter with config:", {
-      host: config.host,
-      port: transportConfig.port,
-      secure: transportConfig.secure,
-      user: config.user
     });
-    
-    const transporter = nodemailer.default.createTransporter(transportConfig);
     
     // Verify SMTP connection
     await transporter.verify();
@@ -133,12 +136,12 @@ async function createSMTPTransporter(config: any) {
     return transporter;
   } catch (error) {
     console.error("Failed to create/verify SMTP transporter:", error);
-    throw new Error(`SMTP configuration error: ${error.message}`);
+    throw new Error(`Falha na configuração SMTP: ${error.message}`);
   }
 }
 
 /**
- * Send email via SMTP using Nodemailer
+ * Send email via SMTP using corrected Nodemailer
  */
 async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
   try {
@@ -147,6 +150,11 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
     const fromName = config.name || config.user.split('@')[0];
     const fromEmail = config.user;
     const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+    
+    // Validate recipient email
+    if (!isValidEmail(payload.to)) {
+      throw new Error(`Email inválido: ${payload.to}`);
+    }
     
     const mailOptions: any = {
       from: from,
@@ -228,19 +236,34 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
       command: error.command,
       response: error.response
     });
-    throw new Error(`SMTP send failed: ${error.message || 'Unknown SMTP error'}`);
+    
+    // Provide specific error messages
+    if (error.message.includes('authentication')) {
+      throw new Error(`Falha de autenticação SMTP: Verifique o usuário e senha`);
+    } else if (error.message.includes('timeout')) {
+      throw new Error(`Timeout de envio SMTP: Verifique a conexão`);
+    } else if (error.message.includes('Email inválido')) {
+      throw error; // Re-throw validation error as is
+    } else {
+      throw new Error(`Erro SMTP: ${error.message || 'Erro desconhecido no SMTP'}`);
+    }
   }
 }
 
 /**
- * Send email via Resend API
+ * Send email via Resend API with proper validation
  */
 async function sendEmailViaResend(resendApiKey: string, fromName: string, replyTo: string, payload: any): Promise<any> {
   try {
     const resend = new Resend(resendApiKey);
     
     if (!resendApiKey || resendApiKey.trim() === '') {
-      throw new Error("Missing or invalid Resend API key");
+      throw new Error("Chave da API Resend não configurada");
+    }
+    
+    // Validate recipient email
+    if (!isValidEmail(payload.to)) {
+      throw new Error(`Email inválido: ${payload.to}`);
     }
     
     const emailData: any = {
@@ -278,11 +301,11 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
               ? attachment.content.split('base64,')[1] 
               : attachment.content;
           } else {
-            throw new Error(`Invalid attachment content for: ${attachment.filename}`);
+            throw new Error(`Conteúdo inválido para anexo: ${attachment.filename}`);
           }
           
           if (!content || content.trim() === '') {
-            throw new Error(`Empty content for attachment: ${attachment.filename}`);
+            throw new Error(`Conteúdo vazio para anexo: ${attachment.filename}`);
           }
           
           return {
@@ -301,7 +324,7 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
     const result = await resend.emails.send(emailData);
     
     if (result.error) {
-      throw new Error(result.error.message || "Unknown Resend error");
+      throw new Error(result.error.message || "Erro desconhecido no Resend");
     }
     
     console.log("Email sent successfully via Resend:", result.data?.id);
@@ -315,61 +338,55 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
     };
   } catch (error) {
     console.error("Resend Error details:", error);
-    throw new Error(`Resend send failed: ${error.message || 'Unknown Resend error'}`);
-  }
-}
-
-/**
- * Send single email with improved error handling
- */
-async function sendSingleEmail(payload: any, useSmtp: boolean, smtpConfig: any, resendApiKey: string, fromName: string): Promise<any> {
-  let lastError: Error | null = null;
-  
-  // Try SMTP first if configured
-  if (useSmtp && smtpConfig && smtpConfig.host && smtpConfig.port && 
-      smtpConfig.user && smtpConfig.pass) {
-    try {
-      console.log("Attempting to send via SMTP");
-      return await sendEmailViaSMTP(smtpConfig, payload);
-    } catch (smtpError) {
-      console.error("SMTP send failed:", smtpError.message);
-      lastError = smtpError;
-      
-      // Fallback to Resend if available
-      if (resendApiKey && resendApiKey.trim() !== '') {
-        console.log("SMTP failed. Trying Resend as fallback...");
-        try {
-          const result = await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
-          result.note = "Fallback from SMTP failure";
-          return result;
-        } catch (resendError) {
-          console.error("Resend fallback also failed:", resendError.message);
-          throw new Error(`SMTP error: ${smtpError.message}. Resend fallback failed: ${resendError.message}`);
-        }
-      } else {
-        throw new Error(`SMTP error: ${smtpError.message}. No fallback available (missing Resend API key).`);
-      }
+    
+    // Provide specific error messages for Resend
+    if (error.message.includes('Too many requests')) {
+      throw new Error(`Limite de envios Resend excedido: ${error.message}`);
+    } else if (error.message.includes('domain')) {
+      throw new Error(`Erro de domínio Resend: Verifique a configuração do domínio`);
+    } else if (error.message.includes('Email inválido')) {
+      throw error; // Re-throw validation error as is
+    } else {
+      throw new Error(`Erro Resend: ${error.message || 'Erro desconhecido no Resend'}`);
     }
   }
-  
-  // Use Resend if SMTP not configured or failed
-  if (!resendApiKey || resendApiKey.trim() === '') {
-    throw new Error("No email sending method available. Configure SMTP or provide valid Resend API key.");
-  }
-  
-  console.log("Using Resend for email delivery");
-  return await sendEmailViaResend(resendApiKey, fromName, smtpConfig?.user, payload);
 }
 
 /**
- * Process multiple emails in controlled batches with better error handling
+ * Send single email based on user configuration
  */
-async function processBatchEmails(emailRequests: any[], useSmtp: boolean, smtpConfig: any, resendApiKey: string, fromName: string): Promise<any> {
-  const batchSize = 50; // Increased batch size as requested
-  const delayBetweenBatches = 1000; // 1 second between batches
+async function sendSingleEmail(payload: any, config: any): Promise<any> {
+  try {
+    console.log("Sending single email with config type:", config.type);
+    
+    if (config.type === 'smtp') {
+      if (!config.host || !config.port || !config.user || !config.pass) {
+        throw new Error('Configuração SMTP incompleta');
+      }
+      return await sendEmailViaSMTP(config, payload);
+    } else if (config.type === 'resend') {
+      if (!config.apiKey || config.apiKey.trim() === '') {
+        throw new Error('Chave da API Resend não configurada');
+      }
+      return await sendEmailViaResend(config.apiKey, config.fromName || 'RocketMail', config.replyTo, payload);
+    } else {
+      throw new Error('Tipo de envio desconhecido. Configure SMTP ou Resend.');
+    }
+  } catch (error) {
+    console.error("Error in sendSingleEmail:", error);
+    throw error;
+  }
+}
+
+/**
+ * Process multiple emails in parallel batches
+ */
+async function processBatchEmails(emailRequests: any[], config: any): Promise<any> {
+  const batchSize = 50;
+  const delayBetweenBatches = 1000;
   const results: any[] = [];
   
-  console.log(`Processing ${emailRequests.length} emails in batches of ${batchSize}`);
+  console.log(`Processing ${emailRequests.length} emails in batches of ${batchSize} using ${config.type}`);
   
   for (let i = 0; i < emailRequests.length; i += batchSize) {
     const batch = emailRequests.slice(i, i + batchSize);
@@ -378,19 +395,13 @@ async function processBatchEmails(emailRequests: any[], useSmtp: boolean, smtpCo
     
     console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
     
-    // Process batch with Promise.all for better performance
+    // Process batch with Promise.all for parallel execution
     const batchPromises = batch.map(async (emailData, index) => {
       const globalIndex = i + index;
       try {
         console.log(`Sending email ${globalIndex + 1}/${emailRequests.length} to: ${emailData.to}`);
         
-        const result = await sendSingleEmail(
-          emailData, 
-          useSmtp, 
-          smtpConfig, 
-          resendApiKey, 
-          fromName
-        );
+        const result = await sendSingleEmail(emailData, config);
         
         return {
           success: true,
@@ -444,7 +455,7 @@ function optimizeEmailPayload(emailData: any): any {
   const optimized = { ...emailData };
   
   // Limit content size if too large
-  if (optimized.content && optimized.content.length > 500000) { // 500KB limit for content
+  if (optimized.content && optimized.content.length > 500000) {
     console.warn(`Content too large (${optimized.content.length} chars), truncating...`);
     optimized.content = optimized.content.substring(0, 500000) + "\n\n[Conteúdo truncado devido ao tamanho]";
   }
@@ -453,8 +464,8 @@ function optimizeEmailPayload(emailData: any): any {
   if (optimized.attachments && Array.isArray(optimized.attachments)) {
     optimized.attachments = optimized.attachments.filter(attachment => {
       if (attachment.content && typeof attachment.content === 'string') {
-        const sizeEstimate = attachment.content.length * 0.75; // Base64 overhead
-        if (sizeEstimate > 5000000) { // 5MB limit per attachment
+        const sizeEstimate = attachment.content.length * 0.75;
+        if (sizeEstimate > 5000000) {
           console.warn(`Attachment ${attachment.filename} too large, skipping...`);
           return false;
         }
@@ -483,7 +494,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Invalid request data format"
+          error: "Formato de dados da solicitação inválido"
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -547,27 +558,36 @@ serve(async (req) => {
       });
       
       try {
-        const batchResult = await processBatchEmails(
-          emailRequests,
-          !!requestData.smtp_settings,
-          requestData.smtp_settings ? {
+        // Determine configuration based on user settings
+        let config: any = {};
+        
+        if (requestData.smtp_settings && requestData.smtp_settings.from_email) {
+          config = {
+            type: 'smtp',
             host: requestData.smtp_settings.host || "",
             port: parseInt(requestData.smtp_settings.port) || 587,
             secure: requestData.smtp_settings.secure || false,
             user: requestData.smtp_settings.from_email,
             pass: requestData.smtp_settings.password,
             name: requestData.smtp_settings.from_name
-          } : null,
-          apiKey || "",
-          requestData.smtp_settings?.from_name || "RocketMail"
-        );
+          };
+        } else {
+          config = {
+            type: 'resend',
+            apiKey: apiKey || "",
+            fromName: requestData.smtp_settings?.from_name || "RocketMail",
+            replyTo: requestData.smtp_settings?.from_email
+          };
+        }
+        
+        const batchResult = await processBatchEmails(emailRequests, config);
         
         console.log("Batch email processing completed:", batchResult.summary);
         
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Batch email processing completed",
+            message: "Processamento em lote concluído",
             summary: batchResult.summary,
             results: batchResult.results.map(r => ({
               to: r.to,
@@ -587,7 +607,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: error.message || "Batch email processing failed"
+            error: error.message || "Falha no processamento em lote"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -623,7 +643,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Recipient email (to) is required"
+          error: "Email do destinatário é obrigatório"
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -693,11 +713,12 @@ serve(async (req) => {
     };
     
     try {
-      let result;
+      let config: any = {};
+      
       if (smtp_settings && smtp_settings.from_email) {
         console.log("Using SMTP for single email delivery");
-        
-        const smtpConfig = {
+        config = {
+          type: 'smtp',
           host: smtp_settings.host || "",
           port: parseInt(smtp_settings.port) || 587,
           secure: smtp_settings.secure || false,
@@ -705,31 +726,24 @@ serve(async (req) => {
           pass: smtp_settings.password,
           name: smtp_settings.from_name
         };
-        
-        result = await sendSingleEmail(
-          emailPayload,
-          true,
-          smtpConfig,
-          apiKey || "",
-          smtp_settings.from_name || "RocketMail"
-        );
       } else {
         console.log("Using Resend for single email delivery");
-        result = await sendSingleEmail(
-          emailPayload,
-          false,
-          null,
-          apiKey || "",
-          "RocketMail"
-        );
+        config = {
+          type: 'resend',
+          apiKey: apiKey || "",
+          fromName: smtp_settings?.from_name || "RocketMail",
+          replyTo: smtp_settings?.from_email
+        };
       }
+      
+      const result = await sendSingleEmail(emailPayload, config);
       
       console.log("Single email sent successfully:", result);
       
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Email sent successfully",
+          message: "Email enviado com sucesso",
           id: result.id,
           provider: result.provider
         }),
@@ -743,7 +757,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: error.message || "Unknown error occurred"
+          error: error.message || "Erro desconhecido"
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -756,7 +770,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: "Internal server error"
+        error: "Erro interno do servidor"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

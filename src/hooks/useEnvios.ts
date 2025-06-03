@@ -146,8 +146,8 @@ export function useEnvios() {
         
         const signatureImage = formData.signature_image || userSettings?.signature_image || templateData.signature_image;
         
-        // Prepare SMTP settings if configured
-        const smtpSettings = userSettings?.use_smtp ? {
+        // Prepare SMTP settings if configured and use_smtp is enabled
+        const smtpSettings = userSettings?.use_smtp && userSettings?.email_smtp ? {
           host: userSettings.email_smtp,
           port: userSettings.email_porta,
           secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
@@ -178,7 +178,7 @@ export function useEnvios() {
           contato_id: formData.contato_id,
           has_attachments: !!parsedAttachments,
           subject: emailSubject,
-          use_smtp: !!userSettings?.use_smtp
+          use_smtp: !!smtpSettings
         });
         
         const response = await supabase.functions.invoke('send-email', {
@@ -232,7 +232,22 @@ export function useEnvios() {
       } catch (err: any) {
         console.error('Erro ao enviar email:', err);
         toast.dismiss(loadingToastId);
-        toast.error(`Erro ao enviar email: ${err.message || 'Verifique suas configurações de email'}`);
+        
+        // Display specific error messages based on error content
+        let errorMessage = 'Erro ao enviar email';
+        if (err.message.includes('autenticação SMTP')) {
+          errorMessage = 'Falha de autenticação SMTP: Verifique suas configurações de email';
+        } else if (err.message.includes('Email inválido')) {
+          errorMessage = `Email inválido: ${err.message}`;
+        } else if (err.message.includes('Timeout')) {
+          errorMessage = 'Timeout de envio: Verifique sua conexão de internet';
+        } else if (err.message.includes('Tipo de envio desconhecido')) {
+          errorMessage = 'Configuração de envio inválida: Configure SMTP ou Resend';
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        toast.error(errorMessage);
         return false;
       }
     } finally {
@@ -256,8 +271,8 @@ export function useEnvios() {
           .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
           .single();
         
-        // Prepare SMTP settings if configured
-        const smtpSettings = userSettings?.use_smtp ? {
+        // Prepare SMTP settings if configured and use_smtp is enabled
+        const smtpSettings = userSettings?.use_smtp && userSettings?.email_smtp ? {
           host: userSettings.email_smtp,
           port: userSettings.email_porta,
           secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
@@ -311,13 +326,24 @@ export function useEnvios() {
         
         if (summary.failed > 0) {
           const failedEmails = results.filter((r: any) => !r.success);
-          const errorMessages = [...new Set(failedEmails.map((r: any) => r.error))].slice(0, 3); // Show unique errors, max 3
+          const errorMessages = [...new Set(failedEmails.map((r: any) => r.error))].slice(0, 3);
+          
+          let errorDescription = '';
+          if (errorMessages.some(msg => msg.includes('autenticação'))) {
+            errorDescription = 'Erro de autenticação SMTP detectado';
+          } else if (errorMessages.some(msg => msg.includes('Email inválido'))) {
+            errorDescription = 'Emails inválidos detectados';
+          } else if (errorMessages.some(msg => msg.includes('Timeout'))) {
+            errorDescription = 'Timeout de conexão detectado';
+          } else {
+            errorDescription = errorMessages.join('; ');
+          }
           
           toast.error(
             `${summary.failed} emails falharam no envio. Taxa de sucesso: ${summary.successRate}%`,
             {
-              description: errorMessages.length > 0 ? `Erros: ${errorMessages.join('; ')}` : undefined,
-              duration: 10000, // Show longer for failed emails
+              description: errorDescription,
+              duration: 10000,
               action: {
                 label: "x",
                 onClick: () => toast.dismiss()
@@ -361,7 +387,18 @@ export function useEnvios() {
       } catch (err: any) {
         console.error('Erro no envio em lote:', err);
         toast.dismiss(loadingToastId);
-        toast.error(`Erro no envio em lote: ${err.message || 'Erro desconhecido'}`, {
+        
+        // Display specific error messages for batch sending
+        let errorMessage = 'Erro no envio em lote';
+        if (err.message.includes('autenticação SMTP')) {
+          errorMessage = 'Falha de autenticação SMTP: Verifique suas configurações';
+        } else if (err.message.includes('Tipo de envio desconhecido')) {
+          errorMessage = 'Configuração inválida: Configure SMTP ou Resend nas configurações';
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        toast.error(errorMessage, {
           action: {
             label: "x",
             onClick: () => toast.dismiss()

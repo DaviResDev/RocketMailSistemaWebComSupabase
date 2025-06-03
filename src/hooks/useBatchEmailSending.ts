@@ -94,8 +94,27 @@ export function useBatchEmailSending() {
         }
       }
 
+      // Validate emails before processing
+      const validContacts = selectedContacts.filter(contato => {
+        const isValidEmail = /\S+@\S+\.\S+/.test(contato.email);
+        if (!isValidEmail) {
+          console.warn(`Email inválido ignorado: ${contato.email}`);
+        }
+        return isValidEmail;
+      });
+
+      if (validContacts.length !== selectedContacts.length) {
+        const invalidCount = selectedContacts.length - validContacts.length;
+        toast.warning(`${invalidCount} contatos com emails inválidos foram ignorados`);
+      }
+
+      if (validContacts.length === 0) {
+        toast.error('Nenhum contato com email válido encontrado');
+        return false;
+      }
+
       // Prepare email data for batch sending
-      const emailsData = selectedContacts.map(contato => {
+      const emailsData = validContacts.map(contato => {
         // Process template content with contact variables
         const processedContent = customContent || processTemplateVariables(templateData.conteudo, contato);
         
@@ -114,7 +133,7 @@ export function useBatchEmailSending() {
         };
       });
 
-      console.log(`Preparados ${emailsData.length} emails para envio em lote`);
+      console.log(`Preparados ${emailsData.length} emails válidos para envio em lote`);
 
       // Send emails using the batch function
       const result = await originalSendBatchEmails(emailsData);
@@ -126,8 +145,20 @@ export function useBatchEmailSending() {
           toast.success(`Todos os ${result.summary.successful} emails foram enviados com sucesso! 🎉`);
         } else if (result.summary.successful > 0) {
           toast.success(`${result.summary.successful} de ${result.summary.total} emails enviados com sucesso (${result.summary.successRate}% de taxa de sucesso)`);
+          
+          // Show additional info about failures
+          if (result.summary.failed > 0) {
+            const failureReasons = result.results
+              ?.filter((r: any) => !r.success)
+              ?.map((r: any) => r.error)
+              ?.slice(0, 3) || [];
+            
+            if (failureReasons.length > 0) {
+              console.warn('Principais razões de falha:', failureReasons);
+            }
+          }
         } else {
-          toast.error('Nenhum email foi enviado com sucesso. Verifique as configurações.');
+          toast.error('Nenhum email foi enviado com sucesso. Verifique as configurações de envio.');
         }
 
         setProgress({ current: result.summary.successful, total: result.summary.total });
@@ -139,7 +170,18 @@ export function useBatchEmailSending() {
 
     } catch (error: any) {
       console.error('Erro no envio em lote:', error);
-      toast.error(`Erro no envio em lote: ${error.message || 'Erro desconhecido'}`);
+      
+      // Provide specific error messages based on error content
+      let errorMessage = 'Erro no envio em lote';
+      if (error.message?.includes('autenticação')) {
+        errorMessage = 'Falha de autenticação: Verifique suas configurações de email';
+      } else if (error.message?.includes('configuração')) {
+        errorMessage = 'Erro de configuração: Configure SMTP ou Resend nas configurações';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
       return false;
     } finally {
       setIsProcessing(false);
@@ -156,9 +198,28 @@ export function useBatchEmailSending() {
     setProgress({ current: 0, total: emailJobs.length });
 
     try {
+      // Validate email jobs before processing
+      const validEmailJobs = emailJobs.filter(job => {
+        const isValidEmail = /\S+@\S+\.\S+/.test(job.contactEmail || '');
+        if (!isValidEmail) {
+          console.warn(`Email inválido no job ignorado: ${job.contactEmail}`);
+        }
+        return isValidEmail && job.contactEmail;
+      });
+
+      if (validEmailJobs.length !== emailJobs.length) {
+        const invalidCount = emailJobs.length - validEmailJobs.length;
+        toast.warning(`${invalidCount} jobs com emails inválidos foram ignorados`);
+      }
+
+      if (validEmailJobs.length === 0) {
+        toast.error('Nenhum job com email válido encontrado');
+        return { success: false };
+      }
+
       // Map emailJobs to the expected format
-      const emailsData = emailJobs.map(job => ({
-        to: job.contactEmail || '',
+      const emailsData = validEmailJobs.map(job => ({
+        to: job.contactEmail,
         contato_nome: job.contactName || '',
         contato_id: job.contactId || '',
         template_id: job.templateId || '',
@@ -178,10 +239,10 @@ export function useBatchEmailSending() {
           toast.success(`Todos os ${result.summary.successful} emails foram enviados com sucesso! 🎉`);
           return { success: true, result };
         } else if (result.summary.successful > 0) {
-          toast.success(`${result.summary.successful} de ${result.summary.total} emails enviados com sucesso`);
+          toast.success(`${result.summary.successful} de ${result.summary.total} emails enviados com sucesso (${result.summary.successRate}% de taxa de sucesso)`);
           return { success: true, result };
         } else {
-          toast.error('Nenhum email foi enviado com sucesso');
+          toast.error('Nenhum email foi enviado com sucesso. Verifique as configurações de envio.');
           return { success: false };
         }
       } else {
@@ -191,7 +252,18 @@ export function useBatchEmailSending() {
 
     } catch (error: any) {
       console.error('Erro no sendBatchEmails:', error);
-      toast.error(`Erro no envio: ${error.message || 'Erro desconhecido'}`);
+      
+      // Provide specific error messages
+      let errorMessage = 'Erro no envio';
+      if (error.message?.includes('autenticação')) {
+        errorMessage = 'Falha de autenticação: Verifique suas configurações';
+      } else if (error.message?.includes('configuração')) {
+        errorMessage = 'Erro de configuração: Configure SMTP ou Resend';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
       return { success: false };
     } finally {
       setIsProcessing(false);
