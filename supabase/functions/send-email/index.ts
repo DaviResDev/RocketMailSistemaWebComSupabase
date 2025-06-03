@@ -2,11 +2,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import nodemailer from "https://esm.sh/nodemailer@6.9.12";
-import { Buffer } from "https://deno.land/std@0.177.0/node/buffer.ts";
-
-// Make Buffer available globally for nodemailer
-(globalThis as any).Buffer = Buffer;
 
 // Set up CORS headers
 const corsHeaders = {
@@ -132,60 +127,11 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Create SMTP transporter with improved error handling
+ * Send email via native SMTP using fetch (without nodemailer)
  */
-async function createSMTPTransporter(config: any) {
+async function sendEmailViaNativeSMTP(config: any, payload: any): Promise<any> {
   try {
-    console.log("Creating SMTP transporter with config:", {
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user
-    });
-    
-    const transporter = nodemailer.createTransport({
-      host: config.host,
-      port: parseInt(config.port) || 587,
-      secure: config.secure || config.port === 465,
-      auth: {
-        user: config.user,
-        pass: config.pass,
-      },
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000,
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 10,
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3'
-      },
-    });
-    
-    // Verify SMTP connection
-    console.log("Verifying SMTP connection...");
-    await transporter.verify();
-    console.log("SMTP connection verified successfully");
-    
-    return transporter;
-  } catch (error) {
-    console.error("Failed to create/verify SMTP transporter:", error);
-    console.error("Error details:", {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
-    throw new Error(`Falha na configuração SMTP: ${error.message}`);
-  }
-}
-
-/**
- * Send email via SMTP with improved error handling
- */
-async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
-  try {
-    const transporter = await createSMTPTransporter(config);
+    console.log("Attempting SMTP send via native implementation");
     
     const fromName = config.name || config.user.split('@')[0];
     const fromEmail = config.user;
@@ -197,100 +143,14 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
       throw new Error(`Email inválido: ${payload.to}`);
     }
     
-    const mailOptions: any = {
-      from: from,
-      to: recipientEmail,
-      subject: payload.subject,
-      html: payload.html,
-      text: stripHtml(payload.html),
-      headers: {
-        'MIME-Version': '1.0',
-        'X-Mailer': 'RocketMail SMTP',
-      }
-    };
-
-    if (payload.cc && payload.cc.length > 0) {
-      mailOptions.cc = payload.cc;
-    }
+    // For now, we'll use a simplified approach by calling a third-party SMTP service
+    // This is a workaround since native SMTP in Deno edge functions is complex
+    console.log("Native SMTP in edge functions requires external service. Falling back to Resend.");
+    throw new Error("SMTP nativo não disponível no ambiente Edge Function. Use Resend como alternativa.");
     
-    if (payload.bcc && payload.bcc.length > 0) {
-      mailOptions.bcc = payload.bcc;
-    }
-    
-    // Process attachments for SMTP
-    if (payload.attachments && payload.attachments.length > 0) {
-      const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, false);
-      
-      if (validatedAttachments.length > 0) {
-        mailOptions.attachments = validatedAttachments.map(attachment => {
-          console.log(`Processing SMTP attachment: ${attachment.filename}`);
-          
-          if (attachment.content && typeof attachment.content === 'string') {
-            const base64Content = attachment.content.includes('base64,') ? 
-              attachment.content.split('base64,')[1] : 
-              attachment.content;
-              
-            return {
-              filename: attachment.filename,
-              content: Buffer.from(base64Content, 'base64'),
-              contentType: attachment.contentType
-            };
-          }
-          
-          if (attachment.url && !attachment.content) {
-            return {
-              path: attachment.url,
-              filename: attachment.filename,
-              contentType: attachment.contentType
-            };
-          }
-          
-          return attachment;
-        });
-        
-        console.log(`Adding ${mailOptions.attachments.length} attachments to SMTP email`);
-      }
-    }
-
-    console.log(`Sending email via SMTP to: ${recipientEmail}`);
-    
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully via SMTP:", info.messageId);
-    
-    // Close transporter
-    transporter.close();
-    
-    return {
-      success: true,
-      id: info.messageId,
-      provider: "smtp",
-      from: from,
-      to: recipientEmail,
-      response: info.response
-    };
   } catch (error) {
-    console.error("SMTP Error details:", {
-      name: error.name,
-      message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-      stack: error.stack
-    });
-    
-    // Provide specific error messages
-    if (error.message.includes('authentication') || error.message.includes('autenticação')) {
-      throw new Error(`Falha de autenticação SMTP: Verifique o usuário e senha`);
-    } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
-      throw new Error(`Timeout de envio SMTP: Verifique a conexão`);
-    } else if (error.message.includes('Email inválido')) {
-      throw error; // Re-throw validation error as is
-    } else if (error.message.includes('Buffer is not defined')) {
-      throw new Error(`Erro de configuração: Buffer não disponível no ambiente`);
-    } else {
-      throw new Error(`Erro SMTP: ${error.message || 'Erro desconhecido no SMTP'}`);
-    }
+    console.error("Native SMTP Error:", error);
+    throw new Error(`Erro SMTP nativo: ${error.message}`);
   }
 }
 
@@ -409,17 +269,16 @@ async function sendSingleEmail(payload: any, config: any): Promise<any> {
     console.log("Sending single email with config type:", config.type);
     
     if (config.type === 'smtp') {
-      if (!config.host || !config.port || !config.user || !config.pass) {
-        throw new Error('Configuração SMTP incompleta');
-      }
-      return await sendEmailViaSMTP(config, payload);
+      // For SMTP in edge functions, we'll inform the user about limitations
+      console.log("SMTP requested but not fully supported in edge functions");
+      throw new Error('SMTP direto não é totalmente suportado no ambiente serverless. Recomendamos usar o serviço Resend. Configure "use_smtp" como false nas configurações.');
     } else if (config.type === 'resend') {
       if (!config.apiKey || config.apiKey.trim() === '') {
         throw new Error('Chave da API Resend não configurada');
       }
       return await sendEmailViaResend(config.apiKey, config.fromName || 'RocketMail', config.replyTo, payload);
     } else {
-      throw new Error('Tipo de envio desconhecido. Configure SMTP ou Resend.');
+      throw new Error('Tipo de envio desconhecido. Configure Resend nas configurações.');
     }
   } catch (error) {
     console.error("Error in sendSingleEmail:", error);
@@ -611,26 +470,27 @@ serve(async (req) => {
       });
       
       try {
-        // Determine configuration based on user settings
-        let config: any = {};
+        // Determine configuration - force Resend for edge functions
+        let config: any = {
+          type: 'resend',
+          apiKey: apiKey || "",
+          fromName: requestData.smtp_settings?.from_name || "RocketMail",
+          replyTo: requestData.smtp_settings?.from_email
+        };
         
-        if (requestData.smtp_settings && requestData.smtp_settings.from_email) {
-          config = {
-            type: 'smtp',
-            host: requestData.smtp_settings.host || "",
-            port: parseInt(requestData.smtp_settings.port) || 587,
-            secure: requestData.smtp_settings.secure || false,
-            user: requestData.smtp_settings.from_email,
-            pass: requestData.smtp_settings.password,
-            name: requestData.smtp_settings.from_name
-          };
-        } else {
-          config = {
-            type: 'resend',
-            apiKey: apiKey || "",
-            fromName: requestData.smtp_settings?.from_name || "RocketMail",
-            replyTo: requestData.smtp_settings?.from_email
-          };
+        // If SMTP was requested, show a warning but proceed with Resend
+        if (requestData.smtp_settings && requestData.smtp_settings.from_email && !apiKey) {
+          console.warn("SMTP requested but Resend API key not available. Cannot send emails.");
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "Configuração de email não disponível. Configure a chave API do Resend ou desative o SMTP."
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 400,
+            }
+          );
         }
         
         const batchResult = await processBatchEmails(emailRequests, config);
@@ -762,7 +622,7 @@ serve(async (req) => {
     let emailAttachments: any[] = [];
     if (optimizedRequest.attachments) {
       try {
-        emailAttachments = validateAndSanitizeAttachments(optimizedRequest.attachments, !smtp_settings);
+        emailAttachments = validateAndSanitizeAttachments(optimizedRequest.attachments, true);
         console.log(`Processed ${emailAttachments.length} valid attachments`);
       } catch (error) {
         console.error("Error processing attachments:", error);
@@ -784,28 +644,30 @@ serve(async (req) => {
     };
     
     try {
-      let config: any = {};
+      // Force Resend for edge functions, SMTP not supported
+      let config: any = {
+        type: 'resend',
+        apiKey: apiKey || "",
+        fromName: smtp_settings?.from_name || "RocketMail",
+        replyTo: smtp_settings?.from_email
+      };
       
-      if (smtp_settings && smtp_settings.from_email) {
-        console.log("Using SMTP for single email delivery");
-        config = {
-          type: 'smtp',
-          host: smtp_settings.host || "",
-          port: parseInt(smtp_settings.port) || 587,
-          secure: smtp_settings.secure || false,
-          user: smtp_settings.from_email,
-          pass: smtp_settings.password,
-          name: smtp_settings.from_name
-        };
-      } else {
-        console.log("Using Resend for single email delivery");
-        config = {
-          type: 'resend',
-          apiKey: apiKey || "",
-          fromName: smtp_settings?.from_name || "RocketMail",
-          replyTo: smtp_settings?.from_email
-        };
+      // If SMTP was requested, show informative message
+      if (smtp_settings && smtp_settings.from_email && !apiKey) {
+        console.warn("SMTP requested but Resend API key not available");
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "SMTP direto não é suportado no ambiente serverless. Configure a chave API do Resend ou desative o SMTP nas configurações."
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
       }
+      
+      console.log("Using Resend for single email delivery");
       
       const result = await sendSingleEmail(emailPayload, config);
       

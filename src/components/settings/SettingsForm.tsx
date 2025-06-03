@@ -28,8 +28,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     smtp_seguranca: 'tls',
     smtp_nome: null,
     two_factor_enabled: false,
-    use_smtp: true, // Default to using SMTP
-    signature_image: null // Add the signature_image property
+    use_smtp: false, // Default to Resend since SMTP has limitations
+    signature_image: null
   });
 
   // Update form data when settings change
@@ -45,8 +45,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         smtp_seguranca: settings.smtp_seguranca || 'tls',
         smtp_nome: settings.smtp_nome || '',
         two_factor_enabled: settings.two_factor_enabled || false,
-        use_smtp: settings.use_smtp !== undefined ? settings.use_smtp : true, // Default to using SMTP if not defined
-        signature_image: settings.signature_image || null // Add the signature_image property
+        use_smtp: settings.use_smtp || false, // Default to Resend
+        signature_image: settings.signature_image || null
       });
     }
   }, [settings]);
@@ -95,7 +95,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
               <Alert className="bg-blue-50 text-blue-800 border-blue-200">
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                  Você pode escolher entre usar o serviço Resend ou configurar seu próprio servidor SMTP para enviar emails.
+                  <strong>Recomendação:</strong> Use o serviço Resend para melhor confiabilidade e entrega de emails. 
+                  O SMTP direto tem limitações no ambiente serverless.
                 </AlertDescription>
               </Alert>
               
@@ -108,9 +109,19 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                   }
                 />
                 <Label htmlFor="use-smtp">
-                  {formData.use_smtp ? "Usar meu próprio servidor SMTP (via Nodemailer)" : "Usar serviço Resend (recomendado)"}
+                  {formData.use_smtp ? "Usar SMTP (limitado no ambiente serverless)" : "Usar serviço Resend (recomendado)"}
                 </Label>
               </div>
+
+              {formData.use_smtp && (
+                <Alert className="bg-amber-50 text-amber-800 border-amber-200">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Aviso:</strong> SMTP direto possui limitações no ambiente serverless e pode não funcionar corretamente. 
+                    Recomendamos usar o serviço Resend para garantir a entrega dos emails.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="smtp_nome">Nome do Remetente</Label>
@@ -162,9 +173,17 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
               {formData.use_smtp ? (
                 <>
                   <div className="border-t pt-4 mt-4">
-                    <h3 className="text-lg font-medium mb-4">Configurações do Servidor SMTP</h3>
+                    <h3 className="text-lg font-medium mb-4">Configurações do Servidor SMTP (Limitado)</h3>
                     
-                    <div className="grid gap-4">
+                    <Alert className="mb-4 bg-red-50 text-red-800 border-red-200">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>Limitação Técnica:</strong> O SMTP direto não funciona completamente no ambiente serverless devido a restrições de DNS. 
+                        Os emails configurados com SMTP serão automaticamente enviados via Resend como fallback.
+                      </AlertDescription>
+                    </Alert>
+                    
+                    <div className="grid gap-4 opacity-60">
                       <div className="space-y-2">
                         <Label htmlFor="email_smtp">Servidor SMTP</Label>
                         <Input
@@ -172,8 +191,11 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                           placeholder="Ex: smtp.gmail.com"
                           value={formData.email_smtp || ''}
                           onChange={(e) => setFormData({ ...formData, email_smtp: e.target.value })}
-                          required={formData.use_smtp}
+                          disabled
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Desabilitado devido a limitações do ambiente serverless
+                        </p>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
@@ -185,7 +207,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                             placeholder="Ex: 587"
                             value={formData.email_porta?.toString() || ''}
                             onChange={(e) => setFormData({ ...formData, email_porta: parseInt(e.target.value) || null })}
-                            required={formData.use_smtp}
+                            disabled
                           />
                         </div>
                         
@@ -194,6 +216,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                           <Select
                             value={formData.smtp_seguranca || 'tls'}
                             onValueChange={(value) => setFormData({ ...formData, smtp_seguranca: value })}
+                            disabled
                           >
                             <SelectTrigger id="smtp_seguranca">
                               <SelectValue placeholder="Selecione" />
@@ -207,22 +230,6 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label htmlFor="email_usuario_smtp">Usuário SMTP</Label>
-                        <Input
-                          id="email_usuario_smtp"
-                          type="email"
-                          placeholder="Ex: seu.email@gmail.com"
-                          value={formData.email_usuario || ''}
-                          onChange={(e) => setFormData({ ...formData, email_usuario: e.target.value })}
-                          required={formData.use_smtp}
-                          disabled={true}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          O email do remetente é usado como o nome de usuário SMTP.
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-2">
                         <Label htmlFor="email_senha">Senha SMTP</Label>
                         <Input
                           id="email_senha"
@@ -230,20 +237,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                           placeholder="Sua senha SMTP"
                           value={formData.email_senha || ''}
                           onChange={(e) => setFormData({ ...formData, email_senha: e.target.value })}
-                          required={formData.use_smtp}
+                          disabled
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Para Gmail, use uma senha de aplicativo gerada em: https://myaccount.google.com/apppasswords
-                        </p>
                       </div>
                     </div>
-                    
-                    <Alert className="mt-4 bg-green-50 text-green-800 border-green-200">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <AlertDescription>
-                        Agora usando Nodemailer, uma biblioteca robusta e amplamente utilizada para envio de emails via SMTP, proporcionando maior confiabilidade e compatibilidade com servidores.
-                      </AlertDescription>
-                    </Alert>
                   </div>
                 </>
               ) : (
