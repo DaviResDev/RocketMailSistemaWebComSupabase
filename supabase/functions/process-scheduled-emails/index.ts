@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -14,59 +15,57 @@ interface BatchResult<T> {
   id: string;
 }
 
+// Enhanced batch processing with better rate limiting and error handling
 async function processBatch<T, R>(
   items: T[],
   processor: (item: T, index: number) => Promise<R>,
-  batchSize: number = 10, // Increased from 3 to 10
-  delayBetweenBatches: number = 200 // Reduced from 500 to 200ms
+  batchSize: number = 3, // Reduced from 10 for better stability
+  delayBetweenBatches: number = 2000 // Increased to 2 seconds for better rate limiting
 ): Promise<BatchResult<R>[]> {
   const results: BatchResult<R>[] = [];
   const totalBatches = Math.ceil(items.length / batchSize);
+  
+  console.log(`Processing ${items.length} items in batches of ${batchSize} with ${delayBetweenBatches}ms delay`);
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     const batchStartIndex = i;
     const batchNumber = Math.floor(i / batchSize) + 1;
     
-    console.log(`Processing optimized batch ${batchNumber} of ${totalBatches} (${batch.length} items)`);
+    console.log(`Processing batch ${batchNumber} of ${totalBatches} (${batch.length} items)`);
     
-    const batchPromises = batch.map(async (item: any, batchIndex) => {
-      const globalIndex = batchStartIndex + batchIndex;
+    // Process items in sequence within each batch to avoid overwhelming the API
+    for (let j = 0; j < batch.length; j++) {
+      const item: any = batch[j];
+      const globalIndex = batchStartIndex + j;
+      
       try {
         const result = await processor(item, globalIndex);
-        return {
+        results.push({
           success: true,
           result,
           index: globalIndex,
           id: item.id
-        } as BatchResult<R>;
+        } as BatchResult<R>);
+        
+        // Small delay between items within the same batch
+        if (j < batch.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       } catch (error: any) {
-        return {
+        console.error(`Error processing item ${globalIndex}:`, error);
+        results.push({
           success: false,
           error: error.message || 'Erro desconhecido',
           index: globalIndex,
           id: item.id
-        } as BatchResult<R>;
-      }
-    });
-    
-    const batchResults = await Promise.allSettled(batchPromises);
-    
-    batchResults.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        results.push(result.value);
-      } else {
-        results.push({
-          success: false,
-          error: result.reason?.message || 'Erro durante processamento',
-          index: results.length,
-          id: 'unknown'
         });
       }
-    });
+    }
     
-    // Optimized delay - less delay for better throughput
+    // Delay between batches for rate limiting
     if (i + batchSize < items.length && delayBetweenBatches > 0) {
+      console.log(`Waiting ${delayBetweenBatches}ms before next batch...`);
       await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
     }
   }
@@ -101,9 +100,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') || ''
     );
     
-    console.log("Fetching scheduled emails to send with optimizations...");
+    console.log("Fetching scheduled emails to send...");
     
-    // Buscar todos os agendamentos pendentes que devem ser enviados agora
+    // Fetch pending schedules that should be sent now
     const now = new Date().toISOString();
     const { data: agendamentos, error: agendamentosError } = await supabaseAdmin
       .from('agendamentos')
@@ -117,7 +116,8 @@ serve(async (req) => {
         )
       `)
       .eq('status', 'pendente')
-      .lte('data_envio', now);
+      .lte('data_envio', now)
+      .limit(50); // Limit to prevent overwhelming the system
       
     if (agendamentosError) {
       console.error("Error fetching scheduled emails:", agendamentosError);
@@ -136,12 +136,13 @@ serve(async (req) => {
       );
     }
     
-    console.log(`Processing ${agendamentos.length} scheduled emails with optimized batching...`);
+    console.log(`Processing ${agendamentos.length} scheduled emails with enhanced error handling...`);
     
-    // Process emails with optimized batch settings
+    // Process emails with improved batch settings and error handling
     const results = await processBatch(
       agendamentos,
       async (agendamento: any) => {
+        // Validate required data
         if (!agendamento.contato || !agendamento.template) {
           console.error(`Skipping agendamento ${agendamento.id} - missing contato or template`);
           
@@ -185,17 +186,49 @@ serve(async (req) => {
         
         const signatureImage = userSettings?.signature_image || agendamento.template.signature_image;
         
-        // Process attachments if present
+        // Process attachments safely
         let attachments = null;
         if (agendamento.template.attachments) {
-          if (typeof agendamento.template.attachments === 'string') {
-            try {
-              attachments = JSON.parse(agendamento.template.attachments);
-            } catch (e) {
-              console.error("Error parsing attachments:", e);
+          try {
+            if (typeof agendamento.template.attachments === 'string') {
+              // Only parse if it's not an empty string or empty array
+              if (agendamento.template.attachments.trim() && agendamento.template.attachments !== '[]') {
+                attachments = JSON.parse(agendamento.template.attachments);
+              }
+            } else if (Array.isArray(agendamento.template.attachments)) {
+              attachments = agendamento.template.attachments;
+            } else if (agendamento.template.attachments && typeof agendamento.template.attachments === 'object') {
+              attachments = agendamento.template.attachments;
             }
-          } else {
-            attachments = agendamento.template.attachments;
+            
+            // Validate attachment structure
+            if (attachments && Array.isArray(attachments)) {
+              attachments = attachments.filter(att => {
+                if (!att || typeof att !== 'object') return false;
+                const hasName = att.name || att.filename;
+                const hasContent = att.content || att.url || att.path;
+                if (!hasName || !hasContent) {
+                  console.warn(`Filtering out invalid attachment:`, att);
+                  return false;
+                }
+                return true;
+              });
+              
+              if (attachments.length === 0) {
+                attachments = null;
+              }
+            } else if (attachments && typeof attachments === 'object') {
+              // Single attachment object
+              const hasName = attachments.name || attachments.filename;
+              const hasContent = attachments.content || attachments.url || attachments.path;
+              if (!hasName || !hasContent) {
+                console.warn(`Invalid single attachment:`, attachments);
+                attachments = null;
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing attachments:", e);
+            attachments = null;
           }
         }
         
@@ -203,7 +236,7 @@ serve(async (req) => {
         const formattedDate = `${currentDate.toLocaleDateString('pt-BR')}`;
         const formattedTime = `${currentDate.toLocaleTimeString('pt-BR')}`;
         
-        // Process template with actual contato data
+        // Process template with actual contact data
         let processedContent = agendamento.template.conteudo
           .replace(/\{\{nome\}\}/g, agendamento.contato.nome || "")
           .replace(/\{\{email\}\}/g, agendamento.contato.email || "")
@@ -211,16 +244,16 @@ serve(async (req) => {
           .replace(/\{\{data\}\}/g, formattedDate)
           .replace(/\{\{hora\}\}/g, formattedTime);
         
-        // Optimized retry logic with shorter delays
+        // Enhanced retry logic with exponential backoff
         let attemptCount = 0;
-        const maxAttempts = 2; // Reduced from 3 to 2 for faster processing
+        const maxAttempts = 3;
         let lastError = null;
         
         while (attemptCount < maxAttempts) {
           attemptCount++;
           
           try {
-            console.log(`Optimized attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
+            console.log(`Attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
             
             const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
               body: {
@@ -238,10 +271,12 @@ serve(async (req) => {
             });
             
             if (sendError) {
-              console.error(`Error on optimized attempt ${attemptCount}:`, sendError);
+              console.error(`Error on attempt ${attemptCount}:`, sendError);
               lastError = sendError;
               if (attemptCount < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 200)); // Reduced retry delay
+                // Exponential backoff: 1s, 2s, 4s
+                const delay = Math.pow(2, attemptCount - 1) * 1000;
+                await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
               }
               throw sendError;
@@ -249,10 +284,11 @@ serve(async (req) => {
             
             if (!sendResult || !sendResult.success) {
               const error = new Error(sendResult?.error || "Unknown error in send-email function");
-              console.error(`Error in send-email function on optimized attempt ${attemptCount}:`, error.message);
+              console.error(`Error in send-email function on attempt ${attemptCount}:`, error.message);
               lastError = error;
               if (attemptCount < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 200)); // Reduced retry delay
+                const delay = Math.pow(2, attemptCount - 1) * 1000;
+                await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
               }
               throw error;
@@ -278,10 +314,11 @@ serve(async (req) => {
             return { success: true, id: agendamento.id };
             
           } catch (error: any) {
-            console.error(`Exception on optimized attempt ${attemptCount}:`, error);
+            console.error(`Exception on attempt ${attemptCount}:`, error);
             lastError = error;
             if (attemptCount < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 200)); // Reduced retry delay
+              const delay = Math.pow(2, attemptCount - 1) * 1000;
+              await new Promise(resolve => setTimeout(resolve, delay));
             }
           }
         }
@@ -301,21 +338,21 @@ serve(async (req) => {
         
         throw new Error(errorMessage);
       },
-      10, // Optimized batch size
-      200 // Optimized delay between batches
+      3, // Smaller batch size for better stability
+      2000 // 2 second delay between batches
     );
     
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
     
-    console.log(`Optimized batch processing complete: ${successCount} successful, ${errorCount} failed`);
+    console.log(`Enhanced batch processing complete: ${successCount} successful, ${errorCount} failed`);
     
     return new Response(
       JSON.stringify({ 
         processed: results.length,
         successful: successCount,
         failed: errorCount,
-        optimized: true,
+        enhanced: true,
         results: results.map(r => ({
           id: r.id,
           success: r.success,
@@ -329,7 +366,7 @@ serve(async (req) => {
     );
     
   } catch (error: any) {
-    console.error("Error in optimized process-scheduled-emails function:", error);
+    console.error("Error in enhanced process-scheduled-emails function:", error);
     
     return new Response(
       JSON.stringify({ 
