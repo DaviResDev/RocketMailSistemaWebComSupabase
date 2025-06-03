@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { createTransport } from "https://esm.sh/nodemailer@6.9.12";
 
 // Set up CORS headers
 const corsHeaders = {
@@ -127,17 +128,11 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via SMTP using SMTP2GO API
+ * Send email via native SMTP using nodemailer
  */
 async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
   try {
-    console.log("Attempting SMTP delivery via SMTP2GO");
-    
-    const smtp2goApiKey = Deno.env.get("SMTP2GO_API_KEY");
-    
-    if (!smtp2goApiKey) {
-      throw new Error("SMTP2GO API key not configured. Set SMTP2GO_API_KEY in Supabase secrets.");
-    }
+    console.log("🔄 Attempting native SMTP delivery with nodemailer");
     
     // Extract and validate recipient email
     const recipientEmail = extractEmailAddress(payload.to);
@@ -155,68 +150,68 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
     
     const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
     
-    console.log(`Sending SMTP email from: ${from} to: ${recipientEmail}`);
+    console.log(`📧 Configuring SMTP transport: ${smtpConfig.host}:${smtpConfig.port}`);
     
-    // Prepare email data for SMTP2GO
-    const emailData = {
-      api_key: smtp2goApiKey,
-      to: [recipientEmail],
-      sender: fromEmail,
+    // Create nodemailer transport
+    const transporter = createTransport({
+      host: smtpConfig.host,
+      port: smtpConfig.port,
+      secure: smtpConfig.port === 465, // true for 465, false for other ports
+      auth: {
+        user: smtpConfig.email_usuario,
+        pass: smtpConfig.password,
+      },
+    });
+    
+    // Prepare email data for nodemailer
+    const mailOptions: any = {
+      from: from,
+      to: recipientEmail,
       subject: payload.subject,
-      html_body: payload.html,
-      text_body: stripHtml(payload.html),
+      html: payload.html,
+      text: stripHtml(payload.html),
     };
     
     if (payload.cc && payload.cc.length > 0) {
-      emailData.cc = payload.cc;
+      mailOptions.cc = payload.cc;
     }
     
     if (payload.bcc && payload.bcc.length > 0) {
-      emailData.bcc = payload.bcc;
+      mailOptions.bcc = payload.bcc;
     }
     
-    // Process attachments for SMTP2GO
+    // Process attachments for nodemailer
     if (payload.attachments && payload.attachments.length > 0) {
       const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, false);
       
       if (validatedAttachments.length > 0) {
-        emailData.attachments = validatedAttachments.map(attachment => ({
+        mailOptions.attachments = validatedAttachments.map(attachment => ({
           filename: attachment.filename,
-          fileblob: attachment.content,
-          mimetype: attachment.contentType
+          content: attachment.content || undefined,
+          path: attachment.url || undefined,
+          contentType: attachment.contentType
         }));
-        console.log(`Adding ${emailData.attachments.length} attachments to SMTP email`);
+        console.log(`📎 Adding ${mailOptions.attachments.length} attachments to SMTP email`);
       }
     }
     
-    console.log(`Sending email via SMTP2GO to: ${recipientEmail}`);
+    console.log(`📤 Sending email via native SMTP to: ${recipientEmail}`);
     
-    const response = await fetch('https://api.smtp2go.com/v3/email/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailData),
-    });
+    // Send email using nodemailer
+    const result = await transporter.sendMail(mailOptions);
     
-    const result = await response.json();
-    
-    if (!response.ok || result.data?.error) {
-      throw new Error(result.data?.error || `SMTP2GO Error: ${response.status}`);
-    }
-    
-    console.log("✅ Email sent successfully via SMTP:", result.data?.email_id);
+    console.log("✅ Email sent successfully via native SMTP:", result.messageId);
     
     return {
       success: true,
-      id: result.data?.email_id,
+      id: result.messageId,
       provider: "smtp",
-      method: "SMTP2GO",
+      method: "Native SMTP",
       from: fromEmail,
       to: recipientEmail,
     };
   } catch (error) {
-    console.error("❌ SMTP Error:", error);
+    console.error("❌ Native SMTP Error:", error);
     throw error;
   }
 }
@@ -291,7 +286,7 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
       }
     }
     
-    console.log(`Sending email via Resend to: ${recipientEmail}`);
+    console.log(`📤 Sending email via Resend to: ${recipientEmail}`);
     
     const result = await resend.emails.send(emailData);
     
@@ -336,18 +331,18 @@ async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any,
   let smtpError = null;
   
   try {
-    console.log(`📧 Sending email with strategy: ${useSmtp ? 'SMTP-first with Resend fallback' : 'Resend-only'}`);
+    console.log(`📧 Sending email with strategy: ${useSmtp ? 'Native SMTP-first with Resend fallback' : 'Resend-only'}`);
     
-    // Try SMTP first if enabled and configured
+    // Try native SMTP first if enabled and configured
     if (useSmtp && smtpConfig) {
       try {
-        console.log("🔄 Attempting SMTP delivery...");
+        console.log("🔄 Attempting native SMTP delivery...");
         const result = await sendEmailViaSMTP(smtpConfig, payload);
-        console.log("✅ SMTP delivery successful!");
+        console.log("✅ Native SMTP delivery successful!");
         return result;
       } catch (error) {
         smtpError = error;
-        console.warn("⚠️ SMTP failed, will attempt Resend fallback:", error.message);
+        console.warn("⚠️ Native SMTP failed, will attempt Resend fallback:", error.message);
         
         // Continue to Resend fallback
       }
@@ -408,7 +403,7 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
   const results: any[] = [];
   
   console.log(`📬 Processing ${emailRequests.length} emails in batches of ${batchSize}`);
-  console.log(`📋 Email strategy: ${useSmtp ? 'SMTP-first with Resend fallback' : 'Resend-only'}`);
+  console.log(`📋 Email strategy: ${useSmtp ? 'Native SMTP-first with Resend fallback' : 'Resend-only'}`);
   
   for (let i = 0; i < emailRequests.length; i += batchSize) {
     const batch = emailRequests.slice(i, i + batchSize);
@@ -465,7 +460,7 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
   console.log(`📊 Batch processing complete:`);
   console.log(`   ✅ Total successful: ${successCount}`);
   console.log(`   ❌ Total failed: ${failureCount}`);
-  console.log(`   📧 Via SMTP: ${smtpCount}`);
+  console.log(`   📧 Via native SMTP: ${smtpCount}`);
   console.log(`   📨 Via Resend: ${resendCount}`);
   console.log(`   🔄 Fallback used: ${fallbackCount}`);
   
@@ -570,16 +565,16 @@ serve(async (req) => {
         // Determine configuration based on user settings
         const useSmtp = requestData.use_smtp === true;
         
-        // Prepare SMTP configuration
+        // Prepare native SMTP configuration
         let smtpConfig = null;
         if (useSmtp && requestData.smtp_settings) {
           smtpConfig = {
-            from_email: requestData.smtp_settings.from_email,
-            from_name: requestData.smtp_settings.from_name || 'RocketMail',
             host: requestData.smtp_settings.host,
             port: requestData.smtp_settings.port,
-            secure: requestData.smtp_settings.secure,
             email_usuario: requestData.smtp_settings.from_email,
+            password: requestData.smtp_settings.password,
+            from_email: requestData.smtp_settings.from_email,
+            from_name: requestData.smtp_settings.from_name || 'RocketMail',
             smtp_nome: requestData.smtp_settings.from_name
           };
         }
@@ -593,7 +588,7 @@ serve(async (req) => {
         
         console.log(`📋 Configuration:`);
         console.log(`   🔧 Use SMTP: ${useSmtp}`);
-        console.log(`   📧 SMTP configured: ${!!smtpConfig}`);
+        console.log(`   📧 Native SMTP configured: ${!!smtpConfig}`);
         console.log(`   📨 Resend available: ${!!resendApiKey}`);
         
         if (useSmtp && !smtpConfig) {
@@ -777,16 +772,16 @@ serve(async (req) => {
       // Determine configuration based on user settings
       const useSmtpDelivery = use_smtp === true;
       
-      // Prepare SMTP configuration
+      // Prepare native SMTP configuration
       let smtpConfig = null;
       if (useSmtpDelivery && smtp_settings) {
         smtpConfig = {
-          from_email: smtp_settings.from_email,
-          from_name: smtp_settings.from_name || 'RocketMail',
           host: smtp_settings.host,
           port: smtp_settings.port,
-          secure: smtp_settings.secure,
           email_usuario: smtp_settings.from_email,
+          password: smtp_settings.password,
+          from_email: smtp_settings.from_email,
+          from_name: smtp_settings.from_name || 'RocketMail',
           smtp_nome: smtp_settings.from_name
         };
       }
@@ -800,7 +795,7 @@ serve(async (req) => {
       
       console.log(`📋 Single email configuration:`);
       console.log(`   🔧 Use SMTP: ${useSmtpDelivery}`);
-      console.log(`   📧 SMTP configured: ${!!smtpConfig}`);
+      console.log(`   📧 Native SMTP configured: ${!!smtpConfig}`);
       console.log(`   📨 Resend available: ${!!resendApiKey}`);
       
       if (useSmtpDelivery && !smtpConfig) {
