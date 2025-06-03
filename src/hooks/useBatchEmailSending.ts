@@ -23,9 +23,21 @@ interface BatchEmailData {
   };
 }
 
+interface BatchOptions {
+  showProgress?: boolean;
+  enableOptimizations?: boolean;
+  useParallelSending?: boolean;
+}
+
+interface BatchProgress {
+  current: number;
+  total: number;
+}
+
 export function useBatchEmailSending() {
-  const [isSending, setIsSending] = useState(false);
-  const { sendBatchEmails, processTemplateVariables } = useEnvios();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState<BatchProgress>({ current: 0, total: 0 });
+  const { sendBatchEmails: originalSendBatchEmails, processTemplateVariables } = useEnvios();
 
   const sendEmailsInBatch = async (
     selectedContacts: any[],
@@ -38,7 +50,8 @@ export function useBatchEmailSending() {
       return false;
     }
 
-    setIsSending(true);
+    setIsProcessing(true);
+    setProgress({ current: 0, total: selectedContacts.length });
 
     try {
       console.log(`Iniciando preparação de envio em lote para ${selectedContacts.length} contatos`);
@@ -104,7 +117,7 @@ export function useBatchEmailSending() {
       console.log(`Preparados ${emailsData.length} emails para envio em lote`);
 
       // Send emails using the batch function
-      const result = await sendBatchEmails(emailsData);
+      const result = await originalSendBatchEmails(emailsData);
 
       if (result && result.summary) {
         console.log('Resultado do envio em lote:', result.summary);
@@ -117,6 +130,7 @@ export function useBatchEmailSending() {
           toast.error('Nenhum email foi enviado com sucesso. Verifique as configurações.');
         }
 
+        setProgress({ current: result.summary.successful, total: result.summary.total });
         return result;
       } else {
         toast.error('Erro no envio em lote dos emails');
@@ -128,13 +142,68 @@ export function useBatchEmailSending() {
       toast.error(`Erro no envio em lote: ${error.message || 'Erro desconhecido'}`);
       return false;
     } finally {
-      setIsSending(false);
+      setIsProcessing(false);
+    }
+  };
+
+  const sendBatchEmails = async (emailJobs: any[], options?: BatchOptions) => {
+    if (!emailJobs.length) {
+      toast.error('Nenhum email para enviar');
+      return { success: false };
+    }
+
+    setIsProcessing(true);
+    setProgress({ current: 0, total: emailJobs.length });
+
+    try {
+      // Map emailJobs to the expected format
+      const emailsData = emailJobs.map(job => ({
+        to: job.contactEmail || '',
+        contato_nome: job.contactName || '',
+        contato_id: job.contactId || '',
+        template_id: job.templateId || '',
+        subject: job.subject || 'Sem assunto',
+        content: job.content || '',
+        signature_image: job.signatureImage || null,
+        image_url: job.imageUrl || null,
+        attachments: job.attachments || null
+      }));
+
+      const result = await originalSendBatchEmails(emailsData);
+
+      if (result && result.summary) {
+        setProgress({ current: result.summary.successful, total: result.summary.total });
+        
+        if (result.summary.successful === emailsData.length) {
+          toast.success(`Todos os ${result.summary.successful} emails foram enviados com sucesso! 🎉`);
+          return { success: true, result };
+        } else if (result.summary.successful > 0) {
+          toast.success(`${result.summary.successful} de ${result.summary.total} emails enviados com sucesso`);
+          return { success: true, result };
+        } else {
+          toast.error('Nenhum email foi enviado com sucesso');
+          return { success: false };
+        }
+      } else {
+        toast.error('Erro no envio em lote dos emails');
+        return { success: false };
+      }
+
+    } catch (error: any) {
+      console.error('Erro no sendBatchEmails:', error);
+      toast.error(`Erro no envio: ${error.message || 'Erro desconhecido'}`);
+      return { success: false };
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   return {
-    isSending,
-    sendEmailsInBatch
+    isSending: isProcessing, // Keep backward compatibility
+    isProcessing,
+    progress,
+    sendEmailsInBatch,
+    sendBatchEmails
   };
 }
 
