@@ -141,206 +141,6 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via native SMTP using Deno's native APIs
- */
-async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
-  try {
-    console.log("🔄 Attempting native SMTP delivery");
-    
-    // Extract and validate recipient email
-    const recipientEmail = extractEmailAddress(payload.to);
-    if (!isValidEmail(recipientEmail)) {
-      throw new Error(`Email inválido: ${payload.to}`);
-    }
-    
-    // Use configured SMTP settings for from field
-    const fromName = smtpConfig.from_name || smtpConfig.smtp_nome || 'RocketMail';
-    const fromEmail = smtpConfig.from_email || smtpConfig.email_usuario;
-    
-    if (!fromEmail) {
-      throw new Error("Email do remetente não configurado nas configurações SMTP");
-    }
-    
-    const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
-    const sanitizedSubject = sanitizeSubject(payload.subject);
-    
-    console.log(`📧 Connecting to SMTP: ${smtpConfig.host}:${smtpConfig.port}`);
-    
-    // Connect to SMTP server using Deno's native TCP
-    const conn = await Deno.connect({
-      hostname: smtpConfig.host,
-      port: smtpConfig.port,
-    });
-    
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    
-    let buffer = new Uint8Array(1024);
-    
-    // Read SMTP greeting
-    const bytesRead = await conn.read(buffer);
-    if (bytesRead === null) throw new Error("Failed to read SMTP greeting");
-    const greeting = decoder.decode(buffer.subarray(0, bytesRead));
-    console.log("SMTP greeting:", greeting);
-    
-    if (!greeting.startsWith('220')) {
-      throw new Error(`SMTP connection failed: ${greeting}`);
-    }
-    
-    // Send EHLO
-    const ehloCommand = `EHLO ${smtpConfig.host}\r\n`;
-    await conn.write(encoder.encode(ehloCommand));
-    
-    buffer = new Uint8Array(1024);
-    const ehloResponse = await conn.read(buffer);
-    if (ehloResponse === null) throw new Error("Failed to read EHLO response");
-    const ehloText = decoder.decode(buffer.subarray(0, ehloResponse));
-    console.log("EHLO response:", ehloText);
-    
-    // Start TLS if needed (port 587)
-    if (smtpConfig.port === 587) {
-      await conn.write(encoder.encode("STARTTLS\r\n"));
-      
-      buffer = new Uint8Array(1024);
-      const tlsResponse = await conn.read(buffer);
-      if (tlsResponse === null) throw new Error("Failed to read STARTTLS response");
-      const tlsText = decoder.decode(buffer.subarray(0, tlsResponse));
-      console.log("STARTTLS response:", tlsText);
-      
-      if (!tlsText.startsWith('220')) {
-        throw new Error(`STARTTLS failed: ${tlsText}`);
-      }
-      
-      // Close current connection and establish TLS connection
-      conn.close();
-      
-      // For now, we'll throw an error for TLS as it requires more complex implementation
-      throw new Error("TLS/STARTTLS não suportado ainda - use porta 25 sem TLS ou aguarde implementação completa");
-    }
-    
-    // AUTH LOGIN (Base64 encoded)
-    const username = btoa(smtpConfig.email_usuario);
-    const password = btoa(smtpConfig.password);
-    
-    await conn.write(encoder.encode("AUTH LOGIN\r\n"));
-    buffer = new Uint8Array(1024);
-    let authResponse = await conn.read(buffer);
-    if (authResponse === null) throw new Error("Failed to read AUTH response");
-    let authText = decoder.decode(buffer.subarray(0, authResponse));
-    console.log("AUTH response:", authText);
-    
-    if (!authText.startsWith('334')) {
-      throw new Error(`AUTH LOGIN failed: ${authText}`);
-    }
-    
-    // Send username
-    await conn.write(encoder.encode(`${username}\r\n`));
-    buffer = new Uint8Array(1024);
-    authResponse = await conn.read(buffer);
-    if (authResponse === null) throw new Error("Failed to read username response");
-    authText = decoder.decode(buffer.subarray(0, authResponse));
-    
-    if (!authText.startsWith('334')) {
-      throw new Error(`Username authentication failed: ${authText}`);
-    }
-    
-    // Send password
-    await conn.write(encoder.encode(`${password}\r\n`));
-    buffer = new Uint8Array(1024);
-    authResponse = await conn.read(buffer);
-    if (authResponse === null) throw new Error("Failed to read password response");
-    authText = decoder.decode(buffer.subarray(0, authResponse));
-    
-    if (!authText.startsWith('235')) {
-      throw new Error(`Password authentication failed: ${authText}`);
-    }
-    
-    console.log("✅ SMTP Authentication successful");
-    
-    // Send MAIL FROM
-    await conn.write(encoder.encode(`MAIL FROM:<${fromEmail}>\r\n`));
-    buffer = new Uint8Array(1024);
-    const mailFromResponse = await conn.read(buffer);
-    if (mailFromResponse === null) throw new Error("Failed to read MAIL FROM response");
-    const mailFromText = decoder.decode(buffer.subarray(0, mailFromResponse));
-    
-    if (!mailFromText.startsWith('250')) {
-      throw new Error(`MAIL FROM failed: ${mailFromText}`);
-    }
-    
-    // Send RCPT TO
-    await conn.write(encoder.encode(`RCPT TO:<${recipientEmail}>\r\n`));
-    buffer = new Uint8Array(1024);
-    const rcptResponse = await conn.read(buffer);
-    if (rcptResponse === null) throw new Error("Failed to read RCPT TO response");
-    const rcptText = decoder.decode(buffer.subarray(0, rcptResponse));
-    
-    if (!rcptText.startsWith('250')) {
-      throw new Error(`RCPT TO failed: ${rcptText}`);
-    }
-    
-    // Send DATA
-    await conn.write(encoder.encode("DATA\r\n"));
-    buffer = new Uint8Array(1024);
-    const dataResponse = await conn.read(buffer);
-    if (dataResponse === null) throw new Error("Failed to read DATA response");
-    const dataText = decoder.decode(buffer.subarray(0, dataResponse));
-    
-    if (!dataText.startsWith('354')) {
-      throw new Error(`DATA command failed: ${dataText}`);
-    }
-    
-    // Build email content
-    const emailContent = [
-      `From: ${from}`,
-      `To: ${recipientEmail}`,
-      `Subject: ${sanitizedSubject}`,
-      `Date: ${new Date().toUTCString()}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/html; charset=UTF-8`,
-      `Content-Transfer-Encoding: 8bit`,
-      ``,
-      payload.html,
-      ``,
-      `.`,
-      ``
-    ].join('\r\n');
-    
-    // Send email content
-    await conn.write(encoder.encode(emailContent));
-    
-    buffer = new Uint8Array(1024);
-    const sendResponse = await conn.read(buffer);
-    if (sendResponse === null) throw new Error("Failed to read send response");
-    const sendText = decoder.decode(buffer.subarray(0, sendResponse));
-    
-    if (!sendText.startsWith('250')) {
-      throw new Error(`Email send failed: ${sendText}`);
-    }
-    
-    // Send QUIT
-    await conn.write(encoder.encode("QUIT\r\n"));
-    conn.close();
-    
-    console.log("✅ Email sent successfully via native SMTP");
-    
-    const messageId = `smtp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    return {
-      success: true,
-      id: messageId,
-      provider: "smtp",
-      method: "Native SMTP (Deno)",
-      from: fromEmail,
-      to: recipientEmail,
-    };
-  } catch (error) {
-    console.error("❌ Native SMTP Error:", error);
-    throw error;
-  }
-}
-
-/**
  * Send email via Resend API with proper validation
  */
 async function sendEmailViaResend(resendApiKey: string, fromName: string, replyTo: string, payload: any): Promise<any> {
@@ -452,33 +252,21 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
 }
 
 /**
- * Send single email with SMTP priority and Resend fallback
+ * Send single email with Resend as primary (SMTP disabled temporarily)
  */
 async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any, useSmtp: boolean): Promise<any> {
-  let smtpError = null;
-  
   try {
-    console.log(`📧 Sending email with strategy: ${useSmtp ? 'Native SMTP-first with Resend fallback' : 'Resend-only'}`);
+    console.log(`📧 Email sending strategy: ${useSmtp ? 'SMTP preferred (temporarily disabled)' : 'Resend-only'}`);
     
-    // Try native SMTP first if enabled and configured
+    // TEMPORARILY DISABLE SMTP DUE TO TLS IMPLEMENTATION ISSUE
     if (useSmtp && smtpConfig) {
-      try {
-        console.log("🔄 Attempting native SMTP delivery...");
-        const result = await sendEmailViaSMTP(smtpConfig, payload);
-        console.log("✅ Native SMTP delivery successful!");
-        return result;
-      } catch (error) {
-        smtpError = error;
-        console.warn("⚠️ Native SMTP failed, will attempt Resend fallback:", error.message);
-        
-        // Continue to Resend fallback
-      }
+      console.warn("⚠️ SMTP temporariamente desabilitado devido a limitação de TLS. Usando Resend como método principal.");
     }
     
-    // Use Resend (either as primary method or as fallback)
+    // Use Resend as the primary method
     if (resendConfig && resendConfig.apiKey) {
       try {
-        console.log(useSmtp && smtpError ? "🔄 Using Resend as fallback..." : "🔄 Using Resend as primary method...");
+        console.log("🔄 Using Resend as primary method...");
         const result = await sendEmailViaResend(
           resendConfig.apiKey,
           resendConfig.fromName || 'RocketMail',
@@ -486,34 +274,16 @@ async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any,
           payload
         );
         
-        // Mark as fallback if SMTP was attempted first
-        if (useSmtp && smtpError) {
-          result.fallback = true;
-          result.originalError = smtpError.message;
-          console.log("✅ Resend fallback successful!");
-        } else {
-          console.log("✅ Resend delivery successful!");
-        }
-        
+        console.log("✅ Resend delivery successful!");
         return result;
       } catch (resendError) {
-        console.error("❌ Resend also failed:", resendError.message);
-        
-        // If both SMTP and Resend failed, throw the more relevant error
-        if (smtpError) {
-          throw new Error(`SMTP falhou (${smtpError.message}) e Resend também falhou (${resendError.message})`);
-        } else {
-          throw resendError;
-        }
+        console.error("❌ Resend failed:", resendError.message);
+        throw resendError;
       }
     }
     
     // No delivery method available
-    if (useSmtp && !smtpConfig) {
-      throw new Error('SMTP ativado mas não configurado corretamente');
-    } else {
-      throw new Error('Nenhum método de envio configurado (Resend não disponível)');
-    }
+    throw new Error('Nenhum método de envio configurado (Resend não disponível)');
     
   } catch (error) {
     console.error("❌ Error in sendSingleEmail:", error);
@@ -525,12 +295,12 @@ async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any,
  * Process multiple emails in parallel batches
  */
 async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendConfig: any, useSmtp: boolean): Promise<any> {
-  const batchSize = 50;
-  const delayBetweenBatches = 1000;
+  const batchSize = 10; // Reduced batch size for better rate limiting
+  const delayBetweenBatches = 2000; // Increased delay to 2 seconds
   const results: any[] = [];
   
   console.log(`📬 Processing ${emailRequests.length} emails in batches of ${batchSize}`);
-  console.log(`📋 Email strategy: ${useSmtp ? 'Native SMTP-first with Resend fallback' : 'Resend-only'}`);
+  console.log(`📋 Email strategy: ${useSmtp ? 'SMTP preferred (temporarily disabled)' : 'Resend-only'}`);
   
   for (let i = 0; i < emailRequests.length; i += batchSize) {
     const batch = emailRequests.slice(i, i + batchSize);
@@ -544,6 +314,11 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
       const globalIndex = i + index;
       try {
         console.log(`📤 Sending email ${globalIndex + 1}/${emailRequests.length} to: ${emailData.to}`);
+        
+        // Add small delay between individual emails in batch to respect rate limits
+        if (index > 0) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
         
         const result = await sendSingleEmail(emailData, smtpConfig, resendConfig, useSmtp);
         
@@ -580,16 +355,12 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
   
   const successCount = results.filter(r => r.success).length;
   const failureCount = results.filter(r => !r.success).length;
-  const fallbackCount = results.filter(r => r.success && r.fallback).length;
-  const smtpCount = results.filter(r => r.success && r.provider === 'smtp').length;
   const resendCount = results.filter(r => r.success && r.provider === 'resend').length;
   
   console.log(`📊 Batch processing complete:`);
   console.log(`   ✅ Total successful: ${successCount}`);
   console.log(`   ❌ Total failed: ${failureCount}`);
-  console.log(`   📧 Via native SMTP: ${smtpCount}`);
   console.log(`   📨 Via Resend: ${resendCount}`);
-  console.log(`   🔄 Fallback used: ${fallbackCount}`);
   
   return {
     results,
@@ -597,8 +368,8 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
       total: emailRequests.length,
       successful: successCount,
       failed: failureCount,
-      fallback: fallbackCount,
-      smtp: smtpCount,
+      fallback: 0,
+      smtp: 0,
       resend: resendCount,
       successRate: emailRequests.length > 0 ? ((successCount / emailRequests.length) * 100).toFixed(1) : "0"
     }
@@ -692,7 +463,7 @@ serve(async (req) => {
         // Determine configuration based on user settings
         const useSmtp = requestData.use_smtp === true;
         
-        // Prepare native SMTP configuration
+        // Prepare SMTP configuration (temporarily disabled)
         let smtpConfig = null;
         if (useSmtp && requestData.smtp_settings) {
           smtpConfig = {
@@ -714,28 +485,14 @@ serve(async (req) => {
         };
         
         console.log(`📋 Configuration:`);
-        console.log(`   🔧 Use SMTP: ${useSmtp}`);
-        console.log(`   📧 Native SMTP configured: ${!!smtpConfig}`);
+        console.log(`   🔧 Use SMTP: ${useSmtp} (temporarily disabled)`);
         console.log(`   📨 Resend available: ${!!resendApiKey}`);
         
-        if (useSmtp && !smtpConfig) {
+        if (!resendApiKey) {
           return new Response(
             JSON.stringify({
               success: false,
-              error: "SMTP ativado mas configurações SMTP não fornecidas"
-            }),
-            {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 400,
-            }
-          );
-        }
-        
-        if (!smtpConfig && !resendApiKey) {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: "Nenhum serviço de email configurado. Configure SMTP ou Resend."
+              error: "Serviço Resend não configurado. Configure a chave API do Resend."
             }),
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -874,7 +631,7 @@ serve(async (req) => {
     let emailAttachments: any[] = [];
     if (attachments) {
       try {
-        emailAttachments = validateAndSanitizeAttachments(attachments, !use_smtp);
+        emailAttachments = validateAndSanitizeAttachments(attachments, true);
         console.log(`📎 Processed ${emailAttachments.length} valid attachments`);
       } catch (error) {
         console.error("Error processing attachments:", error);
@@ -899,7 +656,7 @@ serve(async (req) => {
       // Determine configuration based on user settings
       const useSmtpDelivery = use_smtp === true;
       
-      // Prepare native SMTP configuration
+      // Prepare SMTP configuration (temporarily disabled)
       let smtpConfig = null;
       if (useSmtpDelivery && smtp_settings) {
         smtpConfig = {
@@ -921,28 +678,14 @@ serve(async (req) => {
       };
       
       console.log(`📋 Single email configuration:`);
-      console.log(`   🔧 Use SMTP: ${useSmtpDelivery}`);
-      console.log(`   📧 Native SMTP configured: ${!!smtpConfig}`);
+      console.log(`   🔧 Use SMTP: ${useSmtpDelivery} (temporarily disabled)`);
       console.log(`   📨 Resend available: ${!!resendApiKey}`);
       
-      if (useSmtpDelivery && !smtpConfig) {
+      if (!resendApiKey) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "SMTP ativado mas configurações SMTP não fornecidas"
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          }
-        );
-      }
-      
-      if (!smtpConfig && !resendApiKey) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Nenhum serviço de email configurado. Configure SMTP ou Resend."
+            error: "Serviço Resend não configurado. Configure a chave API do Resend."
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -1,81 +1,89 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { Settings, SettingsFormData } from './types';
-import { toast } from 'sonner';
+import type { SettingsFormData, Settings } from '@/types/settings';
 
 export async function saveUserSettings(
-  settings: SettingsFormData, 
+  values: SettingsFormData, 
   userId: string, 
-  currentSettings: Settings | null
-): Promise<Settings | null> {
-  if (!userId) {
-    toast.error('Você precisa estar logado para salvar configurações');
-    return null;
-  }
+  existingSettings: Settings | null
+): Promise<Settings> {
+  console.log("Saving settings:", values);
+  console.log("Signature image being saved:", values.signature_image);
 
-  console.log("Saving settings:", settings);
-  console.log("Signature image being saved:", settings.signature_image);
-  
-  // Create a data object that only includes fields that exist in the database
-  // This prevents errors when trying to save fields that don't exist in the database yet
-  const settingsToSave = {
-    email_smtp: settings.email_smtp,
-    email_porta: settings.email_porta,
-    email_usuario: settings.email_usuario,
-    email_senha: settings.email_senha,
-    area_negocio: settings.area_negocio,
-    foto_perfil: settings.foto_perfil,
-    smtp_seguranca: settings.smtp_seguranca,
-    smtp_nome: settings.smtp_nome,
-    whatsapp_token: settings.whatsapp_token,
-    two_factor_enabled: settings.two_factor_enabled,
-    use_smtp: settings.use_smtp,
-    signature_image: settings.signature_image // Garantir que signature_image seja incluído
+  // Prepare the settings data
+  const settingsData = {
+    email_smtp: values.email_smtp || null,
+    email_porta: values.email_porta || null,
+    email_usuario: values.email_usuario || null,
+    email_senha: values.email_senha || null,
+    area_negocio: values.area_negocio || null,
+    foto_perfil: values.foto_perfil || null,
+    smtp_seguranca: values.smtp_seguranca || 'tls',
+    smtp_nome: values.smtp_nome || null,
+    two_factor_enabled: values.two_factor_enabled || false,
+    use_smtp: values.use_smtp || false,
+    signature_image: values.signature_image || null,
+    user_id: userId
   };
-  
-  let result;
-  
+
   try {
-    // Check if settings already exist for this user
-    if (currentSettings && currentSettings.id !== 'new') {
-      // Settings exist, update them
-      console.log("Updating existing settings with ID:", currentSettings.id);
-      result = await supabase
+    let result;
+    
+    if (existingSettings) {
+      console.log("Updating existing settings for user:", userId);
+      // Update existing settings
+      const { data, error } = await supabase
         .from('configuracoes')
-        .update(settingsToSave)
-        .eq('id', currentSettings.id)
+        .update(settingsData)
         .eq('user_id', userId)
-        .select('*')
+        .select()
         .single();
+      
+      if (error) {
+        console.error("Error updating settings:", error);
+        throw error;
+      }
+      
+      result = data;
     } else {
-      // No settings exist, insert new ones
       console.log("Inserting new settings for user:", userId);
-      result = await supabase
+      // Insert new settings
+      const { data, error } = await supabase
         .from('configuracoes')
-        .insert([{ ...settingsToSave, user_id: userId }])
-        .select('*')
+        .insert(settingsData)
+        .select()
         .single();
+      
+      if (error) {
+        console.error("Error inserting settings:", error);
+        // If it's a unique constraint violation, try to update instead
+        if (error.code === '23505') {
+          console.log("Unique constraint violation, attempting update instead");
+          const { data: updateData, error: updateError } = await supabase
+            .from('configuracoes')
+            .update(settingsData)
+            .eq('user_id', userId)
+            .select()
+            .single();
+          
+          if (updateError) {
+            console.error("Error in fallback update:", updateError);
+            throw updateError;
+          }
+          
+          result = updateData;
+        } else {
+          throw error;
+        }
+      } else {
+        result = data;
+      }
     }
-    
-    const { data: newData, error: saveError } = result;
-    
-    if (saveError) {
-      console.error("Error saving settings:", saveError);
-      throw saveError;
-    }
-    
-    console.log("Settings saved successfully:", newData);
-    console.log("Signature image after save:", newData.signature_image);
-    
-    // Make sure to transform the data to match our Settings type
-    return {
-      ...newData,
-      use_smtp: Boolean(newData.use_smtp),
-      two_factor_enabled: Boolean(newData.two_factor_enabled),
-      signature_image: newData.signature_image // Garantir que signature_image seja retornado corretamente
-    } as Settings;
-  } catch (error) {
+
+    console.log("Settings saved successfully:", result);
+    return result;
+  } catch (error: any) {
     console.error("Error in saveUserSettings:", error);
-    throw error;
+    throw new Error(error.message || 'Erro ao salvar configurações');
   }
 }
