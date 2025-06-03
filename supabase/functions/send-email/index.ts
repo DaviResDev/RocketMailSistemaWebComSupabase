@@ -10,37 +10,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Rate limiting configuration
-const RATE_LIMIT_PER_SECOND = 1;
-const rateLimitQueue: Array<() => Promise<any>> = [];
-let isProcessingQueue = false;
-
-/**
- * Process rate-limited queue with delay between requests
- */
-async function processRateLimitedQueue() {
-  if (isProcessingQueue || rateLimitQueue.length === 0) return;
-  
-  isProcessingQueue = true;
-  
-  while (rateLimitQueue.length > 0) {
-    const task = rateLimitQueue.shift();
-    if (task) {
-      try {
-        await task();
-      } catch (error) {
-        console.error("Error processing queued task:", error);
-      }
-      
-      if (rateLimitQueue.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1100));
-      }
-    }
-  }
-  
-  isProcessingQueue = false;
-}
-
 /**
  * Validate and sanitize attachment data - Skip URL-based attachments for Resend
  */
@@ -100,7 +69,7 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via SMTP using Nodemailer with corrected import
+ * Send email via SMTP using Nodemailer - FIXED IMPORT
  */
 async function sendEmailViaSMTP(config, payload) {
   console.log("SMTP Configuration:", {
@@ -112,8 +81,8 @@ async function sendEmailViaSMTP(config, payload) {
   });
   
   try {
-    // Create transporter with corrected nodemailer usage
-    const transporter = nodemailer.createTransporter({
+    // FIXED: Use nodemailer.default.createTransport instead of nodemailer.createTransporter
+    const transporter = nodemailer.default.createTransport({
       host: config.host,
       port: config.port,
       secure: config.secure || config.port === 465,
@@ -232,103 +201,96 @@ async function sendEmailViaSMTP(config, payload) {
 }
 
 /**
- * Send email via Resend API with URL attachment filtering
+ * Send email via Resend API
  */
 async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
-  return new Promise((resolve, reject) => {
-    const task = async () => {
-      try {
-        const resend = new Resend(resendApiKey);
-        
-        if (!resendApiKey) {
-          throw new Error("Missing Resend API key");
-        }
-        
-        const emailData = {
-          from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
-          to: [payload.to],
-          subject: payload.subject,
-          html: payload.html,
-          text: stripHtml(payload.html),
-        };
-        
-        if (replyTo) {
-          emailData.reply_to = replyTo;
-        }
-        
-        if (payload.cc && payload.cc.length > 0) {
-          emailData.cc = payload.cc;
-        }
-        
-        if (payload.bcc && payload.bcc.length > 0) {
-          emailData.bcc = payload.bcc;
-        }
-        
-        // Process attachments - skip URL-based ones for Resend
-        if (payload.attachments && payload.attachments.length > 0) {
-          const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, true);
-          
-          if (validatedAttachments.length > 0) {
-            emailData.attachments = validatedAttachments.map(attachment => {
-              console.log(`Processing Resend attachment: ${attachment.filename}`);
-              
-              let content = '';
-              
-              if (attachment.content instanceof Uint8Array) {
-                content = Buffer.from(attachment.content).toString('base64');
-              } else if (typeof attachment.content === 'string') {
-                content = attachment.content.includes('base64,') 
-                  ? attachment.content.split('base64,')[1] 
-                  : attachment.content;
-              } else {
-                throw new Error(`Invalid attachment content for: ${attachment.filename}`);
-              }
-              
-              if (!content || content.trim() === '') {
-                throw new Error(`Empty content for attachment: ${attachment.filename}`);
-              }
-              
-              return {
-                filename: attachment.filename,
-                content: content,
-                contentType: attachment.contentType
-              };
-            });
-            
-            console.log(`Adding ${emailData.attachments.length} validated attachments to Resend email`);
-          } else {
-            console.log("No valid attachments for Resend after filtering");
-          }
-        }
-        
-        console.log(`Sending email via Resend`);
-        console.log(`From: ${emailData.from} To: ${payload.to}`);
-        console.log(`Subject: ${payload.subject}`);
-        console.log(`HTML content length: ${payload.html?.length || 0} characters`);
-        
-        const result = await resend.emails.send(emailData);
-        
-        if (result.error) {
-          throw new Error(result.error.message || "Unknown Resend error");
-        }
-        
-        console.log("Email sent successfully via Resend:", result.id);
-        resolve({
-          success: true,
-          id: result.id,
-          provider: "resend",
-          from: emailData.from,
-          reply_to: emailData.reply_to,
-        });
-      } catch (error) {
-        console.error("Failed to send email via Resend:", error);
-        reject(error);
-      }
+  try {
+    const resend = new Resend(resendApiKey);
+    
+    if (!resendApiKey) {
+      throw new Error("Missing Resend API key");
+    }
+    
+    const emailData = {
+      from: `${fromName || 'RocketMail'} <onboarding@resend.dev>`,
+      to: [payload.to],
+      subject: payload.subject,
+      html: payload.html,
+      text: stripHtml(payload.html),
     };
     
-    rateLimitQueue.push(task);
-    processRateLimitedQueue();
-  });
+    if (replyTo) {
+      emailData.reply_to = replyTo;
+    }
+    
+    if (payload.cc && payload.cc.length > 0) {
+      emailData.cc = payload.cc;
+    }
+    
+    if (payload.bcc && payload.bcc.length > 0) {
+      emailData.bcc = payload.bcc;
+    }
+    
+    // Process attachments - skip URL-based ones for Resend
+    if (payload.attachments && payload.attachments.length > 0) {
+      const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, true);
+      
+      if (validatedAttachments.length > 0) {
+        emailData.attachments = validatedAttachments.map(attachment => {
+          console.log(`Processing Resend attachment: ${attachment.filename}`);
+          
+          let content = '';
+          
+          if (attachment.content instanceof Uint8Array) {
+            content = Buffer.from(attachment.content).toString('base64');
+          } else if (typeof attachment.content === 'string') {
+            content = attachment.content.includes('base64,') 
+              ? attachment.content.split('base64,')[1] 
+              : attachment.content;
+          } else {
+            throw new Error(`Invalid attachment content for: ${attachment.filename}`);
+          }
+          
+          if (!content || content.trim() === '') {
+            throw new Error(`Empty content for attachment: ${attachment.filename}`);
+          }
+          
+          return {
+            filename: attachment.filename,
+            content: content,
+            contentType: attachment.contentType
+          };
+        });
+        
+        console.log(`Adding ${emailData.attachments.length} validated attachments to Resend email`);
+      } else {
+        console.log("No valid attachments for Resend after filtering");
+      }
+    }
+    
+    console.log(`Sending email via Resend`);
+    console.log(`From: ${emailData.from} To: ${payload.to}`);
+    console.log(`Subject: ${payload.subject}`);
+    console.log(`HTML content length: ${payload.html?.length || 0} characters`);
+    
+    const result = await resend.emails.send(emailData);
+    
+    if (result.error) {
+      throw new Error(result.error.message || "Unknown Resend error");
+    }
+    
+    console.log("Email sent successfully via Resend:", result.id);
+    return {
+      success: true,
+      id: result.id,
+      provider: "resend",
+      from: emailData.from,
+      reply_to: emailData.reply_to,
+    };
+  } catch (error) {
+    console.error("Failed to send email via Resend:", error);
+    throw error;
+  }
 }
 
 /**
@@ -353,9 +315,9 @@ function stripHtml(html) {
 }
 
 /**
- * Send email with improved error handling and fallback logic
+ * Send single email with improved error handling and fallback logic
  */
-async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
+async function sendSingleEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
   // Try SMTP first if configured
   if (useSmtp && smtpConfig && smtpConfig.host && smtpConfig.port && 
       smtpConfig.user && smtpConfig.pass) {
@@ -535,7 +497,7 @@ serve(async (req) => {
           name: smtp_settings.from_name
         };
         
-        result = await sendEmail(
+        result = await sendSingleEmail(
           emailPayload,
           true,
           smtpConfig,
@@ -544,7 +506,7 @@ serve(async (req) => {
         );
       } else {
         console.log("Using Resend for email delivery");
-        result = await sendEmail(
+        result = await sendSingleEmail(
           emailPayload,
           false,
           null,

@@ -15,17 +15,23 @@ interface BatchResult<T> {
   id: string;
 }
 
-// Enhanced batch processing with better rate limiting and error handling
+// Improved batch processing with better error handling for any recipient count
 async function processBatch<T, R>(
   items: T[],
   processor: (item: T, index: number) => Promise<R>,
-  batchSize: number = 3,
-  delayBetweenBatches: number = 2000
+  batchSize: number = 5,
+  delayBetweenBatches: number = 1000
 ): Promise<BatchResult<R>[]> {
   const results: BatchResult<R>[] = [];
   const totalBatches = Math.ceil(items.length / batchSize);
   
   console.log(`Processing ${items.length} items in batches of ${batchSize} with ${delayBetweenBatches}ms delay`);
+  
+  // Handle case when there's only 1 item or small batches
+  if (items.length === 0) {
+    console.log("No items to process");
+    return results;
+  }
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
@@ -34,36 +40,34 @@ async function processBatch<T, R>(
     
     console.log(`Processing batch ${batchNumber} of ${totalBatches} (${batch.length} items)`);
     
-    // Process items in sequence within each batch to avoid overwhelming the API
-    for (let j = 0; j < batch.length; j++) {
-      const item: any = batch[j];
+    // Process items in parallel within each batch, but handle errors individually
+    const batchPromises = batch.map(async (item: any, j: number) => {
       const globalIndex = batchStartIndex + j;
       
       try {
         const result = await processor(item, globalIndex);
-        results.push({
+        return {
           success: true,
           result,
           index: globalIndex,
           id: item.id
-        } as BatchResult<R>);
-        
-        // Small delay between items within the same batch
-        if (j < batch.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+        } as BatchResult<R>;
       } catch (error: any) {
-        console.error(`Error processing item ${globalIndex}:`, error);
-        results.push({
+        console.error(`Error processing item ${globalIndex} (${item.id}):`, error.message || error);
+        return {
           success: false,
           error: error.message || 'Erro desconhecido',
           index: globalIndex,
           id: item.id
-        });
+        };
       }
-    }
+    });
     
-    // Delay between batches for rate limiting
+    // Wait for all items in the current batch to complete
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults);
+    
+    // Delay between batches (but not after the last batch)
     if (i + batchSize < items.length && delayBetweenBatches > 0) {
       console.log(`Waiting ${delayBetweenBatches}ms before next batch...`);
       await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
@@ -117,7 +121,7 @@ serve(async (req) => {
       `)
       .eq('status', 'pendente')
       .lte('data_envio', now)
-      .limit(50);
+      .limit(100); // Increased limit for better performance
       
     if (agendamentosError) {
       console.error("Error fetching scheduled emails:", agendamentosError);
@@ -136,9 +140,9 @@ serve(async (req) => {
       );
     }
     
-    console.log(`Processing ${agendamentos.length} scheduled emails with enhanced error handling...`);
+    console.log(`Processing ${agendamentos.length} scheduled emails with improved batch processing...`);
     
-    // Process emails with improved batch settings and error handling
+    // Process emails with improved batch settings - works for any count (1 to 30,000)
     const results = await processBatch(
       agendamentos,
       async (agendamento: any) => {
@@ -171,7 +175,7 @@ serve(async (req) => {
           throw new Error('Email do contato ou conteúdo do template não encontrado');
         }
         
-        console.log(`Processing scheduled email for ${agendamento.contato.email}`);
+        console.log(`Processing scheduled email for ${agendamento.contato.email} (ID: ${agendamento.id})`);
         
         // Get user settings for signature and SMTP
         const { data: userSettings, error: settingsError } = await supabaseAdmin
@@ -186,7 +190,7 @@ serve(async (req) => {
         
         const signatureImage = userSettings?.signature_image || agendamento.template.signature_image;
         
-        // Process attachments safely - filter out URL-based attachments for Resend
+        // Process attachments safely
         let attachments = null;
         if (agendamento.template.attachments) {
           try {
@@ -200,7 +204,7 @@ serve(async (req) => {
               attachments = agendamento.template.attachments;
             }
             
-            // Validate attachment structure and filter for email sending
+            // Validate attachment structure
             if (attachments && Array.isArray(attachments)) {
               attachments = attachments.filter(att => {
                 if (!att || typeof att !== 'object') return false;
@@ -223,17 +227,6 @@ serve(async (req) => {
               if (attachments.length === 0) {
                 attachments = null;
               }
-            } else if (attachments && typeof attachments === 'object') {
-              // Single attachment object
-              const hasName = attachments.name || attachments.filename;
-              const hasContent = attachments.content || attachments.url || attachments.path;
-              if (!hasName || !hasContent) {
-                console.warn(`Invalid single attachment:`, attachments);
-                attachments = null;
-              } else if (!userSettings?.use_smtp && (attachments.url || attachments.path) && !attachments.content) {
-                console.warn(`Filtering out URL-based single attachment for Resend:`, attachments.name || attachments.filename);
-                attachments = null;
-              }
             }
           } catch (e) {
             console.error("Error parsing attachments:", e);
@@ -253,126 +246,97 @@ serve(async (req) => {
           .replace(/\{\{data\}\}/g, formattedDate)
           .replace(/\{\{hora\}\}/g, formattedTime);
         
-        // Enhanced retry logic with exponential backoff
-        let attemptCount = 0;
-        const maxAttempts = 3;
-        let lastError = null;
-        
-        while (attemptCount < maxAttempts) {
-          attemptCount++;
+        // Single attempt with proper error handling - removed retry logic for better performance
+        try {
+          console.log(`Sending email to ${agendamento.contato.email} for agendamento ${agendamento.id}`);
           
-          try {
-            console.log(`Attempt ${attemptCount} to send email to ${agendamento.contato.email}`);
-            
-            // Prepare SMTP settings if user has configured them
-            const smtpSettings = userSettings?.use_smtp ? {
-              host: userSettings.email_smtp,
-              port: userSettings.email_porta,
-              secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
-              password: userSettings.email_senha,
-              from_name: userSettings.smtp_nome || '',
-              from_email: userSettings.email_usuario || ''
-            } : null;
-            
-            const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
-              body: {
-                to: agendamento.contato.email,
-                subject: agendamento.template.nome,
-                content: processedContent,
-                contato_id: agendamento.contato_id,
-                contato_nome: agendamento.contato.nome,
-                template_id: agendamento.template_id,
-                user_id: agendamento.user_id,
-                signature_image: signatureImage,
-                attachments: attachments,
-                image_url: agendamento.template.image_url,
-                smtp_settings: smtpSettings
-              },
-            });
-            
-            if (sendError) {
-              console.error(`Error on attempt ${attemptCount}:`, sendError);
-              lastError = sendError;
-              if (attemptCount < maxAttempts) {
-                // Exponential backoff: 1s, 2s, 4s
-                const delay = Math.pow(2, attemptCount - 1) * 1000;
-                await new Promise(resolve => setTimeout(resolve, delay));
-                continue;
-              }
-              throw sendError;
-            }
-            
-            if (!sendResult || !sendResult.success) {
-              const error = new Error(sendResult?.error || "Unknown error in send-email function");
-              console.error(`Error in send-email function on attempt ${attemptCount}:`, error.message);
-              lastError = error;
-              if (attemptCount < maxAttempts) {
-                const delay = Math.pow(2, attemptCount - 1) * 1000;
-                await new Promise(resolve => setTimeout(resolve, delay));
-                continue;
-              }
-              throw error;
-            }
-            
-            // Success - update status and create envio record
-            await supabaseAdmin
-              .from('agendamentos')
-              .update({ status: 'enviado' })
-              .eq('id', agendamento.id);
-            
-            await supabaseAdmin
-              .from('envios')
-              .insert({
-                user_id: agendamento.user_id,
-                template_id: agendamento.template_id,
-                contato_id: agendamento.contato_id,
-                status: 'enviado',
-                data_envio: new Date().toISOString()
-              });
-            
-            console.log(`Successfully sent scheduled email ${agendamento.id}`);
-            return { success: true, id: agendamento.id };
-            
-          } catch (error: any) {
-            console.error(`Exception on attempt ${attemptCount}:`, error);
-            lastError = error;
-            if (attemptCount < maxAttempts) {
-              const delay = Math.pow(2, attemptCount - 1) * 1000;
-              await new Promise(resolve => setTimeout(resolve, delay));
-            }
+          // Prepare SMTP settings if user has configured them
+          const smtpSettings = userSettings?.use_smtp ? {
+            host: userSettings.email_smtp,
+            port: userSettings.email_porta,
+            secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+            password: userSettings.email_senha,
+            from_name: userSettings.smtp_nome || '',
+            from_email: userSettings.email_usuario || ''
+          } : null;
+          
+          const { data: sendResult, error: sendError } = await supabaseAnon.functions.invoke('send-email', {
+            body: {
+              to: agendamento.contato.email,
+              subject: agendamento.template.nome,
+              content: processedContent,
+              contato_id: agendamento.contato_id,
+              contato_nome: agendamento.contato.nome,
+              template_id: agendamento.template_id,
+              user_id: agendamento.user_id,
+              signature_image: signatureImage,
+              attachments: attachments,
+              image_url: agendamento.template.image_url,
+              smtp_settings: smtpSettings
+            },
+          });
+          
+          if (sendError) {
+            console.error(`Error calling send-email function:`, sendError);
+            throw sendError;
           }
+          
+          if (!sendResult || !sendResult.success) {
+            const error = new Error(sendResult?.error || "Unknown error in send-email function");
+            console.error(`Error in send-email function:`, error.message);
+            throw error;
+          }
+          
+          // Success - update status and create envio record
+          await supabaseAdmin
+            .from('agendamentos')
+            .update({ status: 'enviado' })
+            .eq('id', agendamento.id);
+          
+          await supabaseAdmin
+            .from('envios')
+            .insert({
+              user_id: agendamento.user_id,
+              template_id: agendamento.template_id,
+              contato_id: agendamento.contato_id,
+              status: 'enviado',
+              data_envio: new Date().toISOString()
+            });
+          
+          console.log(`Successfully sent scheduled email ${agendamento.id} to ${agendamento.contato.email}`);
+          return { success: true, id: agendamento.id, email: agendamento.contato.email };
+          
+        } catch (error: any) {
+          console.error(`Failed to send email for agendamento ${agendamento.id}:`, error);
+          
+          const errorMessage = error.message || 'Erro desconhecido';
+          
+          await supabaseAdmin
+            .from('agendamentos')
+            .update({ 
+              status: 'erro',
+              erro: errorMessage
+            })
+            .eq('id', agendamento.id);
+          
+          throw new Error(errorMessage);
         }
-        
-        // All attempts failed
-        const errorMessage = lastError ? 
-          (typeof lastError === 'string' ? lastError : lastError.message || JSON.stringify(lastError)) : 
-          'Falha após múltiplas tentativas';
-        
-        await supabaseAdmin
-          .from('agendamentos')
-          .update({ 
-            status: 'erro',
-            erro: errorMessage
-          })
-          .eq('id', agendamento.id);
-        
-        throw new Error(errorMessage);
       },
-      3, // Smaller batch size for better stability
-      2000 // 2 second delay between batches
+      5, // Batch size - good balance for performance and SMTP limits
+      1000 // 1 second delay between batches
     );
     
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
     
-    console.log(`Enhanced batch processing complete: ${successCount} successful, ${errorCount} failed`);
+    console.log(`Batch processing complete: ${successCount} successful, ${errorCount} failed out of ${results.length} total`);
     
     return new Response(
       JSON.stringify({ 
         processed: results.length,
         successful: successCount,
         failed: errorCount,
-        enhanced: true,
+        message: `Processed ${results.length} scheduled emails: ${successCount} successful, ${errorCount} failed`,
         results: results.map(r => ({
           id: r.id,
           success: r.success,
@@ -386,7 +350,7 @@ serve(async (req) => {
     );
     
   } catch (error: any) {
-    console.error("Error in enhanced process-scheduled-emails function:", error);
+    console.error("Error in process-scheduled-emails function:", error);
     
     return new Response(
       JSON.stringify({ 
