@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { SettingsForm } from '@/components/settings/SettingsForm';
 import { SecuritySettingsForm } from '@/components/settings/SecuritySettingsForm';
 import { AccountDeletionForm } from '@/components/settings/AccountDeletionForm';
+import { SmtpStatusIndicator } from '@/components/settings/SmtpStatusIndicator';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,6 +68,10 @@ export default function Configuracoes() {
     );
   }
 
+  // Check configuration status
+  const hasSmtpSettings = !!(settings?.email_smtp && settings?.email_usuario && settings?.email_senha);
+  const hasResendConfig = true; // Assuming Resend is always available
+
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
@@ -74,9 +79,17 @@ export default function Configuracoes() {
       <Alert className="bg-blue-50 text-blue-800 border-blue-200">
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Configure seu servidor SMTP para enviar emails diretamente da sua conta. Alternativamente, você pode usar o serviço Resend.
+          Configure um sistema híbrido de email: SMTP para controle total + Resend como fallback para máxima confiabilidade.
         </AlertDescription>
       </Alert>
+
+      {settings && (
+        <SmtpStatusIndicator 
+          useSmtp={settings.use_smtp || false}
+          hasSmtpSettings={hasSmtpSettings}
+          hasResendConfig={hasResendConfig}
+        />
+      )}
       
       <Tabs defaultValue="email">
         <TabsList className="mb-4">

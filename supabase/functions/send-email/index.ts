@@ -127,11 +127,11 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via native SMTP using fetch (without nodemailer)
+ * Send email via SMTP using external service
  */
-async function sendEmailViaNativeSMTP(config: any, payload: any): Promise<any> {
+async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
   try {
-    console.log("Attempting SMTP send via native implementation");
+    console.log("Attempting SMTP send via external service");
     
     const fromName = config.name || config.user.split('@')[0];
     const fromEmail = config.user;
@@ -143,14 +143,74 @@ async function sendEmailViaNativeSMTP(config: any, payload: any): Promise<any> {
       throw new Error(`Email inválido: ${payload.to}`);
     }
     
-    // For now, we'll use a simplified approach by calling a third-party SMTP service
-    // This is a workaround since native SMTP in Deno edge functions is complex
-    console.log("Native SMTP in edge functions requires external service. Falling back to Resend.");
-    throw new Error("SMTP nativo não disponível no ambiente Edge Function. Use Resend como alternativa.");
+    // Use SMTP2GO API for better reliability in serverless environments
+    const smtp2goApiKey = Deno.env.get("SMTP2GO_API_KEY");
     
+    if (!smtp2goApiKey) {
+      console.log("SMTP2GO API key not found, falling back to basic SMTP simulation");
+      throw new Error("SMTP2GO não configurado. Configure a chave API ou use Resend como alternativa.");
+    }
+    
+    // Prepare email data for SMTP2GO
+    const emailData = {
+      api_key: smtp2goApiKey,
+      to: [recipientEmail],
+      sender: fromEmail,
+      subject: payload.subject,
+      html_body: payload.html,
+      text_body: stripHtml(payload.html),
+    };
+    
+    if (payload.cc && payload.cc.length > 0) {
+      emailData.cc = payload.cc;
+    }
+    
+    if (payload.bcc && payload.bcc.length > 0) {
+      emailData.bcc = payload.bcc;
+    }
+    
+    // Process attachments for SMTP2GO
+    if (payload.attachments && payload.attachments.length > 0) {
+      const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, false);
+      
+      if (validatedAttachments.length > 0) {
+        emailData.attachments = validatedAttachments.map(attachment => ({
+          filename: attachment.filename,
+          fileblob: attachment.content, // SMTP2GO expects base64 content
+          mimetype: attachment.contentType
+        }));
+        console.log(`Adding ${emailData.attachments.length} attachments to SMTP email`);
+      }
+    }
+    
+    console.log(`Sending email via SMTP2GO to: ${recipientEmail}`);
+    
+    const response = await fetch('https://api.smtp2go.com/v3/email/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailData),
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok || result.data?.error) {
+      throw new Error(result.data?.error || `SMTP2GO Error: ${response.status}`);
+    }
+    
+    console.log("Email sent successfully via SMTP2GO:", result.data?.email_id);
+    
+    return {
+      success: true,
+      id: result.data?.email_id,
+      provider: "smtp2go",
+      from: fromEmail,
+      to: recipientEmail,
+    };
   } catch (error) {
-    console.error("Native SMTP Error:", error);
-    throw new Error(`Erro SMTP nativo: ${error.message}`);
+    console.error("SMTP Error:", error);
+    throw error;
   }
 }
 
@@ -262,24 +322,52 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
 }
 
 /**
- * Send single email based on user configuration
+ * Send single email based on user configuration with smart fallback
  */
 async function sendSingleEmail(payload: any, config: any): Promise<any> {
   try {
-    console.log("Sending single email with config type:", config.type);
+    console.log("Sending single email with preferred method:", config.preferredMethod);
     
-    if (config.type === 'smtp') {
-      // For SMTP in edge functions, we'll inform the user about limitations
-      console.log("SMTP requested but not fully supported in edge functions");
-      throw new Error('SMTP direto não é totalmente suportado no ambiente serverless. Recomendamos usar o serviço Resend. Configure "use_smtp" como false nas configurações.');
-    } else if (config.type === 'resend') {
-      if (!config.apiKey || config.apiKey.trim() === '') {
-        throw new Error('Chave da API Resend não configurada');
+    // Try SMTP first if configured and preferred
+    if (config.preferredMethod === 'smtp' && config.smtp) {
+      try {
+        console.log("Attempting SMTP delivery...");
+        return await sendEmailViaSMTP(config.smtp, payload);
+      } catch (smtpError) {
+        console.warn("SMTP failed, falling back to Resend:", smtpError.message);
+        
+        // If SMTP fails, try Resend as fallback
+        if (config.resend && config.resend.apiKey) {
+          console.log("Using Resend as fallback...");
+          const result = await sendEmailViaResend(
+            config.resend.apiKey, 
+            config.resend.fromName || 'RocketMail', 
+            config.resend.replyTo, 
+            payload
+          );
+          
+          // Mark as fallback in result
+          result.fallback = true;
+          result.originalError = smtpError.message;
+          return result;
+        } else {
+          throw new Error(`SMTP falhou e Resend não está configurado: ${smtpError.message}`);
+        }
       }
-      return await sendEmailViaResend(config.apiKey, config.fromName || 'RocketMail', config.replyTo, payload);
-    } else {
-      throw new Error('Tipo de envio desconhecido. Configure Resend nas configurações.');
     }
+    
+    // Use Resend as primary method
+    if (config.preferredMethod === 'resend' && config.resend && config.resend.apiKey) {
+      console.log("Using Resend as primary method...");
+      return await sendEmailViaResend(
+        config.resend.apiKey,
+        config.resend.fromName || 'RocketMail',
+        config.resend.replyTo,
+        payload
+      );
+    }
+    
+    throw new Error('Nenhum método de envio configurado corretamente');
   } catch (error) {
     console.error("Error in sendSingleEmail:", error);
     throw error;
@@ -294,7 +382,7 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
   const delayBetweenBatches = 1000;
   const results: any[] = [];
   
-  console.log(`Processing ${emailRequests.length} emails in batches of ${batchSize} using ${config.type}`);
+  console.log(`Processing ${emailRequests.length} emails in batches of ${batchSize} using preferred method: ${config.preferredMethod}`);
   
   for (let i = 0; i < emailRequests.length; i += batchSize) {
     const batch = emailRequests.slice(i, i + batchSize);
@@ -316,7 +404,8 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
           result: result,
           to: emailData.to,
           index: globalIndex,
-          provider: result.provider
+          provider: result.provider,
+          fallback: result.fallback || false
         };
       } catch (error) {
         console.error(`Failed to send email ${globalIndex + 1} to ${emailData.to}:`, error.message);
@@ -342,8 +431,9 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
   
   const successCount = results.filter(r => r.success).length;
   const failureCount = results.filter(r => !r.success).length;
+  const fallbackCount = results.filter(r => r.success && r.fallback).length;
   
-  console.log(`Batch processing complete: ${successCount} successful, ${failureCount} failed`);
+  console.log(`Batch processing complete: ${successCount} successful, ${failureCount} failed, ${fallbackCount} via fallback`);
   
   return {
     results,
@@ -351,38 +441,10 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
       total: emailRequests.length,
       successful: successCount,
       failed: failureCount,
+      fallback: fallbackCount,
       successRate: emailRequests.length > 0 ? ((successCount / emailRequests.length) * 100).toFixed(1) : "0"
     }
   };
-}
-
-/**
- * Optimize payload size to prevent 1MB limit issues
- */
-function optimizeEmailPayload(emailData: any): any {
-  const optimized = { ...emailData };
-  
-  // Limit content size if too large
-  if (optimized.content && optimized.content.length > 500000) {
-    console.warn(`Content too large (${optimized.content.length} chars), truncating...`);
-    optimized.content = optimized.content.substring(0, 500000) + "\n\n[Conteúdo truncado devido ao tamanho]";
-  }
-  
-  // Optimize attachments
-  if (optimized.attachments && Array.isArray(optimized.attachments)) {
-    optimized.attachments = optimized.attachments.filter(attachment => {
-      if (attachment.content && typeof attachment.content === 'string') {
-        const sizeEstimate = attachment.content.length * 0.75;
-        if (sizeEstimate > 5000000) {
-          console.warn(`Attachment ${attachment.filename} too large, skipping...`);
-          return false;
-        }
-      }
-      return true;
-    });
-  }
-  
-  return optimized;
 }
 
 serve(async (req) => {
@@ -392,7 +454,8 @@ serve(async (req) => {
       return new Response(null, { headers: corsHeaders });
     }
     
-    const apiKey = Deno.env.get("RESEND_API_KEY");
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const smtp2goApiKey = Deno.env.get("SMTP2GO_API_KEY");
     
     let requestData;
     try {
@@ -417,7 +480,6 @@ serve(async (req) => {
       
       // Optimize each email payload
       const emailRequests = requestData.emails.map(emailData => {
-        const optimizedData = optimizeEmailPayload(emailData);
         
         // Build email HTML with proper structure
         let finalContent = `
@@ -426,27 +488,27 @@ serve(async (req) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${optimizedData.subject || "Email"}</title>
+  <title>${emailData.subject || "Email"}</title>
 </head>
 <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
   <div style="max-width: 600px; margin: 0 auto;">`;
         
-        if (optimizedData.image_url) {
+        if (emailData.image_url) {
           finalContent += `
     <div style="margin-bottom: 20px;">
-      <img src="${optimizedData.image_url}" alt="Header image" style="max-width: 100%; height: auto;" />
+      <img src="${emailData.image_url}" alt="Header image" style="max-width: 100%; height: auto;" />
     </div>`;
         }
         
         finalContent += `
     <div style="margin-bottom: 20px;">
-      ${optimizedData.content || ""}
+      ${emailData.content || ""}
     </div>`;
         
-        if (optimizedData.signature_image && optimizedData.signature_image !== 'no_signature') {
+        if (emailData.signature_image && emailData.signature_image !== 'no_signature') {
           finalContent += `
     <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
-      <img src="${optimizedData.signature_image}" alt="Assinatura" style="max-height: 100px;" />
+      <img src="${emailData.signature_image}" alt="Assinatura" style="max-height: 100px;" />
     </div>`;
         }
         
@@ -456,35 +518,55 @@ serve(async (req) => {
 </html>`;
         
         // Format the recipient email properly
-        let toAddress = optimizedData.to;
-        if (optimizedData.contato_nome && !toAddress.includes('<')) {
-          toAddress = `"${optimizedData.contato_nome}" <${optimizedData.to}>`;
+        let toAddress = emailData.to;
+        if (emailData.contato_nome && !toAddress.includes('<')) {
+          toAddress = `"${emailData.contato_nome}" <${emailData.to}>`;
         }
         
         return {
           to: toAddress,
-          subject: optimizedData.subject || "Sem assunto",
+          subject: emailData.subject || "Sem assunto",
           html: finalContent,
-          attachments: optimizedData.attachments || []
+          attachments: emailData.attachments || []
         };
       });
       
       try {
-        // Determine configuration - force Resend for edge functions
+        // Determine configuration based on user settings
         let config: any = {
-          type: 'resend',
-          apiKey: apiKey || "",
-          fromName: requestData.smtp_settings?.from_name || "RocketMail",
-          replyTo: requestData.smtp_settings?.from_email
+          preferredMethod: 'resend', // Default to Resend
+          resend: {
+            apiKey: resendApiKey || "",
+            fromName: requestData.smtp_settings?.from_name || "RocketMail",
+            replyTo: requestData.smtp_settings?.from_email
+          }
         };
         
-        // If SMTP was requested, show a warning but proceed with Resend
-        if (requestData.smtp_settings && requestData.smtp_settings.from_email && !apiKey) {
-          console.warn("SMTP requested but Resend API key not available. Cannot send emails.");
+        // Check if user wants to use SMTP and it's available
+        if (requestData.smtp_settings && requestData.use_smtp) {
+          console.log("User requested SMTP delivery");
+          
+          if (smtp2goApiKey) {
+            config.preferredMethod = 'smtp';
+            config.smtp = {
+              host: requestData.smtp_settings.host || 'smtp.gmail.com',
+              port: requestData.smtp_settings.port || 587,
+              secure: requestData.smtp_settings.secure || false,
+              user: requestData.smtp_settings.from_email,
+              pass: requestData.smtp_settings.password,
+              name: requestData.smtp_settings.from_name || 'RocketMail'
+            };
+            console.log("SMTP2GO available, will attempt SMTP delivery with Resend fallback");
+          } else {
+            console.warn("SMTP requested but SMTP2GO API key not available, using Resend");
+          }
+        }
+        
+        if (!resendApiKey && config.preferredMethod === 'resend') {
           return new Response(
             JSON.stringify({
               success: false,
-              error: "Configuração de email não disponível. Configure a chave API do Resend ou desative o SMTP."
+              error: "Nenhum serviço de email configurado. Configure Resend ou SMTP2GO."
             }),
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -507,7 +589,8 @@ serve(async (req) => {
               success: r.success,
               error: r.error || null,
               id: r.result?.id || null,
-              provider: r.provider || null
+              provider: r.provider || null,
+              fallback: r.fallback || false
             }))
           }),
           {
@@ -539,7 +622,8 @@ serve(async (req) => {
       attachments,
       contato_nome,
       image_url,
-      smtp_settings
+      smtp_settings,
+      use_smtp
     } = requestData;
     
     console.log("Received single email request:", { 
@@ -549,7 +633,8 @@ serve(async (req) => {
       hasSignatureImage: !!signature_image,
       hasAttachments: !!attachments,
       hasImageUrl: !!image_url,
-      hasSmtpSettings: !!smtp_settings
+      hasSmtpSettings: !!smtp_settings,
+      useSmtp: use_smtp
     });
     
     if (!to) {
@@ -579,9 +664,6 @@ serve(async (req) => {
       );
     }
     
-    // Optimize payload
-    const optimizedRequest = optimizeEmailPayload(requestData);
-    
     // Build email HTML with proper structure
     let finalContent = `
 <!DOCTYPE html>
@@ -603,7 +685,7 @@ serve(async (req) => {
     
     finalContent += `
     <div style="margin-bottom: 20px;">
-      ${optimizedRequest.content || ""}
+      ${content || ""}
     </div>`;
     
     if (signature_image && signature_image !== 'no_signature') {
@@ -620,9 +702,9 @@ serve(async (req) => {
     
     // Process and validate attachments
     let emailAttachments: any[] = [];
-    if (optimizedRequest.attachments) {
+    if (attachments) {
       try {
-        emailAttachments = validateAndSanitizeAttachments(optimizedRequest.attachments, true);
+        emailAttachments = validateAndSanitizeAttachments(attachments, !use_smtp);
         console.log(`Processed ${emailAttachments.length} valid attachments`);
       } catch (error) {
         console.error("Error processing attachments:", error);
@@ -644,21 +726,41 @@ serve(async (req) => {
     };
     
     try {
-      // Force Resend for edge functions, SMTP not supported
+      // Determine configuration based on user settings
       let config: any = {
-        type: 'resend',
-        apiKey: apiKey || "",
-        fromName: smtp_settings?.from_name || "RocketMail",
-        replyTo: smtp_settings?.from_email
+        preferredMethod: 'resend', // Default to Resend
+        resend: {
+          apiKey: resendApiKey || "",
+          fromName: smtp_settings?.from_name || "RocketMail",
+          replyTo: smtp_settings?.from_email
+        }
       };
       
-      // If SMTP was requested, show informative message
-      if (smtp_settings && smtp_settings.from_email && !apiKey) {
-        console.warn("SMTP requested but Resend API key not available");
+      // Check if user wants to use SMTP and it's available
+      if (smtp_settings && use_smtp) {
+        console.log("User requested SMTP delivery");
+        
+        if (smtp2goApiKey) {
+          config.preferredMethod = 'smtp';
+          config.smtp = {
+            host: smtp_settings.host || 'smtp.gmail.com',
+            port: smtp_settings.port || 587,
+            secure: smtp_settings.secure || false,
+            user: smtp_settings.from_email,
+            pass: smtp_settings.password,
+            name: smtp_settings.from_name || 'RocketMail'
+          };
+          console.log("SMTP2GO available, will attempt SMTP delivery with Resend fallback");
+        } else {
+          console.warn("SMTP requested but SMTP2GO API key not available, using Resend");
+        }
+      }
+      
+      if (!resendApiKey && config.preferredMethod === 'resend') {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "SMTP direto não é suportado no ambiente serverless. Configure a chave API do Resend ou desative o SMTP nas configurações."
+            error: "Nenhum serviço de email configurado. Configure Resend ou SMTP2GO."
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -666,8 +768,6 @@ serve(async (req) => {
           }
         );
       }
-      
-      console.log("Using Resend for single email delivery");
       
       const result = await sendSingleEmail(emailPayload, config);
       
@@ -678,7 +778,9 @@ serve(async (req) => {
           success: true,
           message: "Email enviado com sucesso",
           id: result.id,
-          provider: result.provider
+          provider: result.provider,
+          fallback: result.fallback || false,
+          originalError: result.originalError || null
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

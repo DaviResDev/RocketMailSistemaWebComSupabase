@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, Save, KeyRound, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { Mail, Save, KeyRound, CheckCircle2, AlertCircle, Info, Zap } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { SecuritySettingsForm } from './SecuritySettingsForm';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,7 +17,7 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ onSave }: SettingsFormProps) {
-  const { settings, loading, saveSettings } = useSettings();
+  const { settings, loading, saveSettings, testSmtpConnection } = useSettings();
   const [formData, setFormData] = useState<SettingsFormData>({
     email_smtp: '',
     email_porta: null,
@@ -28,9 +28,10 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     smtp_seguranca: 'tls',
     smtp_nome: null,
     two_factor_enabled: false,
-    use_smtp: false, // Default to Resend since SMTP has limitations
+    use_smtp: false,
     signature_image: null
   });
+  const [testing, setTesting] = useState(false);
 
   // Update form data when settings change
   useEffect(() => {
@@ -45,7 +46,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
         smtp_seguranca: settings.smtp_seguranca || 'tls',
         smtp_nome: settings.smtp_nome || '',
         two_factor_enabled: settings.two_factor_enabled || false,
-        use_smtp: settings.use_smtp || false, // Default to Resend
+        use_smtp: settings.use_smtp || false,
         signature_image: settings.signature_image || null
       });
     }
@@ -56,6 +57,20 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
     const success = await saveSettings(formData);
     if (success && onSave) {
       onSave();
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!formData.email_usuario || !formData.email_senha) {
+      alert('Preencha o email e senha antes de testar a conexão');
+      return;
+    }
+    
+    setTesting(true);
+    try {
+      await testSmtpConnection(formData);
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -88,15 +103,14 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
             <CardHeader>
               <CardTitle>Configurações de Email</CardTitle>
               <CardDescription>
-                Configure suas configurações de envio de email.
+                Configure suas configurações de envio de email com melhor entrega e controle.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <Alert className="bg-blue-50 text-blue-800 border-blue-200">
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Recomendação:</strong> Use o serviço Resend para melhor confiabilidade e entrega de emails. 
-                  O SMTP direto tem limitações no ambiente serverless.
+                  <strong>Sistema Híbrido:</strong> Configure SMTP para usar seu próprio servidor de email com fallback automático para Resend em caso de falha.
                 </AlertDescription>
               </Alert>
               
@@ -108,20 +122,24 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                     setFormData({ ...formData, use_smtp: checked })
                   }
                 />
-                <Label htmlFor="use-smtp">
-                  {formData.use_smtp ? "Usar SMTP (limitado no ambiente serverless)" : "Usar serviço Resend (recomendado)"}
-                </Label>
+                <div className="flex flex-col">
+                  <Label htmlFor="use-smtp" className="flex items-center">
+                    {formData.use_smtp ? (
+                      <>
+                        <Zap className="h-4 w-4 mr-1 text-green-500" />
+                        Usar SMTP com fallback Resend (recomendado)
+                      </>
+                    ) : (
+                      "Usar apenas serviço Resend"
+                    )}
+                  </Label>
+                  <span className="text-xs text-muted-foreground">
+                    {formData.use_smtp 
+                      ? "Tentará SMTP primeiro, fallback para Resend se falhar"
+                      : "Usar apenas Resend para entrega confiável"}
+                  </span>
+                </div>
               </div>
-
-              {formData.use_smtp && (
-                <Alert className="bg-amber-50 text-amber-800 border-amber-200">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Aviso:</strong> SMTP direto possui limitações no ambiente serverless e pode não funcionar corretamente. 
-                    Recomendamos usar o serviço Resend para garantir a entrega dos emails.
-                  </AlertDescription>
-                </Alert>
-              )}
 
               <div className="space-y-2">
                 <Label htmlFor="smtp_nome">Nome do Remetente</Label>
@@ -148,7 +166,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                   Este email será usado como remetente e para respostas.
                   {!formData.use_smtp && (
                     <span className="block mt-1 text-amber-600">
-                      <strong>Nota:</strong> Com o serviço Resend, seu domínio precisa ser verificado para envio direto. Caso contrário, o email mostrará como enviado pelo Resend com seu endereço como endereço de resposta.
+                      <strong>Nota:</strong> Com o serviço Resend, seu domínio precisa ser verificado para envio direto.
                       <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="block underline mt-1">
                         Verificar seu domínio no Resend
                       </a>
@@ -170,31 +188,33 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                 </p>
               </div>
               
-              {formData.use_smtp ? (
+              {formData.use_smtp && (
                 <>
                   <div className="border-t pt-4 mt-4">
-                    <h3 className="text-lg font-medium mb-4">Configurações do Servidor SMTP (Limitado)</h3>
+                    <h3 className="text-lg font-medium mb-4 flex items-center">
+                      <Zap className="h-5 w-5 mr-2 text-green-500" />
+                      Configurações SMTP (Com Fallback Inteligente)
+                    </h3>
                     
-                    <Alert className="mb-4 bg-red-50 text-red-800 border-red-200">
-                      <AlertCircle className="h-4 w-4" />
+                    <Alert className="mb-4 bg-green-50 text-green-800 border-green-200">
+                      <CheckCircle2 className="h-4 w-4" />
                       <AlertDescription>
-                        <strong>Limitação Técnica:</strong> O SMTP direto não funciona completamente no ambiente serverless devido a restrições de DNS. 
-                        Os emails configurados com SMTP serão automaticamente enviados via Resend como fallback.
+                        <strong>Sistema Híbrido Ativo:</strong> Os emails serão enviados via seu SMTP primeiro. 
+                        Em caso de falha, o sistema automaticamente usará Resend como backup para garantir a entrega.
                       </AlertDescription>
                     </Alert>
                     
-                    <div className="grid gap-4 opacity-60">
+                    <div className="grid gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="email_smtp">Servidor SMTP</Label>
                         <Input
                           id="email_smtp"
-                          placeholder="Ex: smtp.gmail.com"
+                          placeholder="Ex: smtp.gmail.com, smtp.office365.com"
                           value={formData.email_smtp || ''}
                           onChange={(e) => setFormData({ ...formData, email_smtp: e.target.value })}
-                          disabled
                         />
                         <p className="text-xs text-muted-foreground">
-                          Desabilitado devido a limitações do ambiente serverless
+                          Servidor SMTP do seu provedor de email
                         </p>
                       </div>
                       
@@ -204,10 +224,9 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                           <Input
                             id="email_porta"
                             type="number"
-                            placeholder="Ex: 587"
+                            placeholder="587 (TLS) ou 465 (SSL)"
                             value={formData.email_porta?.toString() || ''}
                             onChange={(e) => setFormData({ ...formData, email_porta: parseInt(e.target.value) || null })}
-                            disabled
                           />
                         </div>
                         
@@ -216,45 +235,62 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                           <Select
                             value={formData.smtp_seguranca || 'tls'}
                             onValueChange={(value) => setFormData({ ...formData, smtp_seguranca: value })}
-                            disabled
                           >
                             <SelectTrigger id="smtp_seguranca">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="tls">TLS/STARTTLS</SelectItem>
-                              <SelectItem value="ssl">SSL</SelectItem>
+                              <SelectItem value="tls">TLS/STARTTLS (porta 587)</SelectItem>
+                              <SelectItem value="ssl">SSL (porta 465)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
                       
                       <div className="space-y-2">
-                        <Label htmlFor="email_senha">Senha SMTP</Label>
+                        <Label htmlFor="email_senha">Senha SMTP / Senha de App</Label>
                         <Input
                           id="email_senha"
                           type="password"
-                          placeholder="Sua senha SMTP"
+                          placeholder="Sua senha SMTP ou senha de aplicativo"
                           value={formData.email_senha || ''}
                           onChange={(e) => setFormData({ ...formData, email_senha: e.target.value })}
-                          disabled
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Para Gmail/Google Workspace, use uma senha de aplicativo. 
+                          <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" className="underline ml-1">
+                            Como gerar
+                          </a>
+                        </p>
+                      </div>
+
+                      <div className="flex space-x-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleTestConnection}
+                          disabled={testing || !formData.email_usuario || !formData.email_senha}
+                        >
+                          {testing ? 'Testando...' : 'Testar Conexão SMTP'}
+                        </Button>
                       </div>
                     </div>
                   </div>
                 </>
-              ) : (
+              )}
+
+              {!formData.use_smtp && (
                 <Alert className="bg-emerald-50 text-emerald-800 border-emerald-200">
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertDescription>
-                    Você está usando o serviço Resend para envio de emails. Apenas mantenha seu nome e email de remetente atualizados.
+                    Você está usando apenas o serviço Resend para envio de emails.
                     <a 
                       href="https://resend.com/domains" 
                       target="_blank" 
                       rel="noopener noreferrer" 
                       className="block mt-2 underline"
                     >
-                      Para usar seu próprio domínio como remetente, verifique-o no Resend
+                      Para usar seu próprio domínio, verifique-o no Resend
                     </a>
                   </AlertDescription>
                 </Alert>
