@@ -1,6 +1,6 @@
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, AlertTriangle, Zap, Mail } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Zap, Mail, Settings } from 'lucide-react';
 
 interface SmtpStatusIndicatorProps {
   useSmtp: boolean;
@@ -48,10 +48,10 @@ export function SmtpStatusIndicator({ useSmtp, hasSmtpSettings, hasResendConfig 
   if (useSmtp && !hasSmtpSettings) {
     return (
       <Alert className="bg-red-50 text-red-800 border-red-200">
-        <AlertTriangle className="h-4 w-4" />
+        <Settings className="h-4 w-4" />
         <AlertDescription>
           <strong>Configuração Incompleta:</strong> SMTP ativado mas não configurado. 
-          Complete as configurações SMTP ou desative para usar apenas Resend.
+          Complete as configurações SMTP abaixo ou desative para usar apenas Resend.
         </AlertDescription>
       </Alert>
     );

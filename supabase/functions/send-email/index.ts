@@ -127,15 +127,17 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Send email via SMTP using external service
+ * Send email via SMTP using SMTP2GO API
  */
-async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
+async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
   try {
-    console.log("Attempting SMTP send via external service");
+    console.log("Attempting SMTP delivery via SMTP2GO");
     
-    const fromName = config.name || config.user.split('@')[0];
-    const fromEmail = config.user;
-    const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+    const smtp2goApiKey = Deno.env.get("SMTP2GO_API_KEY");
+    
+    if (!smtp2goApiKey) {
+      throw new Error("SMTP2GO API key not configured. Set SMTP2GO_API_KEY in Supabase secrets.");
+    }
     
     // Extract and validate recipient email
     const recipientEmail = extractEmailAddress(payload.to);
@@ -143,13 +145,17 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
       throw new Error(`Email inválido: ${payload.to}`);
     }
     
-    // Use SMTP2GO API for better reliability in serverless environments
-    const smtp2goApiKey = Deno.env.get("SMTP2GO_API_KEY");
+    // Use configured SMTP settings for from field
+    const fromName = smtpConfig.from_name || smtpConfig.smtp_nome || 'RocketMail';
+    const fromEmail = smtpConfig.from_email || smtpConfig.email_usuario;
     
-    if (!smtp2goApiKey) {
-      console.log("SMTP2GO API key not found, falling back to basic SMTP simulation");
-      throw new Error("SMTP2GO não configurado. Configure a chave API ou use Resend como alternativa.");
+    if (!fromEmail) {
+      throw new Error("Email do remetente não configurado nas configurações SMTP");
     }
+    
+    const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+    
+    console.log(`Sending SMTP email from: ${from} to: ${recipientEmail}`);
     
     // Prepare email data for SMTP2GO
     const emailData = {
@@ -176,7 +182,7 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
       if (validatedAttachments.length > 0) {
         emailData.attachments = validatedAttachments.map(attachment => ({
           filename: attachment.filename,
-          fileblob: attachment.content, // SMTP2GO expects base64 content
+          fileblob: attachment.content,
           mimetype: attachment.contentType
         }));
         console.log(`Adding ${emailData.attachments.length} attachments to SMTP email`);
@@ -199,17 +205,18 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
       throw new Error(result.data?.error || `SMTP2GO Error: ${response.status}`);
     }
     
-    console.log("Email sent successfully via SMTP2GO:", result.data?.email_id);
+    console.log("✅ Email sent successfully via SMTP:", result.data?.email_id);
     
     return {
       success: true,
       id: result.data?.email_id,
-      provider: "smtp2go",
+      provider: "smtp",
+      method: "SMTP2GO",
       from: fromEmail,
       to: recipientEmail,
     };
   } catch (error) {
-    console.error("SMTP Error:", error);
+    console.error("❌ SMTP Error:", error);
     throw error;
   }
 }
@@ -292,17 +299,18 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
       throw new Error(result.error.message || "Erro desconhecido no Resend");
     }
     
-    console.log("Email sent successfully via Resend:", result.data?.id);
+    console.log("✅ Email sent successfully via Resend:", result.data?.id);
     return {
       success: true,
       id: result.data?.id,
       provider: "resend",
+      method: "Resend API",
       from: emailData.from,
       to: recipientEmail,
       reply_to: emailData.reply_to,
     };
   } catch (error) {
-    console.error("Resend Error details:", {
+    console.error("❌ Resend Error details:", {
       name: error.name,
       message: error.message,
       stack: error.stack
@@ -322,54 +330,71 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
 }
 
 /**
- * Send single email based on user configuration with smart fallback
+ * Send single email with SMTP priority and Resend fallback
  */
-async function sendSingleEmail(payload: any, config: any): Promise<any> {
+async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any, useSmtp: boolean): Promise<any> {
+  let smtpError = null;
+  
   try {
-    console.log("Sending single email with preferred method:", config.preferredMethod);
+    console.log(`📧 Sending email with strategy: ${useSmtp ? 'SMTP-first with Resend fallback' : 'Resend-only'}`);
     
-    // Try SMTP first if configured and preferred
-    if (config.preferredMethod === 'smtp' && config.smtp) {
+    // Try SMTP first if enabled and configured
+    if (useSmtp && smtpConfig) {
       try {
-        console.log("Attempting SMTP delivery...");
-        return await sendEmailViaSMTP(config.smtp, payload);
-      } catch (smtpError) {
-        console.warn("SMTP failed, falling back to Resend:", smtpError.message);
+        console.log("🔄 Attempting SMTP delivery...");
+        const result = await sendEmailViaSMTP(smtpConfig, payload);
+        console.log("✅ SMTP delivery successful!");
+        return result;
+      } catch (error) {
+        smtpError = error;
+        console.warn("⚠️ SMTP failed, will attempt Resend fallback:", error.message);
         
-        // If SMTP fails, try Resend as fallback
-        if (config.resend && config.resend.apiKey) {
-          console.log("Using Resend as fallback...");
-          const result = await sendEmailViaResend(
-            config.resend.apiKey, 
-            config.resend.fromName || 'RocketMail', 
-            config.resend.replyTo, 
-            payload
-          );
-          
-          // Mark as fallback in result
+        // Continue to Resend fallback
+      }
+    }
+    
+    // Use Resend (either as primary method or as fallback)
+    if (resendConfig && resendConfig.apiKey) {
+      try {
+        console.log(useSmtp && smtpError ? "🔄 Using Resend as fallback..." : "🔄 Using Resend as primary method...");
+        const result = await sendEmailViaResend(
+          resendConfig.apiKey,
+          resendConfig.fromName || 'RocketMail',
+          resendConfig.replyTo,
+          payload
+        );
+        
+        // Mark as fallback if SMTP was attempted first
+        if (useSmtp && smtpError) {
           result.fallback = true;
           result.originalError = smtpError.message;
-          return result;
+          console.log("✅ Resend fallback successful!");
         } else {
-          throw new Error(`SMTP falhou e Resend não está configurado: ${smtpError.message}`);
+          console.log("✅ Resend delivery successful!");
+        }
+        
+        return result;
+      } catch (resendError) {
+        console.error("❌ Resend also failed:", resendError.message);
+        
+        // If both SMTP and Resend failed, throw the more relevant error
+        if (smtpError) {
+          throw new Error(`SMTP falhou (${smtpError.message}) e Resend também falhou (${resendError.message})`);
+        } else {
+          throw resendError;
         }
       }
     }
     
-    // Use Resend as primary method
-    if (config.preferredMethod === 'resend' && config.resend && config.resend.apiKey) {
-      console.log("Using Resend as primary method...");
-      return await sendEmailViaResend(
-        config.resend.apiKey,
-        config.resend.fromName || 'RocketMail',
-        config.resend.replyTo,
-        payload
-      );
+    // No delivery method available
+    if (useSmtp && !smtpConfig) {
+      throw new Error('SMTP ativado mas não configurado corretamente');
+    } else {
+      throw new Error('Nenhum método de envio configurado (Resend não disponível)');
     }
     
-    throw new Error('Nenhum método de envio configurado corretamente');
   } catch (error) {
-    console.error("Error in sendSingleEmail:", error);
+    console.error("❌ Error in sendSingleEmail:", error);
     throw error;
   }
 }
@@ -377,27 +402,28 @@ async function sendSingleEmail(payload: any, config: any): Promise<any> {
 /**
  * Process multiple emails in parallel batches
  */
-async function processBatchEmails(emailRequests: any[], config: any): Promise<any> {
+async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendConfig: any, useSmtp: boolean): Promise<any> {
   const batchSize = 50;
   const delayBetweenBatches = 1000;
   const results: any[] = [];
   
-  console.log(`Processing ${emailRequests.length} emails in batches of ${batchSize} using preferred method: ${config.preferredMethod}`);
+  console.log(`📬 Processing ${emailRequests.length} emails in batches of ${batchSize}`);
+  console.log(`📋 Email strategy: ${useSmtp ? 'SMTP-first with Resend fallback' : 'Resend-only'}`);
   
   for (let i = 0; i < emailRequests.length; i += batchSize) {
     const batch = emailRequests.slice(i, i + batchSize);
     const batchNumber = Math.floor(i / batchSize) + 1;
     const totalBatches = Math.ceil(emailRequests.length / batchSize);
     
-    console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
+    console.log(`🔄 Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
     
     // Process batch with Promise.all for parallel execution
     const batchPromises = batch.map(async (emailData, index) => {
       const globalIndex = i + index;
       try {
-        console.log(`Sending email ${globalIndex + 1}/${emailRequests.length} to: ${emailData.to}`);
+        console.log(`📤 Sending email ${globalIndex + 1}/${emailRequests.length} to: ${emailData.to}`);
         
-        const result = await sendSingleEmail(emailData, config);
+        const result = await sendSingleEmail(emailData, smtpConfig, resendConfig, useSmtp);
         
         return {
           success: true,
@@ -405,10 +431,11 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
           to: emailData.to,
           index: globalIndex,
           provider: result.provider,
+          method: result.method,
           fallback: result.fallback || false
         };
       } catch (error) {
-        console.error(`Failed to send email ${globalIndex + 1} to ${emailData.to}:`, error.message);
+        console.error(`❌ Failed to send email ${globalIndex + 1} to ${emailData.to}:`, error.message);
         return {
           success: false,
           error: error.message,
@@ -424,7 +451,7 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
     
     // Add delay between batches (except for the last batch)
     if (i + batchSize < emailRequests.length) {
-      console.log(`Waiting ${delayBetweenBatches}ms before next batch...`);
+      console.log(`⏱️ Waiting ${delayBetweenBatches}ms before next batch...`);
       await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
     }
   }
@@ -432,8 +459,15 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
   const successCount = results.filter(r => r.success).length;
   const failureCount = results.filter(r => !r.success).length;
   const fallbackCount = results.filter(r => r.success && r.fallback).length;
+  const smtpCount = results.filter(r => r.success && r.provider === 'smtp').length;
+  const resendCount = results.filter(r => r.success && r.provider === 'resend').length;
   
-  console.log(`Batch processing complete: ${successCount} successful, ${failureCount} failed, ${fallbackCount} via fallback`);
+  console.log(`📊 Batch processing complete:`);
+  console.log(`   ✅ Total successful: ${successCount}`);
+  console.log(`   ❌ Total failed: ${failureCount}`);
+  console.log(`   📧 Via SMTP: ${smtpCount}`);
+  console.log(`   📨 Via Resend: ${resendCount}`);
+  console.log(`   🔄 Fallback used: ${fallbackCount}`);
   
   return {
     results,
@@ -442,6 +476,8 @@ async function processBatchEmails(emailRequests: any[], config: any): Promise<an
       successful: successCount,
       failed: failureCount,
       fallback: fallbackCount,
+      smtp: smtpCount,
+      resend: resendCount,
       successRate: emailRequests.length > 0 ? ((successCount / emailRequests.length) * 100).toFixed(1) : "0"
     }
   };
@@ -455,7 +491,6 @@ serve(async (req) => {
     }
     
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    const smtp2goApiKey = Deno.env.get("SMTP2GO_API_KEY");
     
     let requestData;
     try {
@@ -476,9 +511,9 @@ serve(async (req) => {
     
     // Handle batch email sending
     if (requestData.batch && Array.isArray(requestData.emails)) {
-      console.log(`Received batch email request for ${requestData.emails.length} recipients`);
+      console.log(`📬 Received batch email request for ${requestData.emails.length} recipients`);
       
-      // Optimize each email payload
+      // Build email requests
       const emailRequests = requestData.emails.map(emailData => {
         
         // Build email HTML with proper structure
@@ -533,40 +568,39 @@ serve(async (req) => {
       
       try {
         // Determine configuration based on user settings
-        let config: any = {
-          preferredMethod: 'resend', // Default to Resend
-          resend: {
-            apiKey: resendApiKey || "",
-            fromName: requestData.smtp_settings?.from_name || "RocketMail",
-            replyTo: requestData.smtp_settings?.from_email
-          }
-        };
+        const useSmtp = requestData.use_smtp === true;
         
-        // Check if user wants to use SMTP and it's available
-        if (requestData.smtp_settings && requestData.use_smtp) {
-          console.log("User requested SMTP delivery");
-          
-          if (smtp2goApiKey) {
-            config.preferredMethod = 'smtp';
-            config.smtp = {
-              host: requestData.smtp_settings.host || 'smtp.gmail.com',
-              port: requestData.smtp_settings.port || 587,
-              secure: requestData.smtp_settings.secure || false,
-              user: requestData.smtp_settings.from_email,
-              pass: requestData.smtp_settings.password,
-              name: requestData.smtp_settings.from_name || 'RocketMail'
-            };
-            console.log("SMTP2GO available, will attempt SMTP delivery with Resend fallback");
-          } else {
-            console.warn("SMTP requested but SMTP2GO API key not available, using Resend");
-          }
+        // Prepare SMTP configuration
+        let smtpConfig = null;
+        if (useSmtp && requestData.smtp_settings) {
+          smtpConfig = {
+            from_email: requestData.smtp_settings.from_email,
+            from_name: requestData.smtp_settings.from_name || 'RocketMail',
+            host: requestData.smtp_settings.host,
+            port: requestData.smtp_settings.port,
+            secure: requestData.smtp_settings.secure,
+            email_usuario: requestData.smtp_settings.from_email,
+            smtp_nome: requestData.smtp_settings.from_name
+          };
         }
         
-        if (!resendApiKey && config.preferredMethod === 'resend') {
+        // Prepare Resend configuration
+        const resendConfig = {
+          apiKey: resendApiKey || "",
+          fromName: requestData.smtp_settings?.from_name || "RocketMail",
+          replyTo: requestData.smtp_settings?.from_email
+        };
+        
+        console.log(`📋 Configuration:`);
+        console.log(`   🔧 Use SMTP: ${useSmtp}`);
+        console.log(`   📧 SMTP configured: ${!!smtpConfig}`);
+        console.log(`   📨 Resend available: ${!!resendApiKey}`);
+        
+        if (useSmtp && !smtpConfig) {
           return new Response(
             JSON.stringify({
               success: false,
-              error: "Nenhum serviço de email configurado. Configure Resend ou SMTP2GO."
+              error: "SMTP ativado mas configurações SMTP não fornecidas"
             }),
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -575,9 +609,22 @@ serve(async (req) => {
           );
         }
         
-        const batchResult = await processBatchEmails(emailRequests, config);
+        if (!smtpConfig && !resendApiKey) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "Nenhum serviço de email configurado. Configure SMTP ou Resend."
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 400,
+            }
+          );
+        }
         
-        console.log("Batch email processing completed:", batchResult.summary);
+        const batchResult = await processBatchEmails(emailRequests, smtpConfig, resendConfig, useSmtp);
+        
+        console.log("📊 Batch email processing completed:", batchResult.summary);
         
         return new Response(
           JSON.stringify({
@@ -590,6 +637,7 @@ serve(async (req) => {
               error: r.error || null,
               id: r.result?.id || null,
               provider: r.provider || null,
+              method: r.method || null,
               fallback: r.fallback || false
             }))
           }),
@@ -599,7 +647,7 @@ serve(async (req) => {
           }
         );
       } catch (error) {
-        console.error("Batch email processing failed:", error);
+        console.error("❌ Batch email processing failed:", error);
         return new Response(
           JSON.stringify({
             success: false,
@@ -626,7 +674,7 @@ serve(async (req) => {
       use_smtp
     } = requestData;
     
-    console.log("Received single email request:", { 
+    console.log("📧 Received single email request:", { 
       to, 
       subject, 
       contentLength: content?.length,
@@ -705,7 +753,7 @@ serve(async (req) => {
     if (attachments) {
       try {
         emailAttachments = validateAndSanitizeAttachments(attachments, !use_smtp);
-        console.log(`Processed ${emailAttachments.length} valid attachments`);
+        console.log(`📎 Processed ${emailAttachments.length} valid attachments`);
       } catch (error) {
         console.error("Error processing attachments:", error);
         // Continue without attachments rather than failing
@@ -727,40 +775,39 @@ serve(async (req) => {
     
     try {
       // Determine configuration based on user settings
-      let config: any = {
-        preferredMethod: 'resend', // Default to Resend
-        resend: {
-          apiKey: resendApiKey || "",
-          fromName: smtp_settings?.from_name || "RocketMail",
-          replyTo: smtp_settings?.from_email
-        }
-      };
+      const useSmtpDelivery = use_smtp === true;
       
-      // Check if user wants to use SMTP and it's available
-      if (smtp_settings && use_smtp) {
-        console.log("User requested SMTP delivery");
-        
-        if (smtp2goApiKey) {
-          config.preferredMethod = 'smtp';
-          config.smtp = {
-            host: smtp_settings.host || 'smtp.gmail.com',
-            port: smtp_settings.port || 587,
-            secure: smtp_settings.secure || false,
-            user: smtp_settings.from_email,
-            pass: smtp_settings.password,
-            name: smtp_settings.from_name || 'RocketMail'
-          };
-          console.log("SMTP2GO available, will attempt SMTP delivery with Resend fallback");
-        } else {
-          console.warn("SMTP requested but SMTP2GO API key not available, using Resend");
-        }
+      // Prepare SMTP configuration
+      let smtpConfig = null;
+      if (useSmtpDelivery && smtp_settings) {
+        smtpConfig = {
+          from_email: smtp_settings.from_email,
+          from_name: smtp_settings.from_name || 'RocketMail',
+          host: smtp_settings.host,
+          port: smtp_settings.port,
+          secure: smtp_settings.secure,
+          email_usuario: smtp_settings.from_email,
+          smtp_nome: smtp_settings.from_name
+        };
       }
       
-      if (!resendApiKey && config.preferredMethod === 'resend') {
+      // Prepare Resend configuration
+      const resendConfig = {
+        apiKey: resendApiKey || "",
+        fromName: smtp_settings?.from_name || "RocketMail",
+        replyTo: smtp_settings?.from_email
+      };
+      
+      console.log(`📋 Single email configuration:`);
+      console.log(`   🔧 Use SMTP: ${useSmtpDelivery}`);
+      console.log(`   📧 SMTP configured: ${!!smtpConfig}`);
+      console.log(`   📨 Resend available: ${!!resendApiKey}`);
+      
+      if (useSmtpDelivery && !smtpConfig) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "Nenhum serviço de email configurado. Configure Resend ou SMTP2GO."
+            error: "SMTP ativado mas configurações SMTP não fornecidas"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -769,9 +816,22 @@ serve(async (req) => {
         );
       }
       
-      const result = await sendSingleEmail(emailPayload, config);
+      if (!smtpConfig && !resendApiKey) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Nenhum serviço de email configurado. Configure SMTP ou Resend."
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
       
-      console.log("Single email sent successfully:", result);
+      const result = await sendSingleEmail(emailPayload, smtpConfig, resendConfig, useSmtpDelivery);
+      
+      console.log("✅ Single email sent successfully:", result);
       
       return new Response(
         JSON.stringify({
@@ -779,6 +839,7 @@ serve(async (req) => {
           message: "Email enviado com sucesso",
           id: result.id,
           provider: result.provider,
+          method: result.method,
           fallback: result.fallback || false,
           originalError: result.originalError || null
         }),
@@ -788,7 +849,7 @@ serve(async (req) => {
         }
       );
     } catch (error) {
-      console.error("Failed to send single email:", error);
+      console.error("❌ Failed to send single email:", error);
       return new Response(
         JSON.stringify({
           success: false,
@@ -801,7 +862,7 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error("Unhandled error in send-email function:", error);
+    console.error("❌ Unhandled error in send-email function:", error);
     return new Response(
       JSON.stringify({
         success: false,

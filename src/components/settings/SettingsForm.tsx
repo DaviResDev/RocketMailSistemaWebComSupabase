@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, Save, KeyRound, CheckCircle2, AlertCircle, Info, Zap } from 'lucide-react';
+import { Mail, Save, KeyRound, CheckCircle2, AlertCircle, Info, Zap, TestTube } from 'lucide-react';
 import { useSettings, SettingsFormData } from '@/hooks/useSettings';
 import { SecuritySettingsForm } from './SecuritySettingsForm';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -61,8 +61,8 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
   };
 
   const handleTestConnection = async () => {
-    if (!formData.email_usuario || !formData.email_senha) {
-      alert('Preencha o email e senha antes de testar a conexão');
+    if (!formData.email_usuario) {
+      alert('Preencha o email do remetente antes de testar');
       return;
     }
     
@@ -83,6 +83,9 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
       </div>
     );
   }
+
+  // Check if SMTP is properly configured
+  const hasSmtpSettings = !!(formData.email_smtp && formData.email_porta && formData.email_usuario && formData.email_senha);
 
   return (
     <Tabs defaultValue="email">
@@ -140,6 +143,32 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                   </span>
                 </div>
               </div>
+
+              {/* Status indicator based on current configuration */}
+              {formData.use_smtp ? (
+                hasSmtpSettings ? (
+                  <Alert className="bg-green-50 text-green-800 border-green-200">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Sistema Híbrido Ativo:</strong> SMTP configurado com fallback Resend para máxima confiabilidade!
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <Alert className="bg-red-50 text-red-800 border-red-200">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Configuração Incompleta:</strong> SMTP ativado mas não configurado. Complete as configurações abaixo.
+                    </AlertDescription>
+                  </Alert>
+                )
+              ) : (
+                <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+                  <Mail className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Modo Resend:</strong> Todos os emails serão enviados via Resend.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="smtp_nome">Nome do Remetente</Label>
@@ -269,11 +298,22 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
                           type="button"
                           variant="outline"
                           onClick={handleTestConnection}
-                          disabled={testing || !formData.email_usuario || !formData.email_senha}
+                          disabled={testing || !formData.email_usuario}
+                          className="flex items-center"
                         >
-                          {testing ? 'Testando...' : 'Testar Conexão SMTP'}
+                          <TestTube className="h-4 w-4 mr-2" />
+                          {testing ? 'Testando...' : 'Testar Configuração'}
                         </Button>
                       </div>
+                      
+                      {!hasSmtpSettings && (
+                        <Alert className="bg-yellow-50 text-yellow-800 border-yellow-200">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>
+                            Complete todos os campos SMTP acima para ativar o envio híbrido.
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
                   </div>
                 </>

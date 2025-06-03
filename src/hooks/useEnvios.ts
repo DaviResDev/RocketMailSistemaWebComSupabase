@@ -170,7 +170,8 @@ export function useEnvios() {
           content: processedContent,
           signature_image: signatureImage,
           image_url: templateData?.image_url,
-          smtp_settings: smtpSettings
+          smtp_settings: smtpSettings,
+          use_smtp: userSettings?.use_smtp || false // ✅ Pass the use_smtp flag
         };
         
         console.log("Sending single email with data:", { 
@@ -179,7 +180,7 @@ export function useEnvios() {
           contato_id: formData.contato_id,
           has_attachments: !!parsedAttachments,
           subject: emailSubject,
-          use_smtp: !!smtpSettings
+          use_smtp: userSettings?.use_smtp || false // ✅ Log the use_smtp flag
         });
         
         const response = await supabase.functions.invoke('send-email', {
@@ -200,7 +201,19 @@ export function useEnvios() {
         console.log('Email enviado com sucesso:', responseData);
         
         toast.dismiss(loadingToastId);
-        toast.success(`Email enviado com sucesso para ${contatoNome || contatoEmail}!`);
+        
+        // Enhanced success message based on delivery method
+        let successMessage = `Email enviado com sucesso para ${contatoNome || contatoEmail}`;
+        if (responseData.provider === 'smtp') {
+          successMessage += ` via SMTP! ✅`;
+        } else if (responseData.fallback) {
+          successMessage += ` via Resend (fallback)! ⚠️`;
+          toast.info('SMTP falhou, mas o email foi enviado via Resend como fallback.');
+        } else {
+          successMessage += ` via Resend! 📨`;
+        }
+        
+        toast.success(successMessage);
         
         // Create entry in envios table
         if (formData.contato_id && formData.template_id) {
@@ -238,14 +251,16 @@ export function useEnvios() {
         let errorMessage = 'Erro ao enviar email';
         const errorMsg = typeof err.message === 'string' ? err.message : '';
         
-        if (errorMsg.includes('autenticação SMTP')) {
+        if (errorMsg.includes('SMTP falhou') && errorMsg.includes('Resend também falhou')) {
+          errorMessage = 'Falha completa: SMTP e Resend falharam. Verifique suas configurações.';
+        } else if (errorMsg.includes('autenticação SMTP')) {
           errorMessage = 'Falha de autenticação SMTP: Verifique suas configurações de email';
         } else if (errorMsg.includes('Email inválido')) {
           errorMessage = `Email inválido: ${errorMsg}`;
         } else if (errorMsg.includes('Timeout')) {
           errorMessage = 'Timeout de envio: Verifique sua conexão de internet';
-        } else if (errorMsg.includes('Tipo de envio desconhecido')) {
-          errorMessage = 'Configuração de envio inválida: Configure SMTP ou Resend';
+        } else if (errorMsg.includes('SMTP ativado mas não configurado')) {
+          errorMessage = 'SMTP ativado mas não configurado. Complete as configurações SMTP.';
         } else if (errorMsg) {
           errorMessage = errorMsg;
         }
@@ -292,13 +307,14 @@ export function useEnvios() {
         const batchRequestData = {
           batch: true,
           emails: emailsData,
-          smtp_settings: smtpSettings
+          smtp_settings: smtpSettings,
+          use_smtp: userSettings?.use_smtp || false // ✅ Pass the use_smtp flag
         };
         
         console.log("Sending batch email request with data:", {
           batch: true,
           total_emails: emailsData.length,
-          use_smtp: !!smtpSettings
+          use_smtp: userSettings?.use_smtp || false // ✅ Log the use_smtp flag
         });
         
         const response = await supabase.functions.invoke('send-email', {
@@ -322,9 +338,19 @@ export function useEnvios() {
         
         const { summary, results } = responseData;
         
-        // Show detailed results with better error handling
+        // Enhanced results display with delivery method information
         if (summary.successful > 0) {
-          toast.success(`${summary.successful} emails enviados com sucesso!`);
+          let successMessage = `${summary.successful} emails enviados com sucesso!`;
+          if (summary.smtp > 0) {
+            successMessage += ` (${summary.smtp} via SMTP)`;
+          }
+          if (summary.resend > 0) {
+            successMessage += ` (${summary.resend} via Resend)`;
+          }
+          if (summary.fallback > 0) {
+            successMessage += ` ⚠️ ${summary.fallback} usaram fallback`;
+          }
+          toast.success(successMessage);
         }
         
         if (summary.failed > 0) {
@@ -332,7 +358,9 @@ export function useEnvios() {
           const errorMessages = [...new Set(failedEmails.map((r: any) => r.error))].slice(0, 3);
           
           let errorDescription = '';
-          if (errorMessages.some(msg => typeof msg === 'string' && msg.includes('autenticação'))) {
+          if (errorMessages.some(msg => typeof msg === 'string' && msg.includes('SMTP falhou') && msg.includes('Resend também falhou'))) {
+            errorDescription = 'Falha completa detectada em alguns emails';
+          } else if (errorMessages.some(msg => typeof msg === 'string' && msg.includes('autenticação'))) {
             errorDescription = 'Erro de autenticação SMTP detectado';
           } else if (errorMessages.some(msg => typeof msg === 'string' && msg.includes('Email inválido'))) {
             errorDescription = 'Emails inválidos detectados';
@@ -395,10 +423,10 @@ export function useEnvios() {
         let errorMessage = 'Erro no envio em lote';
         const errorMsg = typeof err.message === 'string' ? err.message : '';
         
-        if (errorMsg.includes('autenticação SMTP')) {
+        if (errorMsg.includes('SMTP ativado mas não configurado')) {
+          errorMessage = 'SMTP ativado mas não configurado: Complete as configurações SMTP';
+        } else if (errorMsg.includes('autenticação SMTP')) {
           errorMessage = 'Falha de autenticação SMTP: Verifique suas configurações';
-        } else if (errorMsg.includes('Tipo de envio desconhecido')) {
-          errorMessage = 'Configuração inválida: Configure SMTP ou Resend nas configurações';
         } else if (errorMsg) {
           errorMessage = errorMsg;
         }
