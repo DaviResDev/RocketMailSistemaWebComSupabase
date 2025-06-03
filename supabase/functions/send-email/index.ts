@@ -1,8 +1,11 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import nodemailer from "https://esm.sh/nodemailer@6.9.12";
+import { Buffer } from "https://deno.land/std@0.177.0/node/buffer.ts";
+
+// Make Buffer available globally for nodemailer
+(globalThis as any).Buffer = Buffer;
 
 // Set up CORS headers
 const corsHeaders = {
@@ -98,7 +101,7 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
- * Create SMTP transporter with corrected Nodemailer usage
+ * Create SMTP transporter with improved error handling
  */
 async function createSMTPTransporter(config: any) {
   try {
@@ -109,7 +112,7 @@ async function createSMTPTransporter(config: any) {
       user: config.user
     });
     
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       host: config.host,
       port: parseInt(config.port) || 587,
       secure: config.secure || config.port === 465,
@@ -130,18 +133,24 @@ async function createSMTPTransporter(config: any) {
     });
     
     // Verify SMTP connection
+    console.log("Verifying SMTP connection...");
     await transporter.verify();
     console.log("SMTP connection verified successfully");
     
     return transporter;
   } catch (error) {
     console.error("Failed to create/verify SMTP transporter:", error);
+    console.error("Error details:", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     throw new Error(`Falha na configuração SMTP: ${error.message}`);
   }
 }
 
 /**
- * Send email via SMTP using corrected Nodemailer
+ * Send email via SMTP with improved error handling
  */
 async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
   try {
@@ -191,9 +200,8 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
               
             return {
               filename: attachment.filename,
-              content: base64Content,
-              contentType: attachment.contentType,
-              encoding: 'base64'
+              content: Buffer.from(base64Content, 'base64'),
+              contentType: attachment.contentType
             };
           }
           
@@ -231,19 +239,23 @@ async function sendEmailViaSMTP(config: any, payload: any): Promise<any> {
     };
   } catch (error) {
     console.error("SMTP Error details:", {
+      name: error.name,
       message: error.message,
       code: error.code,
       command: error.command,
-      response: error.response
+      response: error.response,
+      stack: error.stack
     });
     
     // Provide specific error messages
-    if (error.message.includes('authentication')) {
+    if (error.message.includes('authentication') || error.message.includes('autenticação')) {
       throw new Error(`Falha de autenticação SMTP: Verifique o usuário e senha`);
-    } else if (error.message.includes('timeout')) {
+    } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
       throw new Error(`Timeout de envio SMTP: Verifique a conexão`);
     } else if (error.message.includes('Email inválido')) {
       throw error; // Re-throw validation error as is
+    } else if (error.message.includes('Buffer is not defined')) {
+      throw new Error(`Erro de configuração: Buffer não disponível no ambiente`);
     } else {
       throw new Error(`Erro SMTP: ${error.message || 'Erro desconhecido no SMTP'}`);
     }
@@ -337,7 +349,11 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
       reply_to: emailData.reply_to,
     };
   } catch (error) {
-    console.error("Resend Error details:", error);
+    console.error("Resend Error details:", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     
     // Provide specific error messages for Resend
     if (error.message.includes('Too many requests')) {
