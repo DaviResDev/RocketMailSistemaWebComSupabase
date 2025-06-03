@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -235,16 +236,18 @@ export function useEnvios() {
         
         // Display specific error messages based on error content
         let errorMessage = 'Erro ao enviar email';
-        if (err.message.includes('autenticação SMTP')) {
+        const errorMsg = typeof err.message === 'string' ? err.message : '';
+        
+        if (errorMsg.includes('autenticação SMTP')) {
           errorMessage = 'Falha de autenticação SMTP: Verifique suas configurações de email';
-        } else if (err.message.includes('Email inválido')) {
-          errorMessage = `Email inválido: ${err.message}`;
-        } else if (err.message.includes('Timeout')) {
+        } else if (errorMsg.includes('Email inválido')) {
+          errorMessage = `Email inválido: ${errorMsg}`;
+        } else if (errorMsg.includes('Timeout')) {
           errorMessage = 'Timeout de envio: Verifique sua conexão de internet';
-        } else if (err.message.includes('Tipo de envio desconhecido')) {
+        } else if (errorMsg.includes('Tipo de envio desconhecido')) {
           errorMessage = 'Configuração de envio inválida: Configure SMTP ou Resend';
-        } else if (err.message) {
-          errorMessage = err.message;
+        } else if (errorMsg) {
+          errorMessage = errorMsg;
         }
         
         toast.error(errorMessage);
@@ -329,14 +332,14 @@ export function useEnvios() {
           const errorMessages = [...new Set(failedEmails.map((r: any) => r.error))].slice(0, 3);
           
           let errorDescription = '';
-          if (errorMessages.some(msg => msg.includes('autenticação'))) {
+          if (errorMessages.some(msg => typeof msg === 'string' && msg.includes('autenticação'))) {
             errorDescription = 'Erro de autenticação SMTP detectado';
-          } else if (errorMessages.some(msg => msg.includes('Email inválido'))) {
+          } else if (errorMessages.some(msg => typeof msg === 'string' && msg.includes('Email inválido'))) {
             errorDescription = 'Emails inválidos detectados';
-          } else if (errorMessages.some(msg => msg.includes('Timeout'))) {
+          } else if (errorMessages.some(msg => typeof msg === 'string' && msg.includes('Timeout'))) {
             errorDescription = 'Timeout de conexão detectado';
           } else {
-            errorDescription = errorMessages.join('; ');
+            errorDescription = errorMessages.filter(msg => typeof msg === 'string').join('; ');
           }
           
           toast.error(
@@ -390,12 +393,14 @@ export function useEnvios() {
         
         // Display specific error messages for batch sending
         let errorMessage = 'Erro no envio em lote';
-        if (err.message.includes('autenticação SMTP')) {
+        const errorMsg = typeof err.message === 'string' ? err.message : '';
+        
+        if (errorMsg.includes('autenticação SMTP')) {
           errorMessage = 'Falha de autenticação SMTP: Verifique suas configurações';
-        } else if (err.message.includes('Tipo de envio desconhecido')) {
+        } else if (errorMsg.includes('Tipo de envio desconhecido')) {
           errorMessage = 'Configuração inválida: Configure SMTP ou Resend nas configurações';
-        } else if (err.message) {
-          errorMessage = err.message;
+        } else if (errorMsg) {
+          errorMessage = errorMsg;
         }
         
         toast.error(errorMessage, {
