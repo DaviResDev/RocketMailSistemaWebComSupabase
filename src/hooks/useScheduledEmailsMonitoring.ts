@@ -14,8 +14,17 @@ interface ProcessingResult {
   processed: number;
   successful: number;
   failed: number;
+  processingTime: string;
+  throughput: string;
+  parallelProcessing: boolean;
   timestamp: string;
   errors?: string[];
+}
+
+interface ProcessingOptions {
+  useParallelProcessing?: boolean;
+  batchSize?: number;
+  delayBetweenBatches?: number;
 }
 
 export function useScheduledEmailsMonitoring() {
@@ -49,13 +58,26 @@ export function useScheduledEmailsMonitoring() {
     }
   }, []);
 
-  const triggerManualProcessing = useCallback(async () => {
+  const triggerManualProcessing = useCallback(async (options: ProcessingOptions = {}) => {
     try {
       setProcessing(true);
-      toast.info('Iniciando processamento manual de agendamentos...');
+      
+      const processingOptions = {
+        useParallelProcessing: true,
+        batchSize: 20,
+        delayBetweenBatches: 50,
+        triggered_by: 'manual',
+        ...options
+      };
+
+      if (processingOptions.useParallelProcessing) {
+        toast.info(`🚀 Iniciando processamento paralelo de agendamentos (${processingOptions.batchSize} por lote)...`);
+      } else {
+        toast.info('⏳ Iniciando processamento sequencial de agendamentos...');
+      }
 
       const { data, error } = await supabase.functions.invoke('process-scheduled-emails', {
-        body: { triggered_by: 'manual' }
+        body: processingOptions
       });
 
       if (error) throw error;
@@ -63,7 +85,7 @@ export function useScheduledEmailsMonitoring() {
       const result = data as ProcessingResult;
       
       if (result.successful > 0) {
-        toast.success(`✅ ${result.successful} emails enviados com sucesso!`);
+        toast.success(`✅ ${result.successful} emails enviados com sucesso! (${result.throughput})`);
       }
       
       if (result.failed > 0) {
@@ -71,10 +93,22 @@ export function useScheduledEmailsMonitoring() {
       }
       
       if (result.processed === 0) {
-        toast.info('Nenhum agendamento pendente encontrado');
+        toast.info('📭 Nenhum agendamento pendente encontrado');
       }
 
-      // Atualizar estatísticas
+      // Show processing details
+      if (result.processed > 0) {
+        console.log(`📊 Processamento concluído:
+          - Total: ${result.processed}
+          - Sucessos: ${result.successful}
+          - Falhas: ${result.failed}
+          - Tempo: ${result.processingTime}
+          - Throughput: ${result.throughput}
+          - Modo paralelo: ${result.parallelProcessing ? 'SIM' : 'NÃO'}
+        `);
+      }
+
+      // Refresh stats after processing
       await fetchStats();
       
       return result;
@@ -87,11 +121,42 @@ export function useScheduledEmailsMonitoring() {
     }
   }, [fetchStats]);
 
+  const triggerParallelProcessing = useCallback(async () => {
+    return await triggerManualProcessing({
+      useParallelProcessing: true,
+      batchSize: 30,
+      delayBetweenBatches: 25
+    });
+  }, [triggerManualProcessing]);
+
+  const triggerSequentialProcessing = useCallback(async () => {
+    return await triggerManualProcessing({
+      useParallelProcessing: false,
+      batchSize: 1,
+      delayBetweenBatches: 100
+    });
+  }, [triggerManualProcessing]);
+
   const retryFailedSchedules = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Marcar agendamentos com erro como pendentes novamente
+      // Get count of failed schedules first
+      const { data: failedData, error: countError } = await supabase
+        .from('agendamentos')
+        .select('id')
+        .eq('status', 'erro');
+
+      if (countError) throw countError;
+
+      const failedCount = failedData?.length || 0;
+
+      if (failedCount === 0) {
+        toast.info('📭 Nenhum agendamento com erro encontrado');
+        return;
+      }
+
+      // Mark failed schedules as pending again
       const { error } = await supabase
         .from('agendamentos')
         .update({ status: 'pendente' })
@@ -99,7 +164,7 @@ export function useScheduledEmailsMonitoring() {
 
       if (error) throw error;
 
-      toast.success('Agendamentos com erro foram marcados para reenvio');
+      toast.success(`🔄 ${failedCount} agendamentos marcados para reenvio`);
       await fetchStats();
     } catch (error: any) {
       console.error('Erro ao reprocessar agendamentos:', error);
@@ -115,6 +180,8 @@ export function useScheduledEmailsMonitoring() {
     processing,
     fetchStats,
     triggerManualProcessing,
+    triggerParallelProcessing,
+    triggerSequentialProcessing,
     retryFailedSchedules
   };
 }

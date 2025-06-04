@@ -31,16 +31,10 @@ interface ScheduledEmail {
   };
 }
 
-interface UserSettings {
-  use_smtp: boolean;
-  smtp_host?: string;
-  email_porta?: number;
-  email_usuario?: string;
-  smtp_pass?: string;
-  smtp_seguranca?: string;
-  smtp_from_name?: string;
-  smtp_nome?: string;
-  signature_image?: string;
+interface ProcessingOptions {
+  useParallelProcessing?: boolean;
+  batchSize?: number;
+  delayBetweenBatches?: number;
 }
 
 serve(async (req) => {
@@ -62,6 +56,23 @@ serve(async (req) => {
         persistSession: false
       }
     });
+
+    // Parse request body for options
+    let options: ProcessingOptions = {
+      useParallelProcessing: true,
+      batchSize: 20,
+      delayBetweenBatches: 50
+    };
+
+    try {
+      const body = await req.text();
+      if (body) {
+        const parsed = JSON.parse(body);
+        options = { ...options, ...parsed };
+      }
+    } catch (e) {
+      // If no body or invalid JSON, use defaults
+    }
 
     // Buscar agendamentos pendentes que devem ser enviados agora
     const now = new Date().toISOString();
@@ -89,7 +100,7 @@ serve(async (req) => {
       `)
       .eq('status', 'pendente')
       .lte('data_envio', now)
-      .limit(50); // Processar no máximo 50 por vez
+      .limit(100); // Increased limit for better throughput
 
     if (fetchError) {
       console.error("❌ Erro ao buscar agendamentos:", fetchError);
@@ -113,106 +124,84 @@ serve(async (req) => {
     }
 
     console.log(`📧 Encontrados ${scheduledEmails.length} agendamentos para processar`);
+    console.log(`⚙️ Processamento paralelo: ${options.useParallelProcessing ? 'ATIVADO' : 'DESATIVADO'}`);
+    console.log(`📦 Tamanho do lote: ${options.batchSize}`);
 
     let successful = 0;
     let failed = 0;
     const errors: string[] = [];
+    const startTime = Date.now();
 
-    // Processar cada agendamento
-    for (const schedule of scheduledEmails as ScheduledEmail[]) {
-      try {
-        console.log(`📤 Processando agendamento ${schedule.id} para ${schedule.contato?.email}`);
+    if (options.useParallelProcessing && scheduledEmails.length >= 5) {
+      console.log(`🚀 Processando ${scheduledEmails.length} agendamentos em modo paralelo`);
+      
+      // Process in parallel batches
+      for (let i = 0; i < scheduledEmails.length; i += options.batchSize!) {
+        const batch = scheduledEmails.slice(i, i + options.batchSize!) as ScheduledEmail[];
+        console.log(`📦 Processando lote ${Math.floor(i / options.batchSize!) + 1} com ${batch.length} agendamentos`);
         
-        // Buscar configurações do usuário
-        const { data: userSettings, error: settingsError } = await supabase
-          .from('configuracoes')
-          .select('*')
-          .eq('user_id', schedule.user_id)
-          .maybeSingle();
-
-        if (settingsError) {
-          console.error(`❌ Erro ao buscar configurações do usuário ${schedule.user_id}:`, settingsError);
-          throw new Error(`Erro ao buscar configurações: ${settingsError.message}`);
-        }
-
-        // Validar dados necessários
-        if (!schedule.contato?.email) {
-          throw new Error("Contato não possui email válido");
-        }
-
-        if (!schedule.template?.conteudo) {
-          throw new Error("Template não possui conteúdo");
-        }
-
-        // Preparar dados do email
-        const emailData = {
-          to: schedule.contato.email,
-          subject: schedule.template.nome || "Email Agendado",
-          content: schedule.template.conteudo,
-          contato_nome: schedule.contato.nome,
-          contato_email: schedule.contato.email,
-          template_id: schedule.template_id,
-          contato_id: schedule.contato_id,
-          agendamento_id: schedule.id,
-          signature_image: userSettings?.signature_image || schedule.template.signature_image,
-          attachments: schedule.template.attachments
-        };
-
-        // Chamar a função send-email
-        const { data: sendResult, error: sendError } = await supabase.functions.invoke('send-email', {
-          body: emailData
+        // Process all emails in this batch simultaneously
+        const batchPromises = batch.map(async (schedule) => {
+          return await processScheduledEmail(schedule, supabase);
         });
 
-        if (sendError) {
-          console.error(`❌ Erro ao enviar email para ${schedule.contato.email}:`, sendError);
-          throw new Error(`Falha no envio: ${sendError.message}`);
-        }
-
-        if (!sendResult?.success) {
-          console.error(`❌ Falha no envio para ${schedule.contato.email}:`, sendResult);
-          throw new Error(`Falha no envio: ${sendResult?.error || 'Erro desconhecido'}`);
-        }
-
-        // Marcar agendamento como processado
-        const { error: updateError } = await supabase
-          .from('agendamentos')
-          .update({ 
-            status: 'enviado'
-          })
-          .eq('id', schedule.id);
-
-        if (updateError) {
-          console.error(`⚠️ Erro ao atualizar status do agendamento ${schedule.id}:`, updateError);
-          // Não falhar aqui, pois o email foi enviado com sucesso
-        }
-
-        console.log(`✅ Email agendado enviado com sucesso para ${schedule.contato.email}`);
-        successful++;
-
-      } catch (error: any) {
-        console.error(`❌ Erro ao processar agendamento ${schedule.id}:`, error);
+        // Wait for all emails in this batch to complete
+        const batchResults = await Promise.allSettled(batchPromises);
         
-        // Marcar agendamento como falhado
-        const { error: updateError } = await supabase
-          .from('agendamentos')
-          .update({ 
-            status: 'erro'
-          })
-          .eq('id', schedule.id);
+        // Process results
+        batchResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            if (result.value.success) {
+              successful++;
+              console.log(`✅ Agendamento ${batch[index].id} processado com sucesso`);
+            } else {
+              failed++;
+              errors.push(`Agendamento ${batch[index].id}: ${result.value.error}`);
+              console.log(`❌ Falha no agendamento ${batch[index].id}: ${result.value.error}`);
+            }
+          } else {
+            failed++;
+            errors.push(`Agendamento ${batch[index].id}: ${result.reason}`);
+            console.log(`❌ Erro crítico no agendamento ${batch[index].id}: ${result.reason}`);
+          }
+        });
 
-        if (updateError) {
-          console.error(`⚠️ Erro ao atualizar status de falha do agendamento ${schedule.id}:`, updateError);
+        // Small delay between batches to prevent overwhelming the system
+        if (i + options.batchSize! < scheduledEmails.length) {
+          await new Promise(resolve => setTimeout(resolve, options.delayBetweenBatches));
         }
-
-        failed++;
-        errors.push(`Agendamento ${schedule.id}: ${error.message}`);
+      }
+    } else {
+      console.log(`⏳ Processando ${scheduledEmails.length} agendamentos sequencialmente`);
+      
+      // Sequential processing
+      for (const schedule of scheduledEmails as ScheduledEmail[]) {
+        const result = await processScheduledEmail(schedule, supabase);
+        
+        if (result.success) {
+          successful++;
+          console.log(`✅ Agendamento ${schedule.id} processado com sucesso`);
+        } else {
+          failed++;
+          errors.push(`Agendamento ${schedule.id}: ${result.error}`);
+          console.log(`❌ Falha no agendamento ${schedule.id}: ${result.error}`);
+        }
+        
+        // Small delay between emails in sequential mode
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
+
+    const totalTime = Date.now() - startTime;
+    const throughput = Math.round((scheduledEmails.length / totalTime) * 1000);
 
     const result = {
       processed: scheduledEmails.length,
       successful,
       failed,
+      processingTime: `${totalTime}ms`,
+      throughput: `${throughput} emails/seg`,
+      parallelProcessing: options.useParallelProcessing,
       timestamp: new Date().toISOString(),
       errors: errors.length > 0 ? errors : undefined
     };
@@ -243,3 +232,69 @@ serve(async (req) => {
     );
   }
 });
+
+async function processScheduledEmail(schedule: ScheduledEmail, supabase: any) {
+  try {
+    // Validate required data
+    if (!schedule.contato?.email) {
+      throw new Error("Contato não possui email válido");
+    }
+
+    if (!schedule.template?.conteudo) {
+      throw new Error("Template não possui conteúdo");
+    }
+
+    // Prepare email data
+    const emailData = {
+      to: schedule.contato.email,
+      subject: schedule.template.nome || "Email Agendado",
+      content: schedule.template.conteudo,
+      contato_nome: schedule.contato.nome,
+      contato_email: schedule.contato.email,
+      template_id: schedule.template_id,
+      contato_id: schedule.contato_id,
+      agendamento_id: schedule.id,
+      signature_image: schedule.template.signature_image,
+      attachments: schedule.template.attachments
+    };
+
+    // Call the send-email function
+    const { data: sendResult, error: sendError } = await supabase.functions.invoke('send-email', {
+      body: emailData
+    });
+
+    if (sendError) {
+      throw new Error(`Falha no envio: ${sendError.message}`);
+    }
+
+    if (!sendResult?.success) {
+      throw new Error(`Falha no envio: ${sendResult?.error || 'Erro desconhecido'}`);
+    }
+
+    // Mark agendamento as processed
+    const { error: updateError } = await supabase
+      .from('agendamentos')
+      .update({ status: 'enviado' })
+      .eq('id', schedule.id);
+
+    if (updateError) {
+      console.error(`⚠️ Erro ao atualizar status do agendamento ${schedule.id}:`, updateError);
+      // Don't fail here, as the email was sent successfully
+    }
+
+    return { success: true };
+
+  } catch (error: any) {
+    // Mark agendamento as failed
+    const { error: updateError } = await supabase
+      .from('agendamentos')
+      .update({ status: 'erro' })
+      .eq('id', schedule.id);
+
+    if (updateError) {
+      console.error(`⚠️ Erro ao atualizar status de falha do agendamento ${schedule.id}:`, updateError);
+    }
+
+    return { success: false, error: error.message };
+  }
+}

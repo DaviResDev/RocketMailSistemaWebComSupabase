@@ -68,7 +68,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
   const { sendBatchEmails, isProcessing, progress } = useBatchEmailSending();
-  const { sendEmail } = useEnvios();
+  const { sendEmail, sendEmailsInBatch } = useEnvios();
 
   useEffect(() => {
     fetchContacts();
@@ -228,11 +228,11 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       toast.warning(`${invalidCount} contatos com emails inválidos serão ignorados`);
     }
 
-    // Ultra-enhanced confirmation for large volumes with ultra-parallel info
+    // Enhanced confirmation for large volumes
     if (contactsWithValidEmails.length >= 10000) {
-      const sendingMethod = parallelSendingEnabled ? "ultra-paralelo (simultâneo)" : "sequencial";
+      const sendingMethod = parallelSendingEnabled ? "ultra-paralelo" : "sequencial";
       const estimatedTimeText = parallelSendingEnabled 
-        ? `pouquíssimos segundos` 
+        ? "pouquíssimos segundos" 
         : `${estimatedTime?.minutes || 'muitos'} minutos`;
       
       const proceed = window.confirm(
@@ -242,9 +242,9 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       );
       if (!proceed) return;
     } else if (contactsWithValidEmails.length >= 1000) {
-      const sendingMethod = parallelSendingEnabled ? "simultâneo" : "sequencial";
+      const sendingMethod = parallelSendingEnabled ? "paralelo" : "sequencial";
       const estimatedTimeText = parallelSendingEnabled 
-        ? `poucos segundos` 
+        ? "poucos segundos" 
         : `${estimatedTime?.minutes || 'vários'} minutos`;
       
       const proceed = window.confirm(
@@ -257,45 +257,32 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
 
     try {
       if (bulkMode && contactsWithValidEmails.length > 1) {
-        // Create email jobs with enhanced validation
-        const emailJobs = contactsWithValidEmails.map(contactId => {
-          const contact = contacts.find(c => c.id === contactId);
-          if (!contact || !contact.email) {
-            console.warn(`Contato não encontrado ou sem email: ${contactId}`);
-            return null;
-          }
-          
-          return {
-            contactId,
-            templateId: formData.template_id,
-            contactName: contact.nome,
-            contactEmail: contact.email
-          };
-        }).filter(job => job !== null); // Remove null entries
+        // Use the re-enabled batch email sending
+        const selectedContactsData = contactsWithValidEmails.map(contactId => {
+          return contacts.find(c => c.id === contactId);
+        }).filter(contact => contact !== undefined);
 
-        if (emailJobs.length === 0) {
-          toast.error("Nenhum job de email válido foi criado");
+        if (selectedContactsData.length === 0) {
+          toast.error("Nenhum contato válido encontrado");
           return;
         }
 
-        console.log(`Criados ${emailJobs.length} jobs de email válidos para envio`);
-
-        // Ultra-enhanced info for parallel sending
-        if (emailJobs.length >= 10000 && parallelSendingEnabled) {
-          toast.info(`⚡ Enviando ${emailJobs.length.toLocaleString()} emails simultaneamente (modo ultra-paralelo)...`);
-        } else if (emailJobs.length >= 1000 && parallelSendingEnabled) {
-          toast.info(`🚀 Enviando ${emailJobs.length.toLocaleString()} emails simultaneamente...`);
-        } else if (emailJobs.length >= 500) {
-          toast.info(`🚀 Modo ultra-otimizado ativado para ${emailJobs.length.toLocaleString()} emails`);
+        // Enhanced info for parallel sending
+        if (selectedContactsData.length >= 10000 && parallelSendingEnabled) {
+          toast.info(`⚡ Enviando ${selectedContactsData.length.toLocaleString()} emails simultaneamente (modo ultra-paralelo)...`);
+        } else if (selectedContactsData.length >= 1000 && parallelSendingEnabled) {
+          toast.info(`🚀 Enviando ${selectedContactsData.length.toLocaleString()} emails simultaneamente...`);
+        } else if (selectedContactsData.length >= 500) {
+          toast.info(`🚀 Modo ultra-otimizado ativado para ${selectedContactsData.length.toLocaleString()} emails`);
         }
 
-        const result = await sendBatchEmails(emailJobs, {
-          showProgress: true,
-          enableOptimizations: !parallelSendingEnabled,
-          useParallelSending: parallelSendingEnabled
-        });
+        // Use the re-enabled sendEmailsInBatch function
+        const result = await sendEmailsInBatch(
+          selectedContactsData,
+          formData.template_id
+        );
         
-        if (result.success) {
+        if (result) {
           onCancel();
           if (onSuccess) onSuccess();
         }
@@ -303,7 +290,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
         return;
       }
       
-      // Single send
+      // Single send using sendEmail hook
       const selectedContact = contacts.find(c => c.id === contactsWithValidEmails[0]);
       
       if (!selectedContact || !selectedContact.email) {
@@ -324,12 +311,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       }
     } catch (error: any) {
       console.error("Erro durante o envio:", error);
-      toast.error(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`, {
-        action: {
-          label: "✕",
-          onClick: () => {}
-        }
-      });
+      toast.error(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
     }
   };
 
