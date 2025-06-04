@@ -14,7 +14,6 @@ import { ProfileForm } from '@/components/settings/ProfileForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Info } from 'lucide-react';
-import { SettingsInstructions } from '@/components/settings/SettingsInstructions';
 
 export default function Configuracoes() {
   const { fetchSettings, settings, loading, error } = useSettings();
@@ -68,62 +67,47 @@ export default function Configuracoes() {
     );
   }
 
-  // Check configuration status
-  const hasSmtpSettings = !!(settings?.email_smtp && settings?.email_usuario && settings?.email_senha);
-  const hasResendConfig = true; // Assuming Resend is always available
-
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
       
-      <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+      <Alert className="bg-yellow-50 text-yellow-800 border-yellow-200">
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Configure um sistema híbrido de email: SMTP para controle total + Resend como fallback para máxima confiabilidade.
+          As funcionalidades de envio de email foram removidas. O sistema continua funcionando para gerenciamento de templates e contatos.
         </AlertDescription>
       </Alert>
 
-      {settings && (
-        <SmtpStatusIndicator 
-          useSmtp={settings.use_smtp || false}
-          hasSmtpSettings={hasSmtpSettings}
-          hasResendConfig={hasResendConfig}
-        />
-      )}
+      <SmtpStatusIndicator 
+        useSmtp={false}
+        hasSmtpSettings={false}
+        hasResendConfig={false}
+      />
       
-      <Tabs defaultValue="email">
+      <Tabs defaultValue="profile">
         <TabsList className="mb-4">
-          <TabsTrigger value="email">Email</TabsTrigger>
-          <TabsTrigger value="security">Segurança</TabsTrigger>
           <TabsTrigger value="profile">Perfil</TabsTrigger>
+          <TabsTrigger value="security">Segurança</TabsTrigger>
           <TabsTrigger value="account">Conta</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="email">
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <SettingsForm
-                onSave={() => {
-                  toast.success('Configurações de email atualizadas com sucesso!');
-                }}
-              />
-            </div>
-            <div>
-              <SettingsInstructions />
-            </div>
+        <TabsContent value="profile">
+          <div className="grid gap-6">
+            <SettingsForm
+              onSave={() => {
+                toast.success('Configurações de perfil atualizadas com sucesso!');
+              }}
+            />
+            <ProfileForm
+              onSave={() => {
+                toast.success('Perfil atualizado com sucesso!');
+              }}
+            />
           </div>
         </TabsContent>
         
         <TabsContent value="security">
           <SecuritySettingsForm />
-        </TabsContent>
-        
-        <TabsContent value="profile">
-          <ProfileForm
-            onSave={() => {
-              toast.success('Perfil atualizado com sucesso!');
-            }}
-          />
         </TabsContent>
         
         <TabsContent value="account">

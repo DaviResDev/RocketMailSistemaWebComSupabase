@@ -6,7 +6,6 @@ import {
   fetchUserSettings,
   saveUserSettings,
   uploadProfilePhoto,
-  testSmtpConnection,
   type Settings,
   type SettingsFormData
 } from '@/api/settings';
@@ -70,12 +69,7 @@ export function useSettings() {
         throw new Error('Erro ao salvar assinatura digital. Tente novamente.');
       }
       
-      // Enhanced success message based on configuration
-      if (values.use_smtp) {
-        toast.success('Configurações salvas! Sistema híbrido SMTP + Resend ativado.');
-      } else {
-        toast.success('Configurações salvas! Usando apenas Resend para envios.');
-      }
+      toast.success('Configurações de perfil salvas com sucesso!');
       
       return updatedSettings;
     } catch (error: any) {
@@ -89,30 +83,9 @@ export function useSettings() {
   };
   
   const testSmtpConnectionWrapper = async (formData: SettingsFormData) => {
-    try {
-      // Show informative message about the hybrid system
-      if (formData.use_smtp) {
-        toast.info('Testando configuração SMTP... Em produção, haverá fallback para Resend se necessário.');
-      }
-      
-      const result = await testSmtpConnection(formData);
-      
-      if (result.success) {
-        if (result.provider === 'smtp') {
-          toast.success('✅ Conexão SMTP testada com sucesso! Sistema híbrido funcionando.');
-        } else {
-          toast.success(`✅ Fallback testado com sucesso via ${result.provider}!`);
-        }
-      } else {
-        toast.error(result.message || "Falha no teste de conexão");
-      }
-      
-      return result;
-    } catch (error: any) {
-      console.error("Erro ao testar configurações:", error);
-      toast.error(`Erro ao testar: ${error.message}`);
-      return { success: false, message: error.message };
-    }
+    // Email sending functionality has been removed
+    toast.error('Funcionalidade de teste de email foi removida do sistema.');
+    return { success: false, message: "Funcionalidade de envio de email foi removida." };
   };
 
   return {
