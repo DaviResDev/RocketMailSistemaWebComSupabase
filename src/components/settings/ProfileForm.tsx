@@ -83,7 +83,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       setSignatureFile(null);
     }
     
-    // Include all required fields in the saveSettings call
+    // Include all required fields in the saveSettings call including the new SMTP fields
     const completeFormData: SettingsFormData = {
       email_smtp: settings?.email_smtp || '',
       email_porta: settings?.email_porta,
@@ -95,7 +95,10 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       smtp_nome: formData.smtp_nome || null,
       signature_image: formData.signature_image || null,
       two_factor_enabled: settings?.two_factor_enabled || false,
-      use_smtp: settings?.use_smtp || false
+      use_smtp: settings?.use_smtp || false,
+      smtp_host: settings?.smtp_host || null,
+      smtp_pass: settings?.smtp_pass || null,
+      smtp_from_name: settings?.smtp_from_name || null
     };
     
     const success = await saveSettings(completeFormData);
