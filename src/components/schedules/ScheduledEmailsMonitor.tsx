@@ -25,6 +25,10 @@ export function ScheduledEmailsMonitor() {
     return () => clearInterval(interval);
   }, [fetchStats]);
 
+  const handleManualProcessing = async () => {
+    await triggerManualProcessing();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -116,7 +120,7 @@ export function ScheduledEmailsMonitor() {
         {/* Ações manuais */}
         <div className="flex flex-wrap gap-2">
           <Button
-            onClick={triggerManualProcessing}
+            onClick={handleManualProcessing}
             disabled={processing || loading}
             size="sm"
           >

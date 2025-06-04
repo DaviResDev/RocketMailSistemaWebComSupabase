@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -67,8 +68,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
   const { createSchedule, updateSchedule } = useSchedules();
   const { contacts, fetchContacts } = useContacts();
   const { templates, fetchTemplates } = useTemplates();
-  const { sendBatchEmails, isProcessing, progress } = useBatchEmailSending();
-  const { sendEmail, sendEmailsInBatch } = useEnvios();
+  const { sendEmailsInBatch, isProcessing, progress } = useBatchEmailSending();
+  const { sendEmail } = useEnvios();
 
   useEffect(() => {
     fetchContacts();
@@ -257,7 +258,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
 
     try {
       if (bulkMode && contactsWithValidEmails.length > 1) {
-        // Use the re-enabled batch email sending
+        // Use the batch email sending from useBatchEmailSending hook
         const selectedContactsData = contactsWithValidEmails.map(contactId => {
           return contacts.find(c => c.id === contactId);
         }).filter(contact => contact !== undefined);
@@ -276,7 +277,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
           toast.info(`🚀 Modo ultra-otimizado ativado para ${selectedContactsData.length.toLocaleString()} emails`);
         }
 
-        // Use the re-enabled sendEmailsInBatch function
+        // Use the batch email sending function
         const result = await sendEmailsInBatch(
           selectedContactsData,
           formData.template_id
