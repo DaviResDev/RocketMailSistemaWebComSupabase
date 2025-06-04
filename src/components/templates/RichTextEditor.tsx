@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -13,9 +12,15 @@ import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Custom FontSize extension that properly extends TextStyle - FIXED VERSION
+// FIXED: Custom FontSize extension with proper implementation
 const FontSize = TextStyle.extend({
   name: 'fontSize',
+  
+  addOptions() {
+    return {
+      types: ['textStyle'],
+    };
+  },
   
   addAttributes() {
     return {
@@ -23,8 +28,7 @@ const FontSize = TextStyle.extend({
       fontSize: {
         default: null,
         parseHTML: element => {
-          const fontSize = element.style.fontSize;
-          return fontSize ? fontSize.replace(/['"]+/g, '') : null;
+          return element.style.fontSize?.replace(/['"]+/g, '') || null;
         },
         renderHTML: attributes => {
           if (!attributes.fontSize) {
@@ -34,6 +38,22 @@ const FontSize = TextStyle.extend({
             style: `font-size: ${attributes.fontSize}`,
           };
         },
+      },
+    };
+  },
+
+  addCommands() {
+    return {
+      setFontSize: (fontSize) => ({ chain }) => {
+        return chain()
+          .setMark('textStyle', { fontSize })
+          .run();
+      },
+      unsetFontSize: () => ({ chain }) => {
+        return chain()
+          .setMark('textStyle', { fontSize: null })
+          .removeEmptyTextStyle()
+          .run();
       },
     };
   },
@@ -54,16 +74,22 @@ const VARIABLES = [
 ];
 
 const FONT_SIZES = [
+  { value: '10px', label: '10px' },
   { value: '12px', label: '12px' },
   { value: '14px', label: '14px' },
   { value: '16px', label: '16px' },
   { value: '18px', label: '18px' },
   { value: '20px', label: '20px' },
+  { value: '22px', label: '22px' },
   { value: '24px', label: '24px' },
   { value: '28px', label: '28px' },
   { value: '32px', label: '32px' },
   { value: '36px', label: '36px' },
-  { value: '48px', label: '48px' }
+  { value: '42px', label: '42px' },
+  { value: '48px', label: '48px' },
+  { value: '56px', label: '56px' },
+  { value: '64px', label: '64px' },
+  { value: '72px', label: '72px' }
 ];
 
 const FONT_FAMILIES = [
@@ -111,7 +137,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       FontFamily.configure({
         types: ['textStyle'],
       }),
-      FontSize, // Our custom FontSize extension
+      FontSize, // Nossa extensão corrigida
       Placeholder.configure({
         placeholder,
         emptyNodeClass: 'is-editor-empty',
@@ -129,27 +155,24 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
   });
 
-  // Inject Google Fonts and styles for proper font rendering
+  // CRITICAL: Inject proper styles for font rendering
   useEffect(() => {
-    const styleId = 'rich-text-editor-styles';
+    const styleId = 'rich-text-editor-fixed-styles';
     
-    // Remove existing styles if any
     const existingStyle = document.getElementById(styleId);
     if (existingStyle) {
       existingStyle.remove();
     }
 
-    // Add Google Fonts
     const fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
     fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Poppins:wght@400;700&display=swap';
     document.head.appendChild(fontLink);
 
-    // Create and inject styles
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Rich Text Editor Content Styles - FIXED FONT RENDERING */
+      /* FIXED: Rich Text Editor Content Styles with proper font size rendering */
       .rich-text-content .ProseMirror {
         outline: none !important;
         color: inherit !important;
@@ -158,202 +181,49 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         padding: 16px;
       }
       
-      .rich-text-content .ProseMirror p {
-        color: inherit !important;
-        margin: 0.5em 0;
-      }
-      
+      .rich-text-content .ProseMirror p,
       .rich-text-content .ProseMirror h1,
       .rich-text-content .ProseMirror h2,
       .rich-text-content .ProseMirror h3,
       .rich-text-content .ProseMirror h4,
       .rich-text-content .ProseMirror h5,
-      .rich-text-content .ProseMirror h6 {
-        color: inherit !important;
-      }
-      
+      .rich-text-content .ProseMirror h6,
       .rich-text-content .ProseMirror ul,
-      .rich-text-content .ProseMirror ol {
+      .rich-text-content .ProseMirror ol,
+      .rich-text-content .ProseMirror li {
         color: inherit !important;
       }
       
-      .rich-text-content .ProseMirror a {
-        color: hsl(var(--primary)) !important;
+      /* CRITICAL: Force font-size to render properly */
+      .rich-text-content .ProseMirror span[style*="font-size"] {
+        display: inline !important;
+        line-height: 1.2 !important;
       }
       
-      .rich-text-content .ProseMirror blockquote {
-        border-left: 4px solid hsl(var(--border));
-        padding-left: 1rem;
-        margin: 1rem 0;
-        color: inherit !important;
-      }
-      
-      .rich-text-content .ProseMirror code {
-        background: hsl(var(--muted));
-        color: inherit !important;
-        padding: 0.2rem 0.4rem;
-        border-radius: 0.25rem;
-        font-size: 0.875em;
-      }
-      
-      /* CRITICAL: Font family and size must override ALL other styles */
+      /* CRITICAL: Ensure all font families render correctly */
       .rich-text-content .ProseMirror span[style*="font-family"] {
         display: inline !important;
       }
       
-      .rich-text-content .ProseMirror span[style*="font-size"] {
+      /* Template preview must also respect font sizes */
+      .template-preview-content span[style*="font-size"] {
         display: inline !important;
-      }
-      
-      /* Ensure all styled spans render properly */
-      .rich-text-content .ProseMirror span[style] {
-        display: inline !important;
-      }
-      
-      /* FORCE font families to render correctly */
-      .rich-text-content .ProseMirror * {
-        font-family: inherit;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Arial'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Arial"] {
-        font-family: Arial, sans-serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Helvetica'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Helvetica"] {
-        font-family: Helvetica, sans-serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Times New Roman'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Times New Roman"] {
-        font-family: "Times New Roman", serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Georgia'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Georgia"] {
-        font-family: Georgia, serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Verdana'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Verdana"] {
-        font-family: Verdana, sans-serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Roboto'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Roboto"] {
-        font-family: "Roboto", sans-serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Open Sans'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Open Sans"] {
-        font-family: "Open Sans", sans-serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Lato'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Lato"] {
-        font-family: "Lato", sans-serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Montserrat'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Montserrat"] {
-        font-family: "Montserrat", sans-serif !important;
-      }
-      
-      .rich-text-content .ProseMirror span[style*="font-family: 'Poppins'"],
-      .rich-text-content .ProseMirror span[style*="font-family: Poppins"] {
-        font-family: "Poppins", sans-serif !important;
-      }
-      
-      /* Template preview styles - for font consistency */
-      .template-preview-content {
-        font-family: inherit;
+        line-height: 1.2 !important;
       }
       
       .template-preview-content span[style*="font-family"] {
         display: inline !important;
       }
       
-      .template-preview-content span[style*="font-size"] {
-        display: inline !important;
-      }
-      
-      /* CRITICAL: Preview must also respect font families */
-      .template-preview-content span[style*="font-family: 'Arial'"],
-      .template-preview-content span[style*="font-family: Arial"] {
-        font-family: Arial, sans-serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Helvetica'"],
-      .template-preview-content span[style*="font-family: Helvetica"] {
-        font-family: Helvetica, sans-serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Times New Roman'"],
-      .template-preview-content span[style*="font-family: Times New Roman"] {
-        font-family: "Times New Roman", serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Georgia'"],
-      .template-preview-content span[style*="font-family: Georgia"] {
-        font-family: Georgia, serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Verdana'"],
-      .template-preview-content span[style*="font-family: Verdana"] {
-        font-family: Verdana, sans-serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Roboto'"],
-      .template-preview-content span[style*="font-family: Roboto"] {
-        font-family: "Roboto", sans-serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Open Sans'"],
-      .template-preview-content span[style*="font-family: Open Sans"] {
-        font-family: "Open Sans", sans-serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Lato'"],
-      .template-preview-content span[style*="font-family: Lato"] {
-        font-family: "Lato", sans-serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Montserrat'"],
-      .template-preview-content span[style*="font-family: Montserrat"] {
-        font-family: "Montserrat", sans-serif !important;
-      }
-      
-      .template-preview-content span[style*="font-family: 'Poppins'"],
-      .template-preview-content span[style*="font-family: Poppins"] {
-        font-family: "Poppins", sans-serif !important;
-      }
-      
-      /* Dark mode specific improvements */
-      [data-theme="dark"] .rich-text-content .ProseMirror,
-      .dark .rich-text-content .ProseMirror {
-        color: #e0e0e0 !important;
-      }
-      
-      [data-theme="dark"] .rich-text-content .ProseMirror p,
-      .dark .rich-text-content .ProseMirror p {
-        color: #e0e0e0 !important;
-      }
-      
-      [data-theme="dark"] .rich-text-content .ProseMirror h1,
-      [data-theme="dark"] .rich-text-content .ProseMirror h2,
-      [data-theme="dark"] .rich-text-content .ProseMirror h3,
-      [data-theme="dark"] .rich-text-content .ProseMirror h4,
-      [data-theme="dark"] .rich-text-content .ProseMirror h5,
-      [data-theme="dark"] .rich-text-content .ProseMirror h6,
-      .dark .rich-text-content .ProseMirror h1,
-      .dark .rich-text-content .ProseMirror h2,
-      .dark .rich-text-content .ProseMirror h3,
-      .dark .rich-text-content .ProseMirror h4,
-      .dark .rich-text-content .ProseMirror h5,
-      .dark .rich-text-content .ProseMirror h6 {
-        color: #ffffff !important;
-      }
+      /* Force specific font families */
+      ${FONT_FAMILIES.map(font => `
+        .rich-text-content .ProseMirror span[style*="font-family: '${font.label}'"],
+        .rich-text-content .ProseMirror span[style*="font-family: ${font.label}"],
+        .template-preview-content span[style*="font-family: '${font.label}'"],
+        .template-preview-content span[style*="font-family: ${font.label}"] {
+          font-family: ${font.value} !important;
+        }
+      `).join('')}
       
       /* Placeholder styling */
       .rich-text-content .ProseMirror p.is-editor-empty:first-child::before {
@@ -364,6 +234,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         pointer-events: none;
       }
       
+      /* Dark mode support */
+      [data-theme="dark"] .rich-text-content .ProseMirror,
+      .dark .rich-text-content .ProseMirror {
+        color: #e0e0e0 !important;
+      }
+      
       [data-theme="dark"] .rich-text-content .ProseMirror p.is-editor-empty:first-child::before,
       .dark .rich-text-content .ProseMirror p.is-editor-empty:first-child::before {
         color: #aaaaaa !important;
@@ -372,7 +248,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     
     document.head.appendChild(style);
 
-    // Cleanup function
     return () => {
       const styleElement = document.getElementById(styleId);
       if (styleElement) {
@@ -399,78 +274,56 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // IMPROVED: Font family function with better error handling
+  // FIXED: Font family function with better implementation
   const setFontFamily = (fontFamily: string) => {
-    if (!editor) {
-      console.log('Editor not available');
-      return;
-    }
-
-    console.log('Setting font family:', fontFamily);
+    if (!editor) return;
     
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
     
     if (!hasSelection) {
-      console.log('No text selected - prompting user to select text first');
       alert('Por favor, selecione o texto que deseja alterar a fonte primeiro.');
       return;
     }
 
-    // Use TipTap's setFontFamily command correctly
-    const success = editor
+    editor
       .chain()
       .focus()
       .setFontFamily(fontFamily)
       .run();
     
-    console.log('Font family command result:', success);
-    
-    // Force content update and re-render
+    // Force update
     setTimeout(() => {
       const newHTML = editor.getHTML();
-      console.log('Updated HTML after fontFamily:', newHTML);
       onChange(newHTML);
-      
-      // Force editor to refresh view
       editor.view.updateState(editor.state);
     }, 100);
   };
 
-  // IMPROVED: Font size function using our custom extension
+  // FIXED: Font size function with proper implementation
   const setFontSize = (size: string) => {
-    if (!editor) {
-      console.log('Editor not available');
-      return;
-    }
-
-    console.log('Setting font size:', size);
+    if (!editor) return;
     
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
     
     if (!hasSelection) {
-      console.log('No text selected - prompting user to select text first');
       alert('Por favor, selecione o texto que deseja alterar o tamanho primeiro.');
       return;
     }
 
-    // Use our custom fontSize attribute via textStyle mark
-    const success = editor
+    // Use nossa extensão customizada
+    editor
       .chain()
       .focus()
-      .setMark('textStyle', { fontSize: size })
+      .setFontSize(size)
       .run();
-    
-    console.log('Font size command result:', success);
     
     // Force content update and re-render
     setTimeout(() => {
       const newHTML = editor.getHTML();
-      console.log('Updated HTML after fontSize:', newHTML);
+      console.log('Font size applied:', size, 'New HTML:', newHTML);
       onChange(newHTML);
-      
-      // Force editor to refresh view
       editor.view.updateState(editor.state);
     }, 100);
   };
@@ -540,7 +393,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* Font Size Selector */}
+        {/* FIXED: Font Size Selector */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -564,7 +417,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   size="sm"
                   className="justify-start text-xs"
                   onClick={() => {
-                    console.log('Font size button clicked:', size.value);
+                    console.log('Setting font size to:', size.value);
                     setFontSize(size.value);
                   }}
                 >
@@ -600,7 +453,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   className="justify-start text-xs"
                   style={{ fontFamily: font.value }}
                   onClick={() => {
-                    console.log('Font family button clicked:', font.value);
+                    console.log('Setting font family to:', font.value);
                     setFontFamily(font.value);
                   }}
                 >

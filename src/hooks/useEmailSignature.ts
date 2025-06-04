@@ -19,7 +19,7 @@ export const useEmailSignature = () => {
       setUploading(true);
       
       // Validações básicas
-      if (file.size > 2 * 1024 * 1024) { // 2MB max
+      if (file.size > 2 * 1024 * 1024) {
         throw new Error('Arquivo muito grande. Tamanho máximo: 2MB');
       }
       
@@ -29,40 +29,31 @@ export const useEmailSignature = () => {
       }
       
       // Criar nome de arquivo único com o ID do usuário
-      const fileName = `sig_${user.id}_${uuidv4()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const fileName = `signature_${user.id}_${uuidv4()}.${fileExt}`;
       
-      // Verificar se o bucket 'signatures' existe, se não, criar
-      const { data: buckets } = await supabase.storage.listBuckets();
-      if (!buckets?.find(bucket => bucket.name === 'signatures')) {
-        const { error: bucketError } = await supabase.storage.createBucket('signatures', {
-          public: true
-        });
-        
-        if (bucketError) {
-          console.error('Error creating signatures bucket:', bucketError);
-          throw new Error('Erro ao criar bucket para assinaturas');
-        }
-      }
+      console.log('Uploading signature to bucket "signatures" with filename:', fileName);
       
-      // Fazer o upload para o bucket 'signatures'
+      // Fazer o upload para o bucket 'signatures' (bucket já criado via SQL)
       const { error: uploadError } = await supabase.storage
         .from('signatures')
-        .upload(filePath, file, {
+        .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: true // Sobrescrever se existir
+          upsert: true
         });
         
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw uploadError;
+      }
       
       // Obter URL pública
       const { data: { publicUrl } } = supabase.storage
         .from('signatures')
-        .getPublicUrl(filePath);
+        .getPublicUrl(fileName);
       
       console.log("Signature image uploaded successfully:", publicUrl);
       
-      // Save signature URL to user settings
+      // Salvar URL da assinatura nas configurações do usuário
       const { data: settingsData, error: settingsError } = await supabase
         .from('configuracoes')
         .select('id')
@@ -75,7 +66,7 @@ export const useEmailSignature = () => {
       }
         
       if (settingsData) {
-        // Update existing settings
+        // Atualizar configurações existentes
         const { error: updateError } = await supabase
           .from('configuracoes')
           .update({ signature_image: publicUrl })
@@ -86,7 +77,7 @@ export const useEmailSignature = () => {
           throw new Error('Erro ao salvar a URL da assinatura nas configurações');
         }
       } else {
-        // Create new settings entry
+        // Criar nova entrada de configurações
         const { error: insertError } = await supabase
           .from('configuracoes')
           .insert({
@@ -119,18 +110,23 @@ export const useEmailSignature = () => {
     }
 
     try {
-      // Extract filename from URL
+      // Extrair nome do arquivo da URL
       const urlParts = imageUrl.split('/');
       const fileName = urlParts[urlParts.length - 1];
 
-      // Delete file directly (no path needed)
+      console.log('Deleting signature file:', fileName);
+
+      // Deletar arquivo do bucket signatures
       const { error } = await supabase.storage
         .from('signatures')
         .remove([fileName]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Storage delete error:', error);
+        throw error;
+      }
       
-      // Also remove from user settings
+      // Remover também das configurações do usuário
       const { error: updateError } = await supabase
         .from('configuracoes')
         .update({ signature_image: null })
@@ -158,11 +154,10 @@ export const useEmailSignature = () => {
         .from('configuracoes')
         .select('signature_image')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       
       if (error) {
         if (error.code === 'PGRST116') {
-          // No settings found, which is fine
           console.log("No settings found for user");
           return null;
         }

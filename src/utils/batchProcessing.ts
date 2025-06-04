@@ -17,7 +17,7 @@ export interface BatchProcessingOptions {
 }
 
 /**
- * Process items in parallel batches with advanced optimization for large datasets (2000+ items)
+ * OPTIMIZED: Process items in parallel batches with enhanced performance for up to 10,000 items
  */
 export async function processBatch<T, R>(
   items: T[],
@@ -25,8 +25,8 @@ export async function processBatch<T, R>(
   options: BatchProcessingOptions = {}
 ): Promise<BatchResult<R>[]> {
   const {
-    batchSize = 5,
-    delayBetweenBatches = 100,
+    batchSize = 10, // Optimized for email sending
+    delayBetweenBatches = 50, // Reduced delay for better throughput
     showProgress = true,
     enableLargeVolumeOptimizations = false,
     onBatchComplete
@@ -40,31 +40,33 @@ export async function processBatch<T, R>(
   let errorCount = 0;
   let startTime = Date.now();
   
-  // For large volumes, enable aggressive optimizations
-  const isLargeVolume = totalItems >= 500;
-  const progressThrottleInterval = isLargeVolume ? 20 : 5; // Show progress every 20 batches for large volumes
+  // OPTIMIZED: Enhanced thresholds for better large volume handling
+  const isLargeVolume = totalItems >= 1000;
+  const isVeryLargeVolume = totalItems >= 5000;
+  const progressThrottleInterval = isVeryLargeVolume ? 50 : isLargeVolume ? 20 : 5;
   
-  console.log(`🚀 Starting ${isLargeVolume ? 'large-volume' : 'standard'} batch processing: ${totalItems} items, ${totalBatches} batches, ${batchSize} items/batch`);
+  console.log(`🚀 Starting ${isVeryLargeVolume ? 'very-large-volume' : isLargeVolume ? 'large-volume' : 'standard'} batch processing: ${totalItems.toLocaleString()} items, ${totalBatches} batches, ${batchSize} items/batch`);
   
-  // Process items in batches
+  // OPTIMIZED: Process items in batches with enhanced error handling
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     const batchStartIndex = i;
     const batchNumber = Math.floor(i / batchSize) + 1;
     
-    // Throttled progress reporting for large volumes
+    // OPTIMIZED: Throttled progress reporting for large volumes
     if (showProgress && !enableLargeVolumeOptimizations) {
-      if (totalBatches <= 50 || batchNumber % progressThrottleInterval === 0 || batchNumber === totalBatches) {
-        toast.info(`Processando lote ${batchNumber} de ${totalBatches} (${batch.length} itens)...`);
+      if (totalBatches <= 100 || batchNumber % progressThrottleInterval === 0 || batchNumber === totalBatches) {
+        const percentComplete = Math.round((batchNumber / totalBatches) * 100);
+        toast.info(`Processando lote ${batchNumber.toLocaleString()} de ${totalBatches.toLocaleString()} (${percentComplete}%)...`);
       }
     }
     
-    // Process batch items in parallel with aggressive error isolation for large volumes
+    // OPTIMIZED: Process batch items with enhanced timeout handling
     const batchPromises = batch.map(async (item, batchIndex) => {
       const globalIndex = batchStartIndex + batchIndex;
       try {
-        // Add timeout for large volume processing to prevent hanging
-        const timeoutMs = isLargeVolume ? 30000 : 60000; // 30s for large volumes, 60s for normal
+        // OPTIMIZED: Adjusted timeouts based on volume
+        const timeoutMs = isVeryLargeVolume ? 20000 : isLargeVolume ? 25000 : 30000;
         
         const result = await Promise.race([
           processor(item, globalIndex),
@@ -79,9 +81,9 @@ export async function processBatch<T, R>(
           index: globalIndex
         } as BatchResult<R>;
       } catch (error: any) {
-        // Enhanced error logging for large volumes
-        if (isLargeVolume && globalIndex % 100 === 0) {
-          console.warn(`Error processing item ${globalIndex}:`, error.message);
+        // OPTIMIZED: Enhanced error logging for large volumes
+        if (isLargeVolume && globalIndex % 500 === 0) {
+          console.warn(`Error processing item ${globalIndex.toLocaleString()}:`, error.message);
         }
         
         return {
@@ -92,10 +94,9 @@ export async function processBatch<T, R>(
       }
     });
     
-    // Wait for all items in this batch to complete with better error handling
+    // OPTIMIZED: Enhanced batch result processing
     const batchResults = await Promise.allSettled(batchPromises);
     
-    // Process batch results and count successes/errors
     let batchSuccessCount = 0;
     let batchErrorCount = 0;
     
@@ -126,49 +127,54 @@ export async function processBatch<T, R>(
       onBatchComplete(batchNumber, totalBatches, batchSuccessCount, batchErrorCount);
     }
     
-    // Progress and performance monitoring for large volumes
-    if (isLargeVolume && batchNumber % 50 === 0) {
+    // OPTIMIZED: Enhanced progress monitoring for large volumes
+    if (isLargeVolume && batchNumber % 100 === 0) {
       const elapsed = Date.now() - startTime;
       const avgTimePerBatch = elapsed / batchNumber;
       const estimatedTotalTime = avgTimePerBatch * totalBatches;
       const remainingTime = Math.round((estimatedTotalTime - elapsed) / 1000);
+      const throughput = Math.round((batchNumber * batchSize / elapsed) * 1000);
       
-      console.log(`Large volume progress: ${batchNumber}/${totalBatches} batches (${Math.round((batchNumber/totalBatches)*100)}%) | ETA: ${remainingTime}s`);
+      console.log(`📊 Large volume progress: ${batchNumber.toLocaleString()}/${totalBatches.toLocaleString()} batches (${Math.round((batchNumber/totalBatches)*100)}%) | ETA: ${remainingTime}s | Throughput: ${throughput} items/s`);
     }
     
-    // Optimized delay between batches
+    // OPTIMIZED: Dynamic delay adjustment based on volume and performance
     if (i + batchSize < items.length && delayBetweenBatches > 0) {
-      // For very large volumes, use minimal delays to maximize throughput
-      const adjustedDelay = isLargeVolume && totalBatches > 100 
-        ? Math.max(25, delayBetweenBatches / 4) 
-        : totalBatches > 50 
-          ? Math.max(50, delayBetweenBatches / 2) 
-          : delayBetweenBatches;
+      let adjustedDelay = delayBetweenBatches;
+      
+      if (isVeryLargeVolume && totalBatches > 500) {
+        adjustedDelay = Math.max(25, delayBetweenBatches / 6); // Very aggressive for huge volumes
+      } else if (isLargeVolume && totalBatches > 200) {
+        adjustedDelay = Math.max(30, delayBetweenBatches / 4); // Aggressive for large volumes
+      } else if (totalBatches > 100) {
+        adjustedDelay = Math.max(40, delayBetweenBatches / 2); // Moderate optimization
+      }
           
       await new Promise(resolve => setTimeout(resolve, adjustedDelay));
     }
   }
   
-  // Final performance statistics
+  // OPTIMIZED: Enhanced final performance statistics
   const totalTime = Date.now() - startTime;
   const avgTimePerItem = totalTime / totalItems;
   const successRate = totalItems > 0 ? (successCount / totalItems) * 100 : 0;
+  const throughput = Math.round((totalItems / totalTime) * 1000);
   
   console.log(`✅ Batch processing completed in ${Math.round(totalTime/1000)}s:`);
-  console.log(`   📊 ${successCount} successful, ${errorCount} failed (${Math.round(successRate)}% success rate)`);
-  console.log(`   ⚡ ${Math.round(avgTimePerItem)}ms avg/item, ${totalBatches} batches processed`);
+  console.log(`   📊 ${successCount.toLocaleString()} successful, ${errorCount.toLocaleString()} failed (${Math.round(successRate)}% success rate)`);
+  console.log(`   ⚡ ${Math.round(avgTimePerItem)}ms avg/item, ${throughput} items/s throughput`);
   
-  // Show final summary for large volumes
+  // OPTIMIZED: Enhanced final summary for large volumes
   if (isLargeVolume) {
-    const throughput = Math.round((totalItems / totalTime) * 1000);
-    toast.success(`🎯 Processamento concluído: ${throughput} itens/s, ${Math.round(successRate)}% sucesso`);
+    const efficiency = successRate >= 95 ? '🎯' : successRate >= 85 ? '⚠️' : '🔴';
+    toast.success(`${efficiency} Processamento concluído: ${throughput} itens/s, ${Math.round(successRate)}% sucesso, ${totalItems.toLocaleString()} processados`);
   }
   
   return results;
 }
 
 /**
- * Get enhanced summary of batch processing results with performance metrics
+ * OPTIMIZED: Enhanced summary with performance metrics and detailed error analysis
  */
 export function getBatchSummary<T>(results: BatchResult<T>[]) {
   const successCount = results.filter(r => r.success).length;
@@ -176,12 +182,22 @@ export function getBatchSummary<T>(results: BatchResult<T>[]) {
   const total = results.length;
   const successRate = total > 0 ? (successCount / total) * 100 : 0;
   
-  // Group errors by type for better debugging
+  // OPTIMIZED: Enhanced error grouping and analysis
   const errorTypes = results
     .filter(r => !r.success && r.error)
     .reduce((acc, r) => {
-      const errorType = r.error?.split(':')[0] || 'Unknown';
-      acc[errorType] = (acc[errorType] || 0) + 1;
+      // Better error categorization
+      let errorCategory = 'Unknown';
+      const errorMsg = r.error?.toLowerCase() || '';
+      
+      if (errorMsg.includes('timeout')) errorCategory = 'Timeout';
+      else if (errorMsg.includes('smtp') || errorMsg.includes('authentication')) errorCategory = 'SMTP Error';
+      else if (errorMsg.includes('network') || errorMsg.includes('connection')) errorCategory = 'Network Error';
+      else if (errorMsg.includes('invalid') || errorMsg.includes('email')) errorCategory = 'Invalid Email';
+      else if (errorMsg.includes('quota') || errorMsg.includes('limit')) errorCategory = 'Rate Limit';
+      else errorCategory = r.error?.split(':')[0] || 'Unknown';
+      
+      acc[errorCategory] = (acc[errorCategory] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
   
@@ -192,12 +208,14 @@ export function getBatchSummary<T>(results: BatchResult<T>[]) {
     successRate: Number(successRate.toFixed(2)),
     errorTypes,
     hasErrors: errorCount > 0,
-    isFullSuccess: successCount === total
+    isFullSuccess: successCount === total,
+    isHighSuccess: successRate >= 95,
+    needsAttention: errorCount > total * 0.1 // More than 10% errors
   };
 }
 
 /**
- * Enhanced utility to chunk array into smaller arrays for optimized batch processing
+ * OPTIMIZED: Enhanced chunking for better memory management
  */
 export function chunkArray<T>(array: T[], chunkSize: number): T[][] {
   const chunks: T[][] = [];
@@ -208,24 +226,56 @@ export function chunkArray<T>(array: T[], chunkSize: number): T[][] {
 }
 
 /**
- * Utility to estimate processing time for large volumes
+ * OPTIMIZED: Enhanced time estimation with better accuracy
  */
-export function estimateProcessingTime(itemCount: number, avgTimePerItem: number = 500): {
+export function estimateProcessingTime(itemCount: number, avgTimePerItem: number = 300): {
   estimatedMinutes: number;
   estimatedHours: number;
   recommended: string;
+  efficiency: 'high' | 'medium' | 'low';
 } {
-  const totalMs = itemCount * avgTimePerItem;
+  // OPTIMIZED: More accurate time estimates based on batch processing
+  const batchOverhead = 50; // 50ms overhead per batch
+  const batchSize = itemCount >= 5000 ? 15 : itemCount >= 1000 ? 10 : 5;
+  const totalBatches = Math.ceil(itemCount / batchSize);
+  const totalMs = (itemCount * avgTimePerItem) + (totalBatches * batchOverhead);
+  
   const estimatedMinutes = Math.round(totalMs / (1000 * 60));
   const estimatedHours = Math.round(estimatedMinutes / 60 * 10) / 10;
   
   let recommended = 'standard';
-  if (itemCount >= 1000) recommended = 'large-volume';
-  if (itemCount >= 2000) recommended = 'ultra-optimized';
+  let efficiency: 'high' | 'medium' | 'low' = 'high';
+  
+  if (itemCount >= 5000) {
+    recommended = 'ultra-optimized';
+    efficiency = itemCount <= 10000 ? 'high' : 'medium';
+  } else if (itemCount >= 1000) {
+    recommended = 'large-volume';
+    efficiency = 'high';
+  }
   
   return {
     estimatedMinutes,
     estimatedHours,
-    recommended
+    recommended,
+    efficiency
   };
+}
+
+/**
+ * OPTIMIZED: New utility for batch email preparation
+ */
+export function prepareBatchEmails(contacts: any[], templateId: string, customSubject?: string, customContent?: string) {
+  if (contacts.length > 10000) {
+    throw new Error('Limite máximo de 10.000 contatos por lote excedido');
+  }
+  
+  return contacts.map(contato => ({
+    to: contato.email,
+    contato_id: contato.id,
+    template_id: templateId,
+    contato_nome: contato.nome,
+    subject: customSubject,
+    content: customContent
+  }));
 }
