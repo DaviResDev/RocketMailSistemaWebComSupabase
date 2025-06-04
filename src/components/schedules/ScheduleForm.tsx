@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -258,7 +257,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
 
     try {
       if (bulkMode && contactsWithValidEmails.length > 1) {
-        // Use the batch email sending from useBatchEmailSending hook
+        // Get complete contact data for selected contacts
         const selectedContactsData = contactsWithValidEmails.map(contactId => {
           return contacts.find(c => c.id === contactId);
         }).filter(contact => contact !== undefined);
@@ -277,7 +276,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
           toast.info(`🚀 Modo ultra-otimizado ativado para ${selectedContactsData.length.toLocaleString()} emails`);
         }
 
-        // Use the batch email sending function
+        // Use the fixed batch email sending function directly from the hook
+        // This ensures we pass complete contact objects with all data needed for template variables
         const result = await sendEmailsInBatch(
           selectedContactsData,
           formData.template_id

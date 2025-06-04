@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useEnvios } from '@/hooks/useEnvios';
-import { processBatch, getBatchSummary } from '@/utils/batchProcessing';
+import { useBatchEmailSending } from '@/hooks/useBatchEmailSending';
 import { toast } from 'sonner';
 import { Mail, Users, Clock, CheckCircle, XCircle } from 'lucide-react';
 
@@ -27,7 +26,7 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<any>(null);
-  const { sendBatchEmails } = useEnvios();
+  const { sendEmailsInBatch } = useBatchEmailSending();
 
   const handleBatchSend = useCallback(async () => {
     if (selectedContacts.length === 0) {
@@ -46,59 +45,26 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
     try {
       console.log(`Iniciando envio em lote para ${selectedContacts.length} contatos`);
       
-      // Preparar dados dos emails para envio em lote
-      const emailsData = selectedContacts.map(contato => ({
-        to: contato.email,
-        contato_id: contato.id,
-        template_id: templateId,
-        contato_nome: contato.nome,
-        subject: customSubject,
-        content: customContent
-      }));
-
       const startTime = Date.now();
       
-      // Processar emails em lotes usando a função otimizada
-      const batchResults = await processBatch(
-        emailsData,
-        async (emailData, index) => {
-          // Simular progresso para UX
-          setProgress({ current: index + 1, total: selectedContacts.length });
-          
-          // Enviar via função de lote otimizada
-          const result = await sendBatchEmails([emailData]);
-          return result;
-        },
-        {
-          batchSize: 10, // Processar 10 emails por vez
-          delayBetweenBatches: 50, // 50ms entre lotes
-          enableLargeVolumeOptimizations: selectedContacts.length >= 500,
-          onBatchComplete: (batchNumber, totalBatches, successCount, errorCount) => {
-            const currentProgress = Math.round((batchNumber / totalBatches) * 100);
-            console.log(`Lote ${batchNumber}/${totalBatches} concluído: ${successCount} sucessos, ${errorCount} erros`);
-          }
-        }
+      // Use the updated sendEmailsInBatch function with all contact data
+      const result = await sendEmailsInBatch(
+        selectedContacts,
+        templateId,
+        customSubject,
+        customContent
       );
-
-      const summary = getBatchSummary(batchResults);
+      
       const totalTime = Date.now() - startTime;
       
-      setResults({
-        ...summary,
-        totalTime: Math.round(totalTime / 1000),
-        throughput: Math.round((summary.total / totalTime) * 1000)
-      });
-
-      // Mostrar resultado final
-      if (summary.isFullSuccess) {
-        toast.success(`🎉 Todos os ${summary.total} emails foram enviados com sucesso!`);
-      } else if (summary.successCount > 0) {
-        toast.success(`✅ ${summary.successCount} emails enviados com sucesso de ${summary.total}`);
-        if (summary.hasErrors) {
-          toast.warning(`⚠️ ${summary.errorCount} emails falharam no envio`);
-        }
+      if (result) {
+        setResults({
+          ...result,
+          totalTime: Math.round(totalTime / 1000),
+          throughput: Math.round((selectedContacts.length / totalTime) * 1000)
+        });
       } else {
-        toast.error(`❌ Falha completa: nenhum email foi enviado`);
+        toast.error('O envio falhou. Verifique os logs para mais detalhes.');
       }
 
     } catch (error: any) {
@@ -108,7 +74,7 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
       setIsProcessing(false);
       onComplete();
     }
-  }, [selectedContacts, templateId, customSubject, customContent, sendBatchEmails, onComplete]);
+  }, [selectedContacts, templateId, customSubject, customContent, sendEmailsInBatch, onComplete]);
 
   const resetResults = () => {
     setResults(null);

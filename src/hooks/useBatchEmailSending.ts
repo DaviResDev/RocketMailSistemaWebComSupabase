@@ -46,24 +46,155 @@ export function useBatchEmailSending() {
     try {
       console.log(`Iniciando envio em lote para ${selectedContacts.length} contatos`);
       
+      // Get user SMTP settings first to determine sending mode
+      const { data: userSettings } = await supabase
+        .from('configuracoes')
+        .select('signature_image, email_usuario, use_smtp, smtp_host, smtp_pass, smtp_from_name, email_porta, smtp_seguranca')
+        .single();
+      
+      // Get template data
+      const { data: templateData, error: templateError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+        
+      if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
+      if (!templateData) throw new Error('Template não encontrado');
+      
+      // Prepare SMTP settings if configured and use_smtp is enabled
+      const smtpSettings = userSettings?.use_smtp && userSettings?.smtp_host ? {
+        host: userSettings.smtp_host,
+        port: userSettings.email_porta || 587,
+        secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+        password: userSettings.smtp_pass,
+        from_name: userSettings.smtp_from_name || '',
+        from_email: userSettings.email_usuario || ''
+      } : null;
+      
       // Create email jobs
-      const emailJobs: EmailJob[] = selectedContacts.map(contact => ({
+      const emailJobs = selectedContacts.map(contact => ({
         contactId: contact.id,
         templateId: templateId,
         contactName: contact.nome,
         contactEmail: contact.email,
-        customSubject,
-        customContent
+        customSubject: customSubject || templateData.descricao || templateData.nome,
+        customContent: customContent || templateData.conteudo,
+        // These fields are needed for proper template processing
+        contact: contact,
+        template: templateData,
+        attachments: templateData.attachments,
+        signature_image: userSettings?.signature_image || templateData.signature_image
       }));
 
-      // Use parallel sending for better performance
-      const result = await sendBatchEmails(emailJobs, {
-        showProgress: true,
-        useParallelSending: true,
-        enableOptimizations: selectedContacts.length >= 100
+      // For SMTP, we need to send through our edge function with batch mode enabled
+      // to ensure proper processing of templates and variables
+      const batchRequestData = {
+        batch: true,
+        emails: emailJobs.map(job => ({
+          to: job.contactEmail,
+          contato_id: job.contactId,
+          template_id: job.templateId,
+          contato_nome: job.contactName,
+          content: job.customContent,
+          subject: job.customSubject,
+          contact: job.contact,
+          image_url: job.template.image_url,
+          signature_image: job.signature_image,
+          attachments: job.attachments
+        })),
+        smtp_settings: smtpSettings,
+        use_smtp: userSettings?.use_smtp || false
+      };
+      
+      console.log("Sending batch email with configuration:", {
+        batch_size: emailJobs.length,
+        use_smtp: userSettings?.use_smtp,
+        has_smtp_settings: !!smtpSettings,
+        template_id: templateId,
+        template_name: templateData.nome
       });
+      
+      const response = await supabase.functions.invoke('send-email', {
+        body: batchRequestData
+      });
+      
+      if (response.error) {
+        console.error("Edge function error:", response.error);
+        throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
+      }
+      
+      const responseData = response.data;
+      if (!responseData || !responseData.success) {
+        console.error("Failed response from send-email:", responseData);
+        throw new Error(responseData?.error || "Falha ao enviar emails em lote");
+      }
+      
+      const { summary, results } = responseData;
+      
+      // Update progress
+      setProgress({ current: selectedContacts.length, total: selectedContacts.length });
+      
+      // Enhanced results display with delivery method information
+      if (summary.successful > 0) {
+        let successMessage = `${summary.successful} emails enviados com sucesso!`;
+        if (summary.smtp > 0) {
+          successMessage += ` (${summary.smtp} via SMTP)`;
+        }
+        if (summary.resend > 0) {
+          successMessage += ` (${summary.resend} via Resend)`;
+        }
+        toast.success(successMessage);
+      }
+      
+      if (summary.failed > 0) {
+        const failedEmails = results.filter((r: any) => !r.success);
+        const errorMessages = [...new Set(failedEmails.map((r: any) => r.error))].slice(0, 3);
+        
+        toast.error(
+          `${summary.failed} emails falharam no envio. Taxa de sucesso: ${summary.successRate}%`,
+          {
+            description: errorMessages.join('; '),
+            duration: 10000
+          }
+        );
+        
+        // Log failed emails for debugging
+        console.warn("Failed emails:", failedEmails);
+      }
+      
+      // Create entries in envios table for successful sends
+      try {
+        const { data: user } = await supabase.auth.getUser();
+        if (user.user) {
+          const successfulResults = results.filter((r: any) => r.success);
+          const envioRecords = successfulResults.map((result: any) => {
+            const email = result.to;
+            const contact = selectedContacts.find(c => c.email === email || (typeof email === 'string' && email.includes(c.email)));
+            
+            return {
+              contato_id: contact?.id,
+              template_id: templateId,
+              status: 'enviado',
+              user_id: user.user.id,
+              data_envio: new Date().toISOString()
+            };
+          }).filter(record => record.contato_id);
+          
+          if (envioRecords.length > 0) {
+            await supabase.from('envios').insert(envioRecords);
+          }
+        }
+      } catch (err) {
+        console.error("Error saving to envios table:", err);
+      }
 
-      return result.success;
+      return {
+        success: summary.successful > 0,
+        successCount: summary.successful,
+        errorCount: summary.failed,
+        successRate: summary.successRate
+      };
     } catch (error: any) {
       console.error('Erro no envio em lote:', error);
       toast.error(`Erro no envio em lote: ${error.message}`);
@@ -73,166 +204,12 @@ export function useBatchEmailSending() {
     }
   };
 
-  const sendBatchEmails = async (emailJobs: EmailJob[], options: BatchOptions = {}) => {
-    const {
-      showProgress = true,
-      useParallelSending = true,
-      enableOptimizations = false,
-      batchSize = useParallelSending ? (emailJobs.length >= 10000 ? 50 : 20) : 10,
-      delayBetweenBatches = useParallelSending ? (emailJobs.length >= 10000 ? 25 : 50) : 100
-    } = options;
-
-    if (!emailJobs || emailJobs.length === 0) {
-      toast.error('Nenhum email para enviar');
-      return { success: false };
-    }
-
-    setIsProcessing(true);
-    setProgress({ current: 0, total: emailJobs.length });
-
-    try {
-      let successCount = 0;
-      let errorCount = 0;
-      const errors: string[] = [];
-
-      if (useParallelSending && emailJobs.length >= 10) {
-        // Ultra-parallel processing for large volumes
-        console.log(`Enviando ${emailJobs.length} emails em modo paralelo (${batchSize} por lote)`);
-        
-        // Process in parallel batches
-        for (let i = 0; i < emailJobs.length; i += batchSize) {
-          const batch = emailJobs.slice(i, i + batchSize);
-          
-          // Send all emails in this batch simultaneously
-          const batchPromises = batch.map(async (job, index) => {
-            try {
-              const { data, error } = await supabase.functions.invoke('send-email', {
-                body: {
-                  to: job.contactEmail,
-                  contato_id: job.contactId,
-                  template_id: job.templateId,
-                  contato_nome: job.contactName,
-                  subject: job.customSubject,
-                  content: job.customContent
-                }
-              });
-
-              if (error) throw error;
-              if (!data?.success) throw new Error(data?.error || 'Falha no envio');
-
-              return { success: true, index: i + index };
-            } catch (error: any) {
-              console.error(`Erro no email ${i + index + 1}:`, error);
-              return { success: false, error: error.message, index: i + index };
-            }
-          });
-
-          // Wait for all emails in this batch to complete
-          const batchResults = await Promise.allSettled(batchPromises);
-          
-          // Process results
-          batchResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
-              if (result.value.success) {
-                successCount++;
-              } else {
-                errorCount++;
-                errors.push(`Email ${result.value.index + 1}: ${result.value.error}`);
-              }
-            } else {
-              errorCount++;
-              errors.push(`Email ${i + index + 1}: ${result.reason}`);
-            }
-
-            // Update progress
-            const currentProgress = successCount + errorCount;
-            setProgress({ current: currentProgress, total: emailJobs.length });
-          });
-
-          // Small delay between batches to prevent overwhelming the system
-          if (i + batchSize < emailJobs.length) {
-            await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-          }
-        }
-      } else {
-        // Sequential processing for smaller volumes or when parallel is disabled
-        console.log(`Enviando ${emailJobs.length} emails sequencialmente`);
-        
-        for (let i = 0; i < emailJobs.length; i++) {
-          const job = emailJobs[i];
-          
-          try {
-            const { data, error } = await supabase.functions.invoke('send-email', {
-              body: {
-                to: job.contactEmail,
-                contato_id: job.contactId,
-                template_id: job.templateId,
-                contato_nome: job.contactName,
-                subject: job.customSubject,
-                content: job.customContent
-              }
-            });
-
-            if (error) throw error;
-            if (!data?.success) throw new Error(data?.error || 'Falha no envio');
-
-            successCount++;
-          } catch (error: any) {
-            console.error(`Erro no email ${i + 1}:`, error);
-            errorCount++;
-            errors.push(`Email ${i + 1}: ${error.message}`);
-          }
-
-          setProgress({ current: i + 1, total: emailJobs.length });
-          
-          // Small delay between emails in sequential mode
-          if (i < emailJobs.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-        }
-      }
-
-      // Show results
-      const totalTime = Date.now();
-      const successRate = Math.round((successCount / emailJobs.length) * 100);
-
-      if (successCount === emailJobs.length) {
-        toast.success(`🎉 Todos os ${successCount.toLocaleString()} emails enviados com sucesso!`);
-      } else if (successCount > 0) {
-        toast.success(`✅ ${successCount.toLocaleString()} emails enviados com sucesso`);
-        if (errorCount > 0) {
-          toast.warning(`⚠️ ${errorCount} emails falharam no envio`);
-        }
-      } else {
-        toast.error(`❌ Falha completa: nenhum email foi enviado`);
-      }
-
-      console.log(`Envio concluído: ${successCount} sucessos, ${errorCount} falhas (${successRate}% taxa de sucesso)`);
-
-      return {
-        success: successCount > 0,
-        successCount,
-        errorCount,
-        successRate,
-        errors: errors.length > 0 ? errors : undefined
-      };
-
-    } catch (error: any) {
-      console.error('Erro crítico no envio em lote:', error);
-      toast.error(`Erro crítico no processamento: ${error.message}`);
-      return { success: false };
-    } finally {
-      setIsProcessing(false);
-      setProgress({ current: 0, total: 0 });
-    }
-  };
-
   return {
     isSending: isProcessing, // Keep backward compatibility
     isProcessing,
     progress,
     sendEmailsInBatch,
-    sendBatchEmails
+    sendBatchEmails: sendEmailsInBatch // Alias for backward compatibility
   };
 }
 

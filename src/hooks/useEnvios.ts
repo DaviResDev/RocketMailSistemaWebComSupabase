@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -121,7 +122,7 @@ export function useEnvios() {
         const templateData = templateResult.data;
         const userSettings = userSettingsResult.data;
 
-        // Process template content
+        // Process template content - Pass contact data for variable substitution
         let processedContent = formData.content;
         if (!processedContent && templateData) {
           processedContent = processTemplateVariables(templateData.conteudo, contatoData);
@@ -170,7 +171,9 @@ export function useEnvios() {
           signature_image: signatureImage,
           image_url: templateData?.image_url,
           smtp_settings: smtpSettings,
-          use_smtp: userSettings?.use_smtp || false
+          use_smtp: userSettings?.use_smtp || false,
+          // Add contact data for proper variable substitution
+          contact: contatoData
         };
         
         console.log("Sending single email with data:", { 
@@ -274,6 +277,7 @@ export function useEnvios() {
   };
 
   // Send emails to multiple recipients in optimized batches with SMTP support
+  // NOTE: This function will be deprecated in favor of useBatchEmailSending hook
   const sendBatchEmails = async (emailsData: any[]) => {
     setSending(true);
     
@@ -304,9 +308,26 @@ export function useEnvios() {
           id: loadingToastId
         });
         
+        // For each email, add the contact data for proper variable substitution
+        const enhancedEmailsData = await Promise.all(emailsData.map(async (emailData) => {
+          if (emailData.contato_id) {
+            const { data: contactData } = await supabase
+              .from('contatos')
+              .select('*')
+              .eq('id', emailData.contato_id)
+              .single();
+              
+            return {
+              ...emailData,
+              contact: contactData
+            };
+          }
+          return emailData;
+        }));
+        
         const batchRequestData = {
           batch: true,
-          emails: emailsData,
+          emails: enhancedEmailsData,
           smtp_settings: smtpSettings,
           use_smtp: userSettings?.use_smtp || false
         };
