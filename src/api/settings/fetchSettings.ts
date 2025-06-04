@@ -22,7 +22,6 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
   if (data) {
     console.log("Settings loaded:", data);
     // Make sure to transform the data to match our Settings type
-    // We need to explicitly handle the signature_image property
     const settings: Settings = {
       id: data.id,
       email_smtp: data.email_smtp,
@@ -38,12 +37,15 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       user_id: data.user_id,
       two_factor_enabled: Boolean(data.two_factor_enabled),
       use_smtp: Boolean(data.use_smtp),
-      signature_image: data.signature_image || null // Properly handle signature_image with null fallback
+      signature_image: data.signature_image || null,
+      smtp_host: data.smtp_host || null, // New SMTP host field
+      smtp_pass: data.smtp_pass || null, // New SMTP password field
+      smtp_from_name: data.smtp_from_name || null // New SMTP from name field
     };
     return settings;
   } else {
-    // No settings found, create empty settings object with default true for use_smtp
-    console.log("No settings found, using empty defaults with SMTP enabled");
+    // No settings found, create empty settings object with default false for use_smtp
+    console.log("No settings found, using empty defaults with Resend enabled");
     return {
       id: 'new',
       email_smtp: '',
@@ -55,8 +57,11 @@ export async function fetchUserSettings(userId: string): Promise<Settings | null
       smtp_seguranca: 'tls', // Default to TLS
       smtp_nome: '',
       two_factor_enabled: false, // Default value
-      use_smtp: true, // Default to SMTP instead of Resend
-      signature_image: null // Default null value for signature_image
+      use_smtp: false, // Default to Resend instead of SMTP
+      signature_image: null, // Default null value for signature_image
+      smtp_host: null, // Default null for new SMTP fields
+      smtp_pass: null,
+      smtp_from_name: null
     };
   }
 }

@@ -8,9 +8,14 @@ export async function saveUserSettings(
   existingSettings: Settings | null
 ): Promise<Settings> {
   console.log("Saving settings:", values);
-  console.log("Signature image being saved:", values.signature_image);
+  console.log("SMTP configuration being saved:", {
+    use_smtp: values.use_smtp,
+    smtp_host: values.smtp_host,
+    smtp_pass: values.smtp_pass ? '[HIDDEN]' : null,
+    smtp_from_name: values.smtp_from_name
+  });
 
-  // Prepare the settings data
+  // Prepare the settings data including new SMTP fields
   const settingsData = {
     email_smtp: values.email_smtp || null,
     email_porta: values.email_porta || null,
@@ -23,6 +28,9 @@ export async function saveUserSettings(
     two_factor_enabled: values.two_factor_enabled || false,
     use_smtp: values.use_smtp || false,
     signature_image: values.signature_image || null,
+    smtp_host: values.smtp_host || null, // New SMTP host field
+    smtp_pass: values.smtp_pass || null, // New SMTP password field
+    smtp_from_name: values.smtp_from_name || null, // New SMTP from name field
     user_id: userId
   };
 

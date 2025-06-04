@@ -65,7 +65,10 @@ export type Database = {
           foto_perfil: string | null
           id: string
           signature_image: string | null
+          smtp_from_name: string | null
+          smtp_host: string | null
           smtp_nome: string | null
+          smtp_pass: string | null
           smtp_seguranca: string | null
           two_factor_enabled: boolean | null
           use_smtp: boolean | null
@@ -82,7 +85,10 @@ export type Database = {
           foto_perfil?: string | null
           id?: string
           signature_image?: string | null
+          smtp_from_name?: string | null
+          smtp_host?: string | null
           smtp_nome?: string | null
+          smtp_pass?: string | null
           smtp_seguranca?: string | null
           two_factor_enabled?: boolean | null
           use_smtp?: boolean | null
@@ -99,7 +105,10 @@ export type Database = {
           foto_perfil?: string | null
           id?: string
           signature_image?: string | null
+          smtp_from_name?: string | null
+          smtp_host?: string | null
           smtp_nome?: string | null
+          smtp_pass?: string | null
           smtp_seguranca?: string | null
           two_factor_enabled?: boolean | null
           use_smtp?: boolean | null

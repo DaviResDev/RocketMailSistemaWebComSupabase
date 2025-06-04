@@ -12,8 +12,6 @@ import { Button } from '@/components/ui/button';
 import { RefreshCcw } from 'lucide-react';
 import { ProfileForm } from '@/components/settings/ProfileForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Info } from 'lucide-react';
 
 export default function Configuracoes() {
   const { fetchSettings, settings, loading, error } = useSettings();
@@ -67,21 +65,16 @@ export default function Configuracoes() {
     );
   }
 
+  const hasSmtpSettings = settings?.smtp_host && settings?.email_usuario && settings?.smtp_pass;
+
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
       
-      <Alert className="bg-yellow-50 text-yellow-800 border-yellow-200">
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          As funcionalidades de envio de email foram removidas. O sistema continua funcionando para gerenciamento de templates e contatos.
-        </AlertDescription>
-      </Alert>
-
       <SmtpStatusIndicator 
-        useSmtp={false}
-        hasSmtpSettings={false}
-        hasResendConfig={false}
+        useSmtp={settings?.use_smtp || false}
+        hasSmtpSettings={!!hasSmtpSettings}
+        hasResendConfig={true}
       />
       
       <Tabs defaultValue="profile">
@@ -95,7 +88,7 @@ export default function Configuracoes() {
           <div className="grid gap-6">
             <SettingsForm
               onSave={() => {
-                toast.success('Configurações de perfil atualizadas com sucesso!');
+                toast.success('Configurações atualizadas com sucesso!');
               }}
             />
             <ProfileForm

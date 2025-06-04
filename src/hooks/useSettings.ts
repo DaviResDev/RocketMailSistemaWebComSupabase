@@ -55,12 +55,17 @@ export function useSettings() {
         throw new Error('Você precisa estar logado para salvar configurações');
       }
       
-      console.log("Saving settings with signature_image:", values.signature_image);
+      console.log("Saving settings with SMTP configuration:", {
+        use_smtp: values.use_smtp,
+        smtp_host: values.smtp_host,
+        smtp_from_name: values.smtp_from_name,
+        signature_image: values.signature_image
+      });
       
       const updatedSettings = await saveUserSettings(values, user.id, settings);
       setSettings(updatedSettings);
       
-      // Verificação explícita para garantir que a assinatura foi salva
+      // Verificação explícita para garantir que as configurações foram salvas
       if (values.signature_image && updatedSettings?.signature_image !== values.signature_image) {
         console.warn("Assinatura não foi salva corretamente:", {
           requested: values.signature_image,
@@ -69,7 +74,7 @@ export function useSettings() {
         throw new Error('Erro ao salvar assinatura digital. Tente novamente.');
       }
       
-      toast.success('Configurações de perfil salvas com sucesso!');
+      toast.success('Configurações salvas com sucesso!');
       
       return updatedSettings;
     } catch (error: any) {
@@ -82,10 +87,41 @@ export function useSettings() {
     }
   };
   
-  const testSmtpConnectionWrapper = async (formData: SettingsFormData) => {
-    // Email sending functionality has been removed
-    toast.error('Funcionalidade de teste de email foi removida do sistema.');
-    return { success: false, message: "Funcionalidade de envio de email foi removida." };
+  const testSmtpConnection = async (formData: SettingsFormData) => {
+    try {
+      console.log("Testing SMTP connection with data:", {
+        smtp_host: formData.smtp_host,
+        email_porta: formData.email_porta,
+        email_usuario: formData.email_usuario,
+        smtp_seguranca: formData.smtp_seguranca
+      });
+
+      const response = await fetch('/api/test-smtp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          smtp_host: formData.smtp_host,
+          email_porta: formData.email_porta,
+          email_usuario: formData.email_usuario,
+          smtp_pass: formData.smtp_pass,
+          smtp_seguranca: formData.smtp_seguranca,
+          smtp_from_name: formData.smtp_from_name
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        return { success: true, message: "Conexão SMTP testada com sucesso!" };
+      } else {
+        return { success: false, message: result.message || "Erro ao testar conexão SMTP" };
+      }
+    } catch (error: any) {
+      console.error('Erro ao testar conexão SMTP:', error);
+      return { success: false, message: error.message || "Erro ao testar conexão SMTP" };
+    }
   };
 
   return {
@@ -107,6 +143,6 @@ export function useSettings() {
         return null;
       }
     },
-    testSmtpConnection: testSmtpConnectionWrapper
+    testSmtpConnection
   };
 }

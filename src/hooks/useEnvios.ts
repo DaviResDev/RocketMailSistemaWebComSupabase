@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -68,7 +67,7 @@ export function useEnvios() {
     return processedContent;
   };
 
-  // Send email to single recipient with improved error handling
+  // Send email to single recipient with improved SMTP support
   const sendEmail = async (formData: EnvioFormData) => {
     setSending(true);
     
@@ -114,7 +113,7 @@ export function useEnvios() {
             .single(),
           supabase
             .from('configuracoes')
-            .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
+            .select('signature_image, email_usuario, use_smtp, smtp_host, smtp_pass, smtp_from_name, email_porta, smtp_seguranca')
             .single()
         ]);
         
@@ -148,12 +147,12 @@ export function useEnvios() {
         const signatureImage = formData.signature_image || userSettings?.signature_image || templateData.signature_image;
         
         // Prepare SMTP settings if configured and use_smtp is enabled
-        const smtpSettings = userSettings?.use_smtp && userSettings?.email_smtp ? {
-          host: userSettings.email_smtp,
-          port: userSettings.email_porta,
+        const smtpSettings = userSettings?.use_smtp && userSettings?.smtp_host ? {
+          host: userSettings.smtp_host,
+          port: userSettings.email_porta || 587,
           secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
-          password: userSettings.email_senha,
-          from_name: userSettings.smtp_nome || '',
+          password: userSettings.smtp_pass,
+          from_name: userSettings.smtp_from_name || '',
           from_email: userSettings.email_usuario || ''
         } : null;
         
@@ -171,7 +170,7 @@ export function useEnvios() {
           signature_image: signatureImage,
           image_url: templateData?.image_url,
           smtp_settings: smtpSettings,
-          use_smtp: userSettings?.use_smtp || false // ✅ Pass the use_smtp flag
+          use_smtp: userSettings?.use_smtp || false
         };
         
         console.log("Sending single email with data:", { 
@@ -180,7 +179,8 @@ export function useEnvios() {
           contato_id: formData.contato_id,
           has_attachments: !!parsedAttachments,
           subject: emailSubject,
-          use_smtp: userSettings?.use_smtp || false // ✅ Log the use_smtp flag
+          use_smtp: userSettings?.use_smtp || false,
+          has_smtp_settings: !!smtpSettings
         });
         
         const response = await supabase.functions.invoke('send-email', {
@@ -273,7 +273,7 @@ export function useEnvios() {
     }
   };
 
-  // Send emails to multiple recipients in optimized batches
+  // Send emails to multiple recipients in optimized batches with SMTP support
   const sendBatchEmails = async (emailsData: any[]) => {
     setSending(true);
     
@@ -286,16 +286,16 @@ export function useEnvios() {
         // Get user settings
         const { data: userSettings } = await supabase
           .from('configuracoes')
-          .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
+          .select('signature_image, email_usuario, use_smtp, smtp_host, smtp_pass, smtp_from_name, email_porta, smtp_seguranca')
           .single();
         
         // Prepare SMTP settings if configured and use_smtp is enabled
-        const smtpSettings = userSettings?.use_smtp && userSettings?.email_smtp ? {
-          host: userSettings.email_smtp,
-          port: userSettings.email_porta,
+        const smtpSettings = userSettings?.use_smtp && userSettings?.smtp_host ? {
+          host: userSettings.smtp_host,
+          port: userSettings.email_porta || 587,
           secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
-          password: userSettings.email_senha,
-          from_name: userSettings.smtp_nome || '',
+          password: userSettings.smtp_pass,
+          from_name: userSettings.smtp_from_name || '',
           from_email: userSettings.email_usuario || ''
         } : null;
         
@@ -308,13 +308,14 @@ export function useEnvios() {
           batch: true,
           emails: emailsData,
           smtp_settings: smtpSettings,
-          use_smtp: userSettings?.use_smtp || false // ✅ Pass the use_smtp flag
+          use_smtp: userSettings?.use_smtp || false
         };
         
         console.log("Sending batch email request with data:", {
           batch: true,
           total_emails: emailsData.length,
-          use_smtp: userSettings?.use_smtp || false // ✅ Log the use_smtp flag
+          use_smtp: userSettings?.use_smtp || false,
+          has_smtp_settings: !!smtpSettings
         });
         
         const response = await supabase.functions.invoke('send-email', {
@@ -473,7 +474,7 @@ export function useEnvios() {
       // Get user settings
       const { data: userSettings } = await supabase
         .from('configuracoes')
-        .select('signature_image, email_usuario, email_smtp, email_porta, email_senha, smtp_seguranca, smtp_nome, use_smtp')
+        .select('signature_image, email_usuario, use_smtp, smtp_host, smtp_pass, smtp_from_name, email_porta, smtp_seguranca')
         .single();
 
       let parsedAttachments = null;
