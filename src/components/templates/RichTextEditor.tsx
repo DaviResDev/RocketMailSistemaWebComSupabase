@@ -1,5 +1,4 @@
 
-
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -14,14 +13,19 @@ import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Custom FontSize extension that properly extends TextStyle
+// Custom FontSize extension that properly extends TextStyle - FIXED VERSION
 const FontSize = TextStyle.extend({
+  name: 'fontSize',
+  
   addAttributes() {
     return {
       ...this.parent?.(),
       fontSize: {
         default: null,
-        parseHTML: element => element.style.fontSize?.replace(/['"]+/g, '') || null,
+        parseHTML: element => {
+          const fontSize = element.style.fontSize;
+          return fontSize ? fontSize.replace(/['"]+/g, '') : null;
+        },
         renderHTML: attributes => {
           if (!attributes.fontSize) {
             return {};
@@ -107,7 +111,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       FontFamily.configure({
         types: ['textStyle'],
       }),
-      FontSize,
+      FontSize, // Our custom FontSize extension
       Placeholder.configure({
         placeholder,
         emptyNodeClass: 'is-editor-empty',
@@ -395,7 +399,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // FIXED: Completely rewritten font family function that works correctly
+  // IMPROVED: Font family function with better error handling
   const setFontFamily = (fontFamily: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -433,7 +437,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }, 100);
   };
 
-  // FIXED: Completely rewritten font size function that works correctly
+  // IMPROVED: Font size function using our custom extension
   const setFontSize = (size: string) => {
     if (!editor) {
       console.log('Editor not available');
@@ -451,7 +455,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       return;
     }
 
-    // Use the fontSize attribute via textStyle mark
+    // Use our custom fontSize attribute via textStyle mark
     const success = editor
       .chain()
       .focus()
@@ -747,4 +751,3 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     </div>
   );
 };
-

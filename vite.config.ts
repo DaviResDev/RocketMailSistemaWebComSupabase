@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => ({
       "@tiptap/pm/schema-list": "prosemirror-schema-list",
       "@tiptap/pm/gapcursor": "prosemirror-gapcursor",
       "@tiptap/pm/dropcursor": "prosemirror-dropcursor",
-      "@tiptap/pm/history": "prosemirror-history", // Add this new alias
+      "@tiptap/pm/history": "prosemirror-history",
     },
   },
   optimizeDeps: {
@@ -40,6 +40,8 @@ export default defineConfig(({ mode }) => ({
       '@tiptap/extension-placeholder',
       '@tiptap/extension-text-align',
       '@tiptap/extension-underline',
+      '@tiptap/extension-text-style',
+      '@tiptap/extension-font-family',
       'prosemirror-model',
       'prosemirror-state',
       'prosemirror-view',
@@ -49,7 +51,7 @@ export default defineConfig(({ mode }) => ({
       'prosemirror-schema-list',
       'prosemirror-gapcursor',
       'prosemirror-dropcursor',
-      'prosemirror-history', // Add this dependency to be included
+      'prosemirror-history',
     ],
   },
 }));
