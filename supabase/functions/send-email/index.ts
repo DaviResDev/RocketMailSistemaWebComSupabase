@@ -141,6 +141,225 @@ function validateAndSanitizeAttachments(attachments: any, isResend: boolean = fa
 }
 
 /**
+ * Send email via SMTP using native Deno APIs
+ */
+async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
+  try {
+    if (!smtpConfig || !smtpConfig.host || !smtpConfig.email_usuario || !smtpConfig.password) {
+      throw new Error("SMTP configuração incompleta");
+    }
+
+    // Extract and validate recipient email
+    const recipientEmail = extractEmailAddress(payload.to);
+    if (!isValidEmail(recipientEmail)) {
+      throw new Error(`Email inválido: ${payload.to}`);
+    }
+
+    const sanitizedSubject = sanitizeSubject(payload.subject);
+    const fromEmail = smtpConfig.from_email || smtpConfig.email_usuario;
+    const fromName = smtpConfig.from_name || smtpConfig.smtp_nome || 'RocketMail';
+    
+    console.log(`📧 Tentando envio SMTP para: ${recipientEmail}`);
+    console.log(`📋 Config SMTP: ${smtpConfig.host}:${smtpConfig.port} (${fromEmail})`);
+    
+    // Validate SMTP settings
+    if (!smtpConfig.port || (smtpConfig.port !== 587 && smtpConfig.port !== 465 && smtpConfig.port !== 25)) {
+      throw new Error(`Porta SMTP inválida: ${smtpConfig.port}. Use 587 (TLS), 465 (SSL) ou 25`);
+    }
+
+    // Create email message in RFC 5322 format
+    const boundary = `----boundary_${Date.now()}_${Math.random().toString(36)}`;
+    
+    let emailMessage = `From: "${fromName}" <${fromEmail}>\r\n`;
+    emailMessage += `To: ${recipientEmail}\r\n`;
+    emailMessage += `Subject: ${sanitizedSubject}\r\n`;
+    emailMessage += `MIME-Version: 1.0\r\n`;
+    
+    // Check if we have attachments
+    const validatedAttachments = validateAndSanitizeAttachments(payload.attachments, false);
+    const hasAttachments = validatedAttachments.length > 0;
+    
+    if (hasAttachments) {
+      emailMessage += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+      
+      // HTML content part
+      emailMessage += `--${boundary}\r\n`;
+      emailMessage += `Content-Type: text/html; charset=UTF-8\r\n`;
+      emailMessage += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      emailMessage += `${payload.html}\r\n\r\n`;
+      
+      // Attachment parts
+      for (const attachment of validatedAttachments) {
+        emailMessage += `--${boundary}\r\n`;
+        emailMessage += `Content-Type: ${attachment.contentType}\r\n`;
+        emailMessage += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;
+        emailMessage += `Content-Transfer-Encoding: base64\r\n\r\n`;
+        
+        if (attachment.content) {
+          const base64Content = attachment.content.includes('base64,') 
+            ? attachment.content.split('base64,')[1] 
+            : attachment.content;
+          emailMessage += `${base64Content}\r\n\r\n`;
+        }
+      }
+      
+      emailMessage += `--${boundary}--\r\n`;
+    } else {
+      emailMessage += `Content-Type: text/html; charset=UTF-8\r\n`;
+      emailMessage += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      emailMessage += `${payload.html}\r\n`;
+    }
+
+    // Connect to SMTP server
+    const isSecure = smtpConfig.port === 465;
+    let conn;
+    
+    try {
+      if (isSecure) {
+        conn = await Deno.connectTls({
+          hostname: smtpConfig.host,
+          port: smtpConfig.port,
+        });
+        console.log("✅ Conexão TLS estabelecida");
+      } else {
+        conn = await Deno.connect({
+          hostname: smtpConfig.host,
+          port: smtpConfig.port,
+        });
+        console.log("✅ Conexão TCP estabelecida");
+      }
+
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+
+      // Helper function to read response
+      async function readResponse(): Promise<string> {
+        const buffer = new Uint8Array(4096);
+        const n = await conn.read(buffer);
+        if (n === null) throw new Error("Conexão SMTP fechada inesperadamente");
+        return decoder.decode(buffer.subarray(0, n));
+      }
+
+      // Helper function to send command
+      async function sendCommand(command: string): Promise<string> {
+        console.log(`→ ${command.trim()}`);
+        await conn.write(encoder.encode(command + "\r\n"));
+        const response = await readResponse();
+        console.log(`← ${response.trim()}`);
+        return response;
+      }
+
+      // SMTP conversation
+      let response = await readResponse(); // Welcome message
+      console.log(`← ${response.trim()}`);
+      
+      if (!response.startsWith('220')) {
+        throw new Error(`SMTP servidor rejeitou conexão: ${response}`);
+      }
+
+      // EHLO
+      response = await sendCommand(`EHLO ${smtpConfig.host}`);
+      if (!response.startsWith('250')) {
+        throw new Error(`EHLO falhou: ${response}`);
+      }
+
+      // STARTTLS for non-SSL connections
+      if (!isSecure && smtpConfig.port === 587) {
+        response = await sendCommand("STARTTLS");
+        if (!response.startsWith('220')) {
+          throw new Error(`STARTTLS falhou: ${response}`);
+        }
+        
+        // Upgrade to TLS
+        const tlsConn = await Deno.startTls(conn, { hostname: smtpConfig.host });
+        conn.close();
+        conn = tlsConn;
+        console.log("✅ Upgrade para TLS concluído");
+        
+        // Send EHLO again after TLS
+        response = await sendCommand(`EHLO ${smtpConfig.host}`);
+        if (!response.startsWith('250')) {
+          throw new Error(`EHLO pós-TLS falhou: ${response}`);
+        }
+      }
+
+      // AUTH LOGIN
+      response = await sendCommand("AUTH LOGIN");
+      if (!response.startsWith('334')) {
+        throw new Error(`AUTH LOGIN falhou: ${response}`);
+      }
+
+      // Send username (base64 encoded)
+      const username = btoa(smtpConfig.email_usuario);
+      response = await sendCommand(username);
+      if (!response.startsWith('334')) {
+        throw new Error(`Autenticação usuário falhou: ${response}`);
+      }
+
+      // Send password (base64 encoded)
+      const password = btoa(smtpConfig.password);
+      response = await sendCommand(password);
+      if (!response.startsWith('235')) {
+        throw new Error(`Autenticação senha falhou: ${response}`);
+      }
+
+      console.log("✅ Autenticação SMTP bem-sucedida");
+
+      // MAIL FROM
+      response = await sendCommand(`MAIL FROM:<${fromEmail}>`);
+      if (!response.startsWith('250')) {
+        throw new Error(`MAIL FROM falhou: ${response}`);
+      }
+
+      // RCPT TO
+      response = await sendCommand(`RCPT TO:<${recipientEmail}>`);
+      if (!response.startsWith('250')) {
+        throw new Error(`RCPT TO falhou: ${response}`);
+      }
+
+      // DATA
+      response = await sendCommand("DATA");
+      if (!response.startsWith('354')) {
+        throw new Error(`DATA falhou: ${response}`);
+      }
+
+      // Send email content
+      await conn.write(encoder.encode(emailMessage));
+      response = await sendCommand(".");
+      if (!response.startsWith('250')) {
+        throw new Error(`Envio da mensagem falhou: ${response}`);
+      }
+
+      // QUIT
+      await sendCommand("QUIT");
+      conn.close();
+
+      console.log("✅ Email enviado com sucesso via SMTP!");
+
+      return {
+        success: true,
+        id: `smtp_${Date.now()}`,
+        provider: "smtp",
+        method: "SMTP Nativo",
+        from: `"${fromName}" <${fromEmail}>`,
+        to: recipientEmail,
+        attachments: hasAttachments ? validatedAttachments.length : 0
+      };
+
+    } catch (connError) {
+      if (conn) {
+        try { conn.close(); } catch (e) { /* ignore */ }
+      }
+      throw connError;
+    }
+
+  } catch (error) {
+    console.error("❌ Erro SMTP:", error.message);
+    throw new Error(`Falha SMTP: ${error.message}`);
+  }
+}
+
+/**
  * Send email via Resend API with proper validation
  */
 async function sendEmailViaResend(resendApiKey: string, fromName: string, replyTo: string, payload: any): Promise<any> {
@@ -252,18 +471,49 @@ async function sendEmailViaResend(resendApiKey: string, fromName: string, replyT
 }
 
 /**
- * Send single email with Resend as primary (SMTP disabled temporarily)
+ * Send single email with SMTP preferred and Resend fallback
  */
 async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any, useSmtp: boolean): Promise<any> {
   try {
-    console.log(`📧 Email sending strategy: ${useSmtp ? 'SMTP preferred (temporarily disabled)' : 'Resend-only'}`);
+    console.log(`📧 Email sending strategy: ${useSmtp ? 'SMTP preferred with Resend fallback' : 'Resend-only'}`);
     
-    // TEMPORARILY DISABLE SMTP DUE TO TLS IMPLEMENTATION ISSUE
+    // Try SMTP first if configured and enabled
     if (useSmtp && smtpConfig) {
-      console.warn("⚠️ SMTP temporariamente desabilitado devido a limitação de TLS. Usando Resend como método principal.");
+      try {
+        console.log("🔄 Attempting SMTP delivery...");
+        const result = await sendEmailViaSMTP(smtpConfig, payload);
+        console.log("✅ SMTP delivery successful!");
+        return result;
+      } catch (smtpError) {
+        console.error("❌ SMTP failed:", smtpError.message);
+        
+        // Try Resend as fallback if available
+        if (resendConfig && resendConfig.apiKey) {
+          console.log("🔄 Attempting Resend fallback...");
+          try {
+            const result = await sendEmailViaResend(
+              resendConfig.apiKey,
+              resendConfig.fromName || 'RocketMail',
+              resendConfig.replyTo,
+              payload
+            );
+            console.log("✅ Resend fallback successful!");
+            return {
+              ...result,
+              fallback: true,
+              originalError: smtpError.message
+            };
+          } catch (resendError) {
+            console.error("❌ Resend fallback also failed:", resendError.message);
+            throw new Error(`SMTP falhou: ${smtpError.message}. Resend também falhou: ${resendError.message}`);
+          }
+        } else {
+          throw new Error(`SMTP falhou: ${smtpError.message}. Resend não configurado como fallback.`);
+        }
+      }
     }
     
-    // Use Resend as the primary method
+    // Use Resend as primary method if SMTP is not enabled
     if (resendConfig && resendConfig.apiKey) {
       try {
         console.log("🔄 Using Resend as primary method...");
@@ -283,7 +533,7 @@ async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any,
     }
     
     // No delivery method available
-    throw new Error('Nenhum método de envio configurado (Resend não disponível)');
+    throw new Error('Nenhum método de envio configurado');
     
   } catch (error) {
     console.error("❌ Error in sendSingleEmail:", error);
@@ -295,12 +545,12 @@ async function sendSingleEmail(payload: any, smtpConfig: any, resendConfig: any,
  * Process multiple emails in parallel batches
  */
 async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendConfig: any, useSmtp: boolean): Promise<any> {
-  const batchSize = 10; // Reduced batch size for better rate limiting
-  const delayBetweenBatches = 2000; // Increased delay to 2 seconds
+  const batchSize = useSmtp ? 50 : 10; // Smaller batches for SMTP to avoid timeouts
+  const delayBetweenBatches = useSmtp ? 3000 : 2000; // Longer delay for SMTP
   const results: any[] = [];
   
   console.log(`📬 Processing ${emailRequests.length} emails in batches of ${batchSize}`);
-  console.log(`📋 Email strategy: ${useSmtp ? 'SMTP preferred (temporarily disabled)' : 'Resend-only'}`);
+  console.log(`📋 Email strategy: ${useSmtp ? 'SMTP preferred with Resend fallback' : 'Resend-only'}`);
   
   for (let i = 0; i < emailRequests.length; i += batchSize) {
     const batch = emailRequests.slice(i, i + batchSize);
@@ -317,7 +567,7 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
         
         // Add small delay between individual emails in batch to respect rate limits
         if (index > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, useSmtp ? 1000 : 500));
         }
         
         const result = await sendSingleEmail(emailData, smtpConfig, resendConfig, useSmtp);
@@ -355,12 +605,16 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
   
   const successCount = results.filter(r => r.success).length;
   const failureCount = results.filter(r => !r.success).length;
+  const smtpCount = results.filter(r => r.success && r.provider === 'smtp').length;
   const resendCount = results.filter(r => r.success && r.provider === 'resend').length;
+  const fallbackCount = results.filter(r => r.success && r.fallback).length;
   
   console.log(`📊 Batch processing complete:`);
   console.log(`   ✅ Total successful: ${successCount}`);
   console.log(`   ❌ Total failed: ${failureCount}`);
+  console.log(`   📧 Via SMTP: ${smtpCount}`);
   console.log(`   📨 Via Resend: ${resendCount}`);
+  console.log(`   🔄 Fallback used: ${fallbackCount}`);
   
   return {
     results,
@@ -368,8 +622,8 @@ async function processBatchEmails(emailRequests: any[], smtpConfig: any, resendC
       total: emailRequests.length,
       successful: successCount,
       failed: failureCount,
-      fallback: 0,
-      smtp: 0,
+      fallback: fallbackCount,
+      smtp: smtpCount,
       resend: resendCount,
       successRate: emailRequests.length > 0 ? ((successCount / emailRequests.length) * 100).toFixed(1) : "0"
     }
@@ -463,7 +717,7 @@ serve(async (req) => {
         // Determine configuration based on user settings
         const useSmtp = requestData.use_smtp === true;
         
-        // Prepare SMTP configuration (temporarily disabled)
+        // Prepare SMTP configuration
         let smtpConfig = null;
         if (useSmtp && requestData.smtp_settings) {
           smtpConfig = {
@@ -485,14 +739,28 @@ serve(async (req) => {
         };
         
         console.log(`📋 Configuration:`);
-        console.log(`   🔧 Use SMTP: ${useSmtp} (temporarily disabled)`);
+        console.log(`   🔧 Use SMTP: ${useSmtp}`);
         console.log(`   📨 Resend available: ${!!resendApiKey}`);
         
-        if (!resendApiKey) {
+        // Validate that at least one delivery method is available
+        if (useSmtp && !smtpConfig) {
           return new Response(
             JSON.stringify({
               success: false,
-              error: "Serviço Resend não configurado. Configure a chave API do Resend."
+              error: "SMTP ativado mas configurações não fornecidas"
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 400,
+            }
+          );
+        }
+        
+        if (!useSmtp && !resendApiKey) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "Nenhum método de envio configurado: SMTP desativado e Resend não disponível"
             }),
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -631,7 +899,7 @@ serve(async (req) => {
     let emailAttachments: any[] = [];
     if (attachments) {
       try {
-        emailAttachments = validateAndSanitizeAttachments(attachments, true);
+        emailAttachments = validateAndSanitizeAttachments(attachments, !use_smtp);
         console.log(`📎 Processed ${emailAttachments.length} valid attachments`);
       } catch (error) {
         console.error("Error processing attachments:", error);
@@ -656,7 +924,7 @@ serve(async (req) => {
       // Determine configuration based on user settings
       const useSmtpDelivery = use_smtp === true;
       
-      // Prepare SMTP configuration (temporarily disabled)
+      // Prepare SMTP configuration
       let smtpConfig = null;
       if (useSmtpDelivery && smtp_settings) {
         smtpConfig = {
@@ -678,14 +946,28 @@ serve(async (req) => {
       };
       
       console.log(`📋 Single email configuration:`);
-      console.log(`   🔧 Use SMTP: ${useSmtpDelivery} (temporarily disabled)`);
+      console.log(`   🔧 Use SMTP: ${useSmtpDelivery}`);
       console.log(`   📨 Resend available: ${!!resendApiKey}`);
       
-      if (!resendApiKey) {
+      // Validate that at least one delivery method is available
+      if (useSmtpDelivery && !smtpConfig) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "Serviço Resend não configurado. Configure a chave API do Resend."
+            error: "SMTP ativado mas configurações não fornecidas"
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
+      
+      if (!useSmtpDelivery && !resendApiKey) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Nenhum método de envio configurado: SMTP desativado e Resend não disponível"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },

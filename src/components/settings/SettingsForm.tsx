@@ -11,6 +11,7 @@ import { SecuritySettingsForm } from './SecuritySettingsForm';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+import { SmtpStatusIndicator } from './SmtpStatusIndicator';
 
 interface SettingsFormProps {
   onSave?: () => void;
@@ -86,6 +87,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
 
   // Check if SMTP is properly configured
   const hasSmtpSettings = !!(formData.email_smtp && formData.email_porta && formData.email_usuario && formData.email_senha);
+  const hasResendConfig = true; // Assume Resend is always available
 
   return (
     <Tabs defaultValue="email">
@@ -106,7 +108,7 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
             <CardHeader>
               <CardTitle>Configurações de Email</CardTitle>
               <CardDescription>
-                Configure suas configurações de envio de email com melhor entrega e controle.
+                Configure suas configurações de envio de email com seu próprio SMTP ou use Resend como backup.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -145,30 +147,11 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
               </div>
 
               {/* Status indicator based on current configuration */}
-              {formData.use_smtp ? (
-                hasSmtpSettings ? (
-                  <Alert className="bg-green-50 text-green-800 border-green-200">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Sistema Híbrido Ativo:</strong> SMTP configurado com fallback Resend para máxima confiabilidade!
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <Alert className="bg-red-50 text-red-800 border-red-200">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Configuração Incompleta:</strong> SMTP ativado mas não configurado. Complete as configurações abaixo.
-                    </AlertDescription>
-                  </Alert>
-                )
-              ) : (
-                <Alert className="bg-blue-50 text-blue-800 border-blue-200">
-                  <Mail className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Modo Resend:</strong> Todos os emails serão enviados via Resend.
-                  </AlertDescription>
-                </Alert>
-              )}
+              <SmtpStatusIndicator 
+                useSmtp={formData.use_smtp}
+                hasSmtpSettings={hasSmtpSettings}
+                hasResendConfig={hasResendConfig}
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="smtp_nome">Nome do Remetente</Label>

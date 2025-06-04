@@ -1,6 +1,6 @@
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, AlertTriangle, Zap, Mail, Settings, Clock } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Zap, Mail, Settings, Clock, Wifi, WifiOff } from 'lucide-react';
 
 interface SmtpStatusIndicatorProps {
   useSmtp: boolean;
@@ -23,12 +23,11 @@ export function SmtpStatusIndicator({ useSmtp, hasSmtpSettings, hasResendConfig 
 
   if (useSmtp && hasSmtpSettings && hasResendConfig) {
     return (
-      <Alert className="bg-yellow-50 text-yellow-800 border-yellow-200">
-        <Clock className="h-4 w-4" />
+      <Alert className="bg-green-50 text-green-800 border-green-200">
+        <CheckCircle2 className="h-4 w-4" />
         <AlertDescription>
-          <strong>SMTP Temporariamente Indisponível:</strong> Suas configurações SMTP estão salvas, 
-          mas o envio está temporariamente usando apenas Resend devido a limitações de TLS. 
-          Uma implementação completa SMTP será disponibilizada em breve.
+          <strong>Sistema Híbrido Ativo:</strong> Enviará via seu SMTP configurado primeiro, 
+          com fallback automático para Resend em caso de falha. Máxima confiabilidade garantida!
         </AlertDescription>
       </Alert>
     );
@@ -36,11 +35,11 @@ export function SmtpStatusIndicator({ useSmtp, hasSmtpSettings, hasResendConfig 
 
   if (useSmtp && hasSmtpSettings && !hasResendConfig) {
     return (
-      <Alert className="bg-red-50 text-red-800 border-red-200">
-        <AlertTriangle className="h-4 w-4" />
+      <Alert className="bg-yellow-50 text-yellow-800 border-yellow-200">
+        <Wifi className="h-4 w-4" />
         <AlertDescription>
-          <strong>Configuração Incompleta:</strong> SMTP temporariamente indisponível e Resend não configurado. 
-          Configure a chave API do Resend para garantir o envio de emails.
+          <strong>SMTP Configurado:</strong> Enviará via seu SMTP, mas sem fallback. 
+          Recomendamos configurar Resend como backup para maior confiabilidade.
         </AlertDescription>
       </Alert>
     );
