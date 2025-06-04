@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Template } from '@/types/template';
 import { useSettings } from '@/hooks/useSettings';
@@ -55,8 +55,9 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
     loadSignatureImage();
   }, [settings, template, getSignatureUrl]);
   
-  // Replace template variables with sample values
-  const processContent = (content: string) => {
+  // Memoized content processing for better performance
+  const processedContent = useMemo(() => {
+    const content = template.conteudo || '';
     return content
       .replace(/\{\{nome\}\}/g, "Nome do Cliente")
       .replace(/\{\{email\}\}/g, "cliente@exemplo.com")
@@ -70,51 +71,47 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
       .replace(/\{\{vencimento\}\}/g, "01/01/2025")
       .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'))
       .replace(/\{\{hora\}\}/g, new Date().toLocaleTimeString('pt-BR'));
-  };
+  }, [template.conteudo]);
   
-  // Create full preview content with proper HTML structure
-  const createPreviewContent = () => {
-    let fullContent = '';
-    
-    // Always add main content
-    fullContent += template.conteudo ? processContent(template.conteudo) : '<p>Sem conteúdo</p>';
-    
-    return fullContent;
-  };
-  
-  // Parse attachments if they exist
-  const renderAttachments = () => {
-    if (!template.attachments) return null;
+  // Memoized attachments parsing
+  const attachmentsList = useMemo(() => {
+    if (!template.attachments) return [];
     
     try {
-      let attachmentsList = [];
+      let parsedAttachments = [];
       
       if (typeof template.attachments === 'string') {
-        attachmentsList = JSON.parse(template.attachments);
+        parsedAttachments = JSON.parse(template.attachments);
       } else if (Array.isArray(template.attachments)) {
-        attachmentsList = template.attachments;
+        parsedAttachments = template.attachments;
       }
       
-      if (attachmentsList.length === 0) return null;
-      
-      return (
-        <div className="mt-4 pt-4 border-t">
-          <h4 className="text-sm font-medium mb-2">Anexos:</h4>
-          <ul className="space-y-1">
-            {attachmentsList.map((attachment: any, index: number) => (
-              <li key={index} className="flex items-center text-sm">
-                <span className="inline-flex items-center">
-                  📎 {attachment.name || attachment.file_name || 'Arquivo'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      );
+      return Array.isArray(parsedAttachments) ? parsedAttachments : [];
     } catch (e) {
-      console.error('Erro ao processar anexos:', e);
-      return null;
+      console.error('Erro ao processar anexos na preview:', e);
+      return [];
     }
+  }, [template.attachments]);
+  
+  // Render attachments component
+  const renderAttachments = () => {
+    if (attachmentsList.length === 0) return null;
+    
+    return (
+      <div className="mt-4 pt-4 border-t">
+        <h4 className="text-sm font-medium mb-2">Anexos ({attachmentsList.length}):</h4>
+        <ul className="space-y-1">
+          {attachmentsList.map((attachment: any, index: number) => (
+            <li key={index} className="flex items-center text-sm">
+              <span className="inline-flex items-center">
+                📎 {attachment.name || attachment.file_name || 'Arquivo'}
+                {attachment.size && ` (${(attachment.size / 1024).toFixed(1)} KB)`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
   };
   
   return (
@@ -140,17 +137,18 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
           </div>
         )}
         
-        {/* FIXED: Main content with proper font rendering and explicit styles */}
+        {/* Main content with proper font rendering and explicit styles */}
         <div 
           className="prose max-w-none template-preview-content"
           dir="ltr"
           style={{ 
             direction: 'ltr', 
             textAlign: 'left',
-            fontFamily: 'inherit'
+            fontFamily: 'inherit',
+            lineHeight: '1.6'
           }}
           dangerouslySetInnerHTML={{ 
-            __html: createPreviewContent()
+            __html: processedContent || '<p class="text-muted-foreground italic">Sem conteúdo</p>'
           }} 
         />
         

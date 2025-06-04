@@ -46,6 +46,52 @@ export function useTemplateOperations() {
     }
   };
 
+  // Helper function to process attachments consistently
+  const processAttachments = async (attachments: any) => {
+    if (!attachments) {
+      return JSON.stringify([]);
+    }
+
+    // If it's already an array of processed attachments, convert to JSON
+    if (Array.isArray(attachments)) {
+      const processedAttachments = [];
+      
+      for (const attachment of attachments) {
+        // If it's a File object, upload it to storage
+        if (attachment instanceof File) {
+          const uploadedFile = await uploadFileToStorage(attachment);
+          processedAttachments.push(uploadedFile);
+        } 
+        // If it's an object with file information, keep it
+        else if (typeof attachment === 'object' && attachment !== null) {
+          processedAttachments.push(attachment);
+        }
+      }
+      
+      return JSON.stringify(processedAttachments);
+    }
+    
+    // If it's a single File object, process and convert
+    if (attachments instanceof File) {
+      const uploadedFile = await uploadFileToStorage(attachments);
+      return JSON.stringify([uploadedFile]);
+    }
+    
+    // If it's already a JSON string, validate and return
+    if (typeof attachments === 'string') {
+      try {
+        JSON.parse(attachments); // Verify it's valid JSON
+        return attachments;
+      } catch (e) {
+        console.error('Invalid JSON in attachments:', e);
+        return JSON.stringify([]);
+      }
+    }
+    
+    // For any other type, convert to empty array
+    return JSON.stringify([]);
+  };
+
   const createTemplate = async (formData: TemplateFormData) => {
     if (!user) {
       toast.error('Você precisa estar logado para criar templates');
@@ -53,62 +99,23 @@ export function useTemplateOperations() {
     }
 
     try {
-      // Set default value for email
+      // Process attachments
+      const processedAttachments = await processAttachments(formData.attachments);
+      
+      // Set default values for template data
       const templateData = {
         ...formData,
         canal: 'email', // Always set to email since it's the only option now
         user_id: user.id,
         status: formData.status || 'ativo', // Ensure status is set
         signature_image: settings?.signature_image || null, // Always use signature from settings
-        image_url: formData.image_url || null // Ensure image_url is included
+        image_url: formData.image_url || null, // Ensure image_url is included
+        attachments: processedAttachments
       };
-      
-      // Ensure attachments is properly formatted and stored
-      if (templateData.attachments) {
-        // Process attachments - if they are files, upload them to storage
-        if (Array.isArray(templateData.attachments)) {
-          const processedAttachments = [];
-          
-          for (const attachment of templateData.attachments) {
-            // If it's a File object, upload it to storage
-            if (attachment instanceof File) {
-              const uploadedFile = await uploadFileToStorage(attachment);
-              processedAttachments.push(uploadedFile);
-            } 
-            // If it's an object with file information, keep it
-            else if (typeof attachment === 'object') {
-              processedAttachments.push(attachment);
-            }
-          }
-          
-          // Store processed attachments as JSON string
-          templateData.attachments = JSON.stringify(processedAttachments);
-        } 
-        // Se for um objeto mas não um array, também converter para string
-        else if (typeof templateData.attachments === 'object' && !(templateData.attachments instanceof File)) {
-          templateData.attachments = JSON.stringify([templateData.attachments]);
-        }
-        // Se for um único arquivo, processar e converter
-        else if (templateData.attachments instanceof File) {
-          const uploadedFile = await uploadFileToStorage(templateData.attachments);
-          templateData.attachments = JSON.stringify([uploadedFile]);
-        }
-        // Se já for uma string, manter como está se for JSON válido
-        else if (typeof templateData.attachments === 'string') {
-          try {
-            JSON.parse(templateData.attachments); // Verificar se é um JSON válido
-          } catch (e) {
-            templateData.attachments = JSON.stringify([]);
-          }
-        }
-      } else {
-        // Ensure attachments is always at least an empty array
-        templateData.attachments = JSON.stringify([]);
-      }
       
       console.log('Criando template com dados:', {
         ...templateData,
-        attachments: templateData.attachments ? 'presente' : 'ausente',
+        attachments: processedAttachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
         image_url: templateData.image_url ? 'presente' : 'ausente'
@@ -131,61 +138,22 @@ export function useTemplateOperations() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
+      // Process attachments
+      const processedAttachments = await processAttachments(formData.attachments);
+      
       // Always set to 'email' for backwards compatibility
       const templateData = {
         ...formData, 
         canal: 'email',
         status: formData.status || 'ativo', // Ensure status is set
         signature_image: settings?.signature_image || null, // Always use signature from settings
-        image_url: formData.image_url || null // Ensure image_url is included
+        image_url: formData.image_url || null, // Ensure image_url is included
+        attachments: processedAttachments
       };
-      
-      // Ensure attachments is properly formatted and stored
-      if (templateData.attachments) {
-        // Process attachments - if they are files, upload them to storage
-        if (Array.isArray(templateData.attachments)) {
-          const processedAttachments = [];
-          
-          for (const attachment of templateData.attachments) {
-            // If it's a File object, upload it to storage
-            if (attachment instanceof File) {
-              const uploadedFile = await uploadFileToStorage(attachment);
-              processedAttachments.push(uploadedFile);
-            } 
-            // If it's an object with file information, keep it
-            else if (typeof attachment === 'object') {
-              processedAttachments.push(attachment);
-            }
-          }
-          
-          // Store processed attachments as JSON string
-          templateData.attachments = JSON.stringify(processedAttachments);
-        } 
-        // Se for um objeto mas não um array, também converter para string
-        else if (typeof templateData.attachments === 'object' && !(templateData.attachments instanceof File)) {
-          templateData.attachments = JSON.stringify([templateData.attachments]);
-        }
-        // Se for um único arquivo, processar e converter
-        else if (templateData.attachments instanceof File) {
-          const uploadedFile = await uploadFileToStorage(templateData.attachments);
-          templateData.attachments = JSON.stringify([uploadedFile]);
-        }
-        // Se já for uma string, manter como está se for JSON válido
-        else if (typeof templateData.attachments === 'string') {
-          try {
-            JSON.parse(templateData.attachments); // Verificar se é um JSON válido
-          } catch (e) {
-            templateData.attachments = JSON.stringify([]);
-          }
-        }
-      } else {
-        // Ensure attachments is always at least an empty array
-        templateData.attachments = JSON.stringify([]);
-      }
       
       console.log('Atualizando template com dados:', {
         ...templateData,
-        attachments: templateData.attachments ? 'presente' : 'ausente',
+        attachments: processedAttachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
         image_url: templateData.image_url ? 'presente' : 'ausente'
@@ -307,7 +275,6 @@ export function useTemplateOperations() {
         
       if (getError) throw getError;
       
-      // Use type checking instead of direct property access
       // Delete attached files from storage, if they exist
       if (template && template.attachments) {
         try {
@@ -333,7 +300,6 @@ export function useTemplateOperations() {
       }
       
       // Delete template file if it exists
-      // Use optional chaining and type assertion for safer property access
       const templateFileUrl = (template as any).template_file_url;
       if (templateFileUrl) {
         try {

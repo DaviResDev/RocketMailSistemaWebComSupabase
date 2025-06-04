@@ -51,6 +51,7 @@ const VARIABLES = [
 export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) => {
   const { settings } = useSettings();
   const [attachments, setAttachments] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,6 +76,9 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     mode: 'onChange'
   });
 
+  // Watch form values for real-time preview updates
+  const formValues = form.watch();
+
   useEffect(() => {
     if (template) {
       form.reset({
@@ -90,7 +94,9 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       
       if (template.attachments) {
         try {
-          const parsedAttachments = JSON.parse(template.attachments as string);
+          const parsedAttachments = Array.isArray(template.attachments) 
+            ? template.attachments 
+            : JSON.parse(template.attachments as string);
           setAttachments(parsedAttachments);
         } catch (e) {
           console.error('Erro ao analisar anexos:', e);
@@ -116,55 +122,83 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
   };
 
   const handleAttachmentUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || isUploading) return;
     
+    setIsUploading(true);
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     const newAttachments = [...attachments];
     let hasErrors = false;
+    let successCount = 0;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Check file size
-      if (file.size > MAX_FILE_SIZE) {
-        toast.error(`O arquivo ${file.name} excede o tamanho máximo de 10MB`);
-        hasErrors = true;
-        continue;
+    // Show initial loading toast
+    const uploadToastId = toast.loading(`Fazendo upload de ${files.length} arquivo(s)...`);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Check file size
+        if (file.size > MAX_FILE_SIZE) {
+          toast.error(`O arquivo ${file.name} excede o tamanho máximo de 10MB`);
+          hasErrors = true;
+          continue;
+        }
+        
+        try {
+          console.log(`Iniciando upload do arquivo: ${file.name}`);
+          
+          // Upload file to Supabase
+          const { data, error } = await supabase.storage
+            .from('template_attachments')
+            .upload(`attachments/${Date.now()}-${i}-${file.name}`, file);
+          
+          if (error) throw error;
+          
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('template_attachments')
+            .getPublicUrl(data.path);
+          
+          newAttachments.push({
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            url: publicUrl,
+            path: data.path
+          });
+          
+          successCount++;
+          console.log(`Arquivo ${file.name} enviado com sucesso`);
+        } catch (error) {
+          console.error('Erro ao fazer upload do arquivo:', error);
+          hasErrors = true;
+        }
       }
       
-      try {
-        toast.loading(`Fazendo upload de ${file.name}...`);
-        
-        // Upload file to Supabase
-        const { data, error } = await supabase.storage
-          .from('template_attachments')
-          .upload(`attachments/${Date.now()}-${file.name}`, file);
-        
-        if (error) throw error;
-        
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('template_attachments')
-          .getPublicUrl(data.path);
-        
-        newAttachments.push({
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          url: publicUrl,
-          path: data.path
-        });
-        
-        toast.success(`Arquivo ${file.name} carregado com sucesso`);
-      } catch (error) {
-        console.error('Erro ao fazer upload do arquivo:', error);
-        toast.error(`Erro ao fazer upload do arquivo ${file.name}`);
-        hasErrors = true;
-      }
-    }
-    
-    if (!hasErrors) {
+      // Update attachments state
       handleAttachmentChange(newAttachments);
+      
+      // Update toast with results
+      toast.dismiss(uploadToastId);
+      
+      if (successCount > 0 && !hasErrors) {
+        toast.success(`${successCount} arquivo(s) carregado(s) com sucesso`);
+      } else if (successCount > 0 && hasErrors) {
+        toast.success(`${successCount} arquivo(s) carregado(s) com sucesso. Alguns uploads falharam.`);
+      } else {
+        toast.error('Erro ao fazer upload dos arquivos');
+      }
+      
+    } catch (error) {
+      console.error('Erro geral no upload:', error);
+      toast.dismiss(uploadToastId);
+      toast.error('Erro ao fazer upload dos arquivos');
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -237,28 +271,15 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     }
   }
 
-  // Preview state
-  const [previewTemplate, setPreviewTemplate] = useState<Partial<Template>>({
-    nome: template?.nome || '',
-    descricao: template?.descricao || '',
-    conteudo: template?.conteudo || '',
+  // Create preview template object from current form state
+  const previewTemplate: Partial<Template> = {
+    nome: formValues.nome || '',
+    descricao: formValues.descricao || '',
+    conteudo: formValues.conteudo || '',
     signature_image: settings?.signature_image || 'default_signature',
-    attachments: template?.attachments || '[]',
-    image_url: template?.image_url || null
-  });
-
-  // Update preview when form values change
-  useEffect(() => {
-    const formValues = form.getValues();
-    setPreviewTemplate({
-      ...previewTemplate,
-      nome: formValues.nome,
-      descricao: formValues.descricao || '',
-      conteudo: formValues.conteudo,
-      signature_image: settings?.signature_image || 'default_signature',
-      attachments: attachments.length > 0 ? JSON.stringify(attachments) : '[]'
-    });
-  }, [form.watch('nome'), form.watch('descricao'), form.watch('conteudo'), settings, attachments]);
+    attachments: attachments.length > 0 ? JSON.stringify(attachments) : '[]',
+    image_url: formValues.image_url || null
+  };
 
   return (
     <Form {...form}>
@@ -320,9 +341,10 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                     size="sm"
                     className="flex items-center"
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
                   >
                     <FileText className="mr-1 h-4 w-4" />
-                    Anexar Arquivos
+                    {isUploading ? 'Enviando...' : 'Anexar Arquivos'}
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -330,11 +352,12 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                     multiple
                     className="hidden"
                     onChange={(e) => handleAttachmentUpload(e.target.files)}
+                    disabled={isUploading}
                   />
                 </div>
               </div>
               
-              {/* New TipTap Editor */}
+              {/* Rich Text Editor */}
               <FormField
                 control={form.control}
                 name="conteudo"
@@ -364,12 +387,13 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                   {attachments.map((attachment, index) => (
                     <li key={index} className="flex justify-between items-center">
                       <span className="text-sm truncate flex-1">
-                        📎 {attachment.name || 'Arquivo'}
+                        📎 {attachment.name || 'Arquivo'} ({(attachment.size / 1024).toFixed(1)} KB)
                       </span>
                       <Button 
                         variant="ghost" 
                         size="sm" 
                         onClick={() => handleRemoveAttachment(index)}
+                        disabled={isUploading}
                       >
                         Remover
                       </Button>
@@ -402,7 +426,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                 <Send className="w-4 h-4 mr-2" />Enviar Teste
               </Button>
             )}
-            <Button type="submit" onClick={form.handleSubmit(onSubmit)}>
+            <Button type="submit" onClick={form.handleSubmit(onSubmit)} disabled={isUploading}>
               <SaveIcon className="w-4 h-4 mr-2" />{isEditing ? 'Atualizar' : 'Criar'}
             </Button>
           </div>
