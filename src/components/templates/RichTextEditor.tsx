@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -12,12 +13,13 @@ import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// FIXED: Custom FontSize extension with proper implementation
+// FIXED: Custom FontSize extension with proper TypeScript implementation
 const FontSize = TextStyle.extend({
   name: 'fontSize',
   
   addOptions() {
     return {
+      ...this.parent?.(),
       types: ['textStyle'],
     };
   },
@@ -44,7 +46,8 @@ const FontSize = TextStyle.extend({
 
   addCommands() {
     return {
-      setFontSize: (fontSize) => ({ chain }) => {
+      ...this.parent?.(),
+      setFontSize: (fontSize: string) => ({ chain }) => {
         return chain()
           .setMark('textStyle', { fontSize })
           .run();
@@ -300,7 +303,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }, 100);
   };
 
-  // FIXED: Font size function with proper implementation
+  // FIXED: Font size function with proper implementation and TypeScript casting
   const setFontSize = (size: string) => {
     if (!editor) return;
     
@@ -312,8 +315,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       return;
     }
 
-    // Use nossa extensão customizada
-    editor
+    // Use nossa extensão customizada com type assertion
+    (editor as any)
       .chain()
       .focus()
       .setFontSize(size)
