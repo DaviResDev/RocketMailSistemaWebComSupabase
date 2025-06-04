@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSchedules } from '@/hooks/useSchedules';
 import { ScheduleForm } from '@/components/schedules/ScheduleForm';
+import { ScheduledEmailsMonitor } from '@/components/schedules/ScheduledEmailsMonitor';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { Plus, RefreshCcw } from 'lucide-react';
@@ -17,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SchedulesList } from '@/components/schedules/SchedulesList';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function Agendamentos() {
   const { schedules, loading, error, fetchSchedules } = useSchedules();
@@ -88,23 +90,36 @@ export default function Agendamentos() {
           </DialogContent>
         </Dialog>
       </div>
-      
-      {loading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-        </div>
-      ) : schedules.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
-          <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
-        </div>
-      ) : (
-        <SchedulesList 
-          schedules={schedules}
-          onRefresh={fetchSchedules}
-        />
-      )}
+
+      <Tabs defaultValue="schedules" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="schedules">Lista de Agendamentos</TabsTrigger>
+          <TabsTrigger value="monitor">Monitor do Sistema</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="schedules" className="space-y-4">
+          {loading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : schedules.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
+              <p className="text-muted-foreground">Nenhum agendamento encontrado</p>
+            </div>
+          ) : (
+            <SchedulesList 
+              schedules={schedules}
+              onRefresh={fetchSchedules}
+            />
+          )}
+        </TabsContent>
+        
+        <TabsContent value="monitor">
+          <ScheduledEmailsMonitor />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
