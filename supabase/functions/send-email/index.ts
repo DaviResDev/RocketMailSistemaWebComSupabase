@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -428,28 +429,87 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
 }
 
 /**
- * ULTRA-OPTIMIZED batch email processing with advanced parallelization
+ * Save email to history table
+ */
+async function saveToHistory(
+  userId: string,
+  emailData: any,
+  result: { success: boolean; error?: string },
+  templateId?: string,
+  contactId?: string
+) {
+  try {
+    const historyRecord = {
+      user_id: userId,
+      template_id: templateId || null,
+      contato_id: contactId || null,
+      remetente_nome: emailData.fromName || 'Sistema',
+      remetente_email: emailData.fromEmail || emailData.from || 'sistema@app.com',
+      destinatario_nome: emailData.contactName || extractNameFromEmail(emailData.to),
+      destinatario_email: extractEmailAddress(emailData.to),
+      status: result.success ? 'entregue' : 'falhou',
+      template_nome: emailData.templateName || null,
+      tipo_envio: 'imediato',
+      mensagem_erro: result.error || null,
+      data_envio: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('envios_historico')
+      .insert(historyRecord);
+
+    if (error) {
+      console.error('Erro ao salvar histórico:', error);
+    } else {
+      console.log('✅ Histórico salvo com sucesso');
+    }
+  } catch (error) {
+    console.error('Erro ao processar histórico:', error);
+  }
+}
+
+/**
+ * Extract name from email address
+ */
+function extractNameFromEmail(email: string): string {
+  if (!email) return 'Destinatário';
+  
+  const emailRegex = /^"?([^"]*)"?\s*<([^>]+)>$/;
+  const match = email.match(emailRegex);
+  
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  
+  // If no name found, use the part before @ as name
+  const actualEmail = extractEmailAddress(email);
+  return actualEmail.split('@')[0];
+}
+
+/**
+ * ULTRA-OPTIMIZED batch email processing with history recording
  */
 async function processEmailBatchOptimized(
   emailJobs: any[],
   smtpConfig: any,
+  userId: string,
   onProgress?: (current: number, total: number) => void
 ): Promise<any> {
   const config = {
-    maxConcurrent: 25, // Increased from 15 to 25
-    chunkSize: 50, // Increased from 25 to 50
-    delayBetweenChunks: 500, // Reduced from 1000ms to 500ms
-    connectionTimeout: 12000, // Reduced timeout
-    maxRetries: 3, // Increased retries
-    microBatchSize: 5 // New: process in micro-batches within chunks
+    maxConcurrent: 30, // Increased for maximum speed
+    chunkSize: 60, // Larger chunks
+    delayBetweenChunks: 300, // Minimal delay
+    connectionTimeout: 10000,
+    maxRetries: 2
   };
 
   const startTime = Date.now();
   const results: any[] = [];
+  const historyRecords: any[] = [];
   let processed = 0;
 
   console.log(`🚀 ULTRA-OPTIMIZED: Processando ${emailJobs.length} emails`);
-  console.log(`⚡ Config: ${config.maxConcurrent} simultâneos, chunks de ${config.chunkSize}, micro-lotes de ${config.microBatchSize}`);
+  console.log(`⚡ Config: ${config.maxConcurrent} simultâneos, chunks de ${config.chunkSize}`);
 
   // Process in ultra-optimized parallel chunks
   for (let i = 0; i < emailJobs.length; i += config.chunkSize) {
@@ -457,105 +517,158 @@ async function processEmailBatchOptimized(
     const chunkNumber = Math.floor(i / config.chunkSize) + 1;
     const totalChunks = Math.ceil(emailJobs.length / config.chunkSize);
 
-    console.log(`⚡ CHUNK ${chunkNumber}/${totalChunks}: processando ${chunk.length} emails em paralelo máximo`);
+    console.log(`⚡ CHUNK ${chunkNumber}/${totalChunks}: processando ${chunk.length} emails`);
 
-    // Create micro-batches within the chunk for even better parallelization
-    const microBatches: any[][] = [];
-    for (let j = 0; j < chunk.length; j += config.microBatchSize) {
-      microBatches.push(chunk.slice(j, j + config.microBatchSize));
-    }
-
-    // Process all micro-batches simultaneously with Promise.all()
-    const microBatchPromises = microBatches.map(async (microBatch, microIndex) => {
-      const microBatchResults = await Promise.all(
-        microBatch.map(async (emailData, emailIndex) => {
-          const globalIndex = i + (microIndex * config.microBatchSize) + emailIndex;
-          const jobStartTime = Date.now();
-          
+    // Process all emails in chunk simultaneously with Promise.all()
+    const chunkPromises = chunk.map(async (emailData, emailIndex) => {
+      const globalIndex = i + emailIndex;
+      const jobStartTime = Date.now();
+      
+      try {
+        // Retry logic
+        let lastError: Error;
+        for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
           try {
-            // Retry logic with exponential backoff
-            let lastError: Error;
-            for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
-              try {
-                console.log(`📤 [${globalIndex + 1}/${emailJobs.length}] Enviando: ${emailData.to} (tentativa ${attempt + 1})`);
-                
-                const result = await sendEmailViaSMTP(smtpConfig, emailData);
-                const duration = Date.now() - jobStartTime;
-                
-                processed++;
-                onProgress?.(processed, emailJobs.length);
-                
-                console.log(`✅ [${globalIndex + 1}] SUCESSO em ${duration}ms`);
-                
-                return {
-                  success: true,
-                  result: result,
-                  to: emailData.to,
-                  index: globalIndex,
-                  duration,
-                  provider: 'smtp',
-                  attempts: attempt + 1
-                };
-              } catch (error: any) {
-                lastError = error;
-                
-                if (attempt < config.maxRetries) {
-                  const delay = Math.min(500 * Math.pow(2, attempt), 2000); // Exponential backoff
-                  console.log(`⚠️ [${globalIndex + 1}] Retry ${attempt + 1}/${config.maxRetries} em ${delay}ms`);
-                  await new Promise(resolve => setTimeout(resolve, delay));
-                } else {
-                  console.error(`❌ [${globalIndex + 1}] FALHA FINAL após ${attempt + 1} tentativas: ${error.message}`);
-                }
-              }
-            }
+            console.log(`📤 [${globalIndex + 1}/${emailJobs.length}] Enviando: ${emailData.to}`);
             
-            // If we get here, all retries failed
+            const result = await sendEmailViaSMTP(smtpConfig, emailData);
             const duration = Date.now() - jobStartTime;
+            
             processed++;
             onProgress?.(processed, emailJobs.length);
             
+            console.log(`✅ [${globalIndex + 1}] SUCESSO em ${duration}ms`);
+
+            // Prepare history record
+            const historyRecord = {
+              user_id: userId,
+              template_id: emailData.template_id || null,
+              contato_id: emailData.contato_id || null,
+              remetente_nome: emailData.fromName || result.fromName || 'Sistema',
+              remetente_email: emailData.fromEmail || result.from || extractEmailAddress(result.from || ''),
+              destinatario_nome: emailData.contato_nome || extractNameFromEmail(emailData.to),
+              destinatario_email: extractEmailAddress(emailData.to),
+              status: 'entregue',
+              template_nome: emailData.template_nome || null,
+              tipo_envio: 'imediato',
+              mensagem_erro: null,
+              data_envio: new Date().toISOString()
+            };
+            historyRecords.push(historyRecord);
+            
             return {
-              success: false,
-              error: lastError.message,
+              success: true,
+              result: result,
               to: emailData.to,
               index: globalIndex,
               duration,
               provider: 'smtp',
-              attempts: config.maxRetries + 1
+              attempts: attempt + 1
             };
           } catch (error: any) {
-            // Fallback error handling
-            const duration = Date.now() - jobStartTime;
-            processed++;
-            onProgress?.(processed, emailJobs.length);
+            lastError = error;
             
-            return {
-              success: false,
-              error: error.message,
-              to: emailData.to,
-              index: globalIndex,
-              duration,
-              provider: 'smtp',
-              attempts: 1
-            };
+            if (attempt < config.maxRetries) {
+              const delay = Math.min(500 * Math.pow(2, attempt), 2000);
+              console.log(`⚠️ [${globalIndex + 1}] Retry ${attempt + 1}/${config.maxRetries} em ${delay}ms`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+              console.error(`❌ [${globalIndex + 1}] FALHA FINAL: ${error.message}`);
+            }
           }
-        })
-      );
-      
-      return microBatchResults;
+        }
+        
+        // If we get here, all retries failed
+        const duration = Date.now() - jobStartTime;
+        processed++;
+        onProgress?.(processed, emailJobs.length);
+
+        // Prepare failure history record
+        const historyRecord = {
+          user_id: userId,
+          template_id: emailData.template_id || null,
+          contato_id: emailData.contato_id || null,
+          remetente_nome: emailData.fromName || 'Sistema',
+          remetente_email: emailData.fromEmail || 'sistema@app.com',
+          destinatario_nome: emailData.contato_nome || extractNameFromEmail(emailData.to),
+          destinatario_email: extractEmailAddress(emailData.to),
+          status: 'falhou',
+          template_nome: emailData.template_nome || null,
+          tipo_envio: 'imediato',
+          mensagem_erro: lastError.message,
+          data_envio: new Date().toISOString()
+        };
+        historyRecords.push(historyRecord);
+        
+        return {
+          success: false,
+          error: lastError.message,
+          to: emailData.to,
+          index: globalIndex,
+          duration,
+          provider: 'smtp',
+          attempts: config.maxRetries + 1
+        };
+      } catch (error: any) {
+        // Fallback error handling
+        const duration = Date.now() - jobStartTime;
+        processed++;
+        onProgress?.(processed, emailJobs.length);
+
+        // Prepare failure history record
+        const historyRecord = {
+          user_id: userId,
+          template_id: emailData.template_id || null,
+          contato_id: emailData.contato_id || null,
+          remetente_nome: emailData.fromName || 'Sistema',
+          remetente_email: emailData.fromEmail || 'sistema@app.com',
+          destinatario_nome: emailData.contato_nome || extractNameFromEmail(emailData.to),
+          destinatario_email: extractEmailAddress(emailData.to),
+          status: 'falhou',
+          template_nome: emailData.template_nome || null,
+          tipo_envio: 'imediato',
+          mensagem_erro: error.message,
+          data_envio: new Date().toISOString()
+        };
+        historyRecords.push(historyRecord);
+        
+        return {
+          success: false,
+          error: error.message,
+          to: emailData.to,
+          index: globalIndex,
+          duration,
+          provider: 'smtp',
+          attempts: 1
+        };
+      }
     });
 
-    // Wait for all micro-batches in this chunk to complete
-    const chunkResults = await Promise.all(microBatchPromises);
-    
-    // Flatten the results
-    chunkResults.forEach(microBatchResult => {
-      results.push(...microBatchResult);
-    });
+    // Wait for all emails in chunk to complete
+    const chunkResults = await Promise.all(chunkPromises);
+    results.push(...chunkResults);
 
-    // Minimal delay between chunks - much faster now
+    // Minimal delay between chunks
     if (i + config.chunkSize < emailJobs.length) {
       await new Promise(resolve => setTimeout(resolve, config.delayBetweenChunks));
+    }
+  }
+
+  // Save all history records in batch
+  if (historyRecords.length > 0) {
+    try {
+      console.log(`💾 Salvando ${historyRecords.length} registros no histórico...`);
+      const { error } = await supabase
+        .from('envios_historico')
+        .insert(historyRecords);
+
+      if (error) {
+        console.error('Erro ao salvar histórico em lote:', error);
+      } else {
+        console.log('✅ Histórico salvo em lote com sucesso');
+      }
+    } catch (error) {
+      console.error('Erro ao processar histórico em lote:', error);
     }
   }
 
@@ -586,92 +699,6 @@ async function processEmailBatchOptimized(
   };
 }
 
-/**
- * Process multiple emails in controlled batches with improved rate limiting
- */
-async function processBatchEmailsWithSMTP(emailRequests: any[], smtpConfig: any): Promise<any> {
-  const batchSize = 10; // Reduced batch size
-  const delayBetweenBatches = 5000; // 5 seconds between batches
-  const delayBetweenEmails = 2000; // 2 seconds between individual emails
-  const results: any[] = [];
-  
-  console.log(`📬 Processando ${emailRequests.length} emails via SMTP em lotes de ${batchSize}`);
-  console.log(`📧 Configuração SMTP validada para processamento em lote`);
-  
-  for (let i = 0; i < emailRequests.length; i += batchSize) {
-    const batch = emailRequests.slice(i, i + batchSize);
-    const batchNumber = Math.floor(i / batchSize) + 1;
-    const totalBatches = Math.ceil(emailRequests.length / batchSize);
-    
-    console.log(`🔄 Processando lote ${batchNumber}/${totalBatches} (${batch.length} emails)`);
-    
-    // Process batch emails sequentially to respect SMTP rate limits
-    for (let j = 0; j < batch.length; j++) {
-      const emailData = batch[j];
-      const globalIndex = i + j;
-      
-      try {
-        console.log(`📤 Enviando email ${globalIndex + 1}/${emailRequests.length} para: ${emailData.to}`);
-        
-        const result = await sendEmailViaSMTP(smtpConfig, emailData);
-        
-        results.push({
-          success: true,
-          result: result,
-          to: emailData.to,
-          index: globalIndex,
-          provider: result.provider,
-          method: result.method
-        });
-        
-        console.log(`✅ Email ${globalIndex + 1} enviado com sucesso`);
-        
-        // Add delay between emails within the batch
-        if (j < batch.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, delayBetweenEmails));
-        }
-        
-      } catch (error) {
-        console.error(`❌ Falha ao enviar email ${globalIndex + 1} para ${emailData.to}:`, error.message);
-        results.push({
-          success: false,
-          error: error.message,
-          to: emailData.to,
-          index: globalIndex
-        });
-      }
-    }
-    
-    // Add delay between batches (except for the last batch)
-    if (i + batchSize < emailRequests.length) {
-      console.log(`⏱️ Aguardando ${delayBetweenBatches}ms antes do próximo lote...`);
-      await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-  }
-  
-  const successCount = results.filter(r => r.success).length;
-  const failureCount = results.filter(r => !r.success).length;
-  const smtpCount = results.filter(r => r.success && r.provider === 'smtp').length;
-  
-  console.log(`📊 Processamento em lote SMTP concluído:`);
-  console.log(`   ✅ Total enviados: ${successCount}`);
-  console.log(`   ❌ Total falharam: ${failureCount}`);
-  console.log(`   📧 Via SMTP: ${smtpCount}`);
-  
-  return {
-    results,
-    summary: {
-      total: emailRequests.length,
-      successful: successCount,
-      failed: failureCount,
-      smtp: smtpCount,
-      resend: 0, // No Resend usage when SMTP is enabled
-      fallback: 0,
-      successRate: emailRequests.length > 0 ? ((successCount / emailRequests.length) * 100).toFixed(1) : "0"
-    }
-  };
-}
-
 serve(async (req) => {
   try {
     // Handle CORS preflight requests
@@ -694,6 +721,20 @@ serve(async (req) => {
           status: 400,
         }
       );
+    }
+
+    // Get user ID for history recording
+    const authHeader = req.headers.get('authorization');
+    let userId = null;
+    if (authHeader) {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+        if (!error && user) {
+          userId = user.id;
+        }
+      } catch (e) {
+        console.error('Error getting user:', e);
+      }
     }
     
     // Handle optimized batch email sending
@@ -798,7 +839,13 @@ serve(async (req) => {
             to: toAddress,
             subject: sanitizeSubject(templateSubject),
             html: finalContent,
-            attachments: emailData.attachments || []
+            attachments: emailData.attachments || [],
+            template_id: emailData.template_id,
+            contato_id: emailData.contato_id,
+            contato_nome: emailData.contato_nome,
+            template_nome: emailData.template_nome,
+            fromName: smtpConfig.from_name,
+            fromEmail: smtpConfig.from_email
           });
           
         } catch (error) {
@@ -809,9 +856,11 @@ serve(async (req) => {
       console.log(`📨 Emails preparados para ULTRA-OTIMIZAÇÃO: ${emailRequests.length}`);
       
       try {
-        const batchResult = requestData.optimized 
-          ? await processEmailBatchOptimized(emailRequests, smtpConfig)
-          : await processBatchEmailsWithSMTP(emailRequests, smtpConfig);
+        const batchResult = await processEmailBatchOptimized(
+          emailRequests, 
+          smtpConfig, 
+          userId || 'system'
+        );
         
         console.log("📊 Envio ULTRA-OTIMIZADO concluído:", batchResult.summary);
         
@@ -850,7 +899,7 @@ serve(async (req) => {
       }
     }
     
-    // Handle single email sending (keep existing logic)
+    // Handle single email sending (with history recording)
     const { 
       to, 
       subject, 
@@ -907,6 +956,7 @@ serve(async (req) => {
     // Process template content if template_id is provided
     let finalTemplateContent = content || '';
     let finalSubject = subject || 'Sem assunto';
+    let templateName = null;
     
     if (template_id) {
       console.log(`📋 Buscando template ${template_id} para email único`);
@@ -922,6 +972,7 @@ serve(async (req) => {
       } else if (templateData) {
         finalTemplateContent = templateData.conteudo || content || '';
         finalSubject = subject || templateData.descricao || templateData.nome || 'Sem assunto';
+        templateName = templateData.nome;
         console.log(`✅ Template ${template_id} carregado para email único: ${templateData.nome}`);
       }
     }
@@ -1008,23 +1059,62 @@ serve(async (req) => {
         
         console.log(`📧 Enviando email único via SMTP configurado`);
         
-        const result = await sendEmailViaSMTP(smtpConfig, emailPayload);
-        
-        console.log("✅ Email único enviado com sucesso via SMTP:", result);
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Email enviado com sucesso via SMTP",
-            id: result.id,
-            provider: result.provider,
-            method: result.method
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          }
-        );
+        let result;
+        let success = false;
+        let errorMessage = null;
+
+        try {
+          result = await sendEmailViaSMTP(smtpConfig, emailPayload);
+          success = true;
+          console.log("✅ Email único enviado com sucesso via SMTP:", result);
+        } catch (error) {
+          errorMessage = error.message;
+          console.error("❌ Falha ao enviar email único:", error);
+        }
+
+        // Save to history regardless of success/failure
+        if (userId) {
+          await saveToHistory(
+            userId,
+            {
+              fromName: smtp_settings.from_name || 'Sistema',
+              fromEmail: smtp_settings.from_email,
+              to: toAddress,
+              contactName: contato_nome,
+              templateName: templateName
+            },
+            { success, error: errorMessage },
+            template_id,
+            contact?.id
+          );
+        }
+
+        if (success) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Email enviado com sucesso via SMTP",
+              id: result.id,
+              provider: result.provider,
+              method: result.method
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 200,
+            }
+          );
+        } else {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: errorMessage || "Erro ao enviar email"
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 500,
+            }
+          );
+        }
       } else {
         return new Response(
           JSON.stringify({
@@ -1039,6 +1129,24 @@ serve(async (req) => {
       }
     } catch (error) {
       console.error("❌ Falha ao enviar email único:", error);
+      
+      // Save failed attempt to history
+      if (userId) {
+        await saveToHistory(
+          userId,
+          {
+            fromName: smtp_settings?.from_name || 'Sistema',
+            fromEmail: smtp_settings?.from_email || 'sistema@app.com',
+            to: toAddress,
+            contactName: contato_nome,
+            templateName: templateName
+          },
+          { success: false, error: error.message },
+          template_id,
+          contact?.id
+        );
+      }
+      
       return new Response(
         JSON.stringify({
           success: false,

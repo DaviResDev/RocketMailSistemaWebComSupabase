@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useHistoricoEnvios } from './useHistoricoEnvios';
 
 interface OptimizedProgress {
   current: number;
@@ -11,6 +12,8 @@ interface OptimizedProgress {
   startTime: number;
   peakThroughput: number;
   avgEmailDuration: number;
+  successCount: number;
+  errorCount: number;
 }
 
 interface OptimizedBatchResult {
@@ -35,8 +38,12 @@ export function useOptimizedBatchSending() {
     estimatedTimeRemaining: 0,
     startTime: 0,
     peakThroughput: 0,
-    avgEmailDuration: 0
+    avgEmailDuration: 0,
+    successCount: 0,
+    errorCount: 0
   });
+
+  const { fetchHistorico } = useHistoricoEnvios();
 
   const sendOptimizedBatch = useCallback(async (
     selectedContacts: any[],
@@ -57,6 +64,8 @@ export function useOptimizedBatchSending() {
     setIsProcessing(true);
     const startTime = Date.now();
     let peakThroughput = 0;
+    let successCount = 0;
+    let errorCount = 0;
     let lastProgressUpdate = startTime;
     let progressHistory: Array<{time: number, count: number}> = [];
     
@@ -68,7 +77,9 @@ export function useOptimizedBatchSending() {
       estimatedTimeRemaining: 0,
       startTime,
       peakThroughput: 0,
-      avgEmailDuration: 0
+      avgEmailDuration: 0,
+      successCount: 0,
+      errorCount: 0
     });
 
     try {
@@ -124,6 +135,7 @@ export function useOptimizedBatchSending() {
         contato_nome: contact.nome,
         subject: customSubject || templateData.descricao || templateData.nome,
         content: customContent || templateData.conteudo,
+        template_nome: templateData.nome,
         contact: contact,
         image_url: templateData.image_url,
         signature_image: userSettings?.signature_image || templateData.signature_image,
@@ -147,9 +159,13 @@ export function useOptimizedBatchSending() {
       });
       
       // Ultra-optimized progress tracking with real-time updates
-      const updateProgress = (current: number, total: number) => {
+      const updateProgress = (current: number, total: number, isSuccess?: boolean) => {
         const now = Date.now();
         const elapsed = now - startTime;
+        
+        // Update success/error counts
+        if (isSuccess === true) successCount++;
+        if (isSuccess === false) errorCount++;
         
         // Track progress history for more accurate throughput calculation
         progressHistory.push({ time: now, count: current });
@@ -185,8 +201,18 @@ export function useOptimizedBatchSending() {
           estimatedTimeRemaining,
           startTime,
           peakThroughput,
-          avgEmailDuration
+          avgEmailDuration,
+          successCount,
+          errorCount
         });
+        
+        // Real-time toast notifications for milestones
+        if (current % 10 === 0 && current > 0) {
+          const successRate = ((successCount / current) * 100).toFixed(1);
+          toast.success(`📊 ${current}/${total} processados (${successRate}% sucesso)`, {
+            duration: 2000
+          });
+        }
         
         // Update every 500ms or on significant progress for ultra-responsive UI
         if (now - lastProgressUpdate > 500 || current === total) {
@@ -221,25 +247,28 @@ export function useOptimizedBatchSending() {
       // Final progress update
       updateProgress(selectedContacts.length, selectedContacts.length);
       
+      // Refresh histórico to show new records
+      await fetchHistorico();
+      
       // Enhanced success messaging with performance metrics
       if (summary.successful > 0) {
         const duration = summary.totalDuration || Math.round((Date.now() - startTime) / 1000);
         const throughput = summary.avgThroughput || (summary.successful / duration);
         const avgEmailDuration = summary.avgEmailDuration || 0;
         
-        if (throughput >= 10) {
+        if (throughput >= 15) {
           toast.success(
             `🚀 PERFORMANCE EXCEPCIONAL! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `Taxa: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Média: ${avgEmailDuration}ms/email`,
+              description: `Taxa: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
               duration: 10000 
             }
           );
-        } else if (throughput >= 8) {
+        } else if (throughput >= 10) {
           toast.success(
             `⚡ ALTA PERFORMANCE! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `Taxa: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s`,
+              description: `Taxa: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
               duration: 8000 
             }
           );
@@ -247,7 +276,7 @@ export function useOptimizedBatchSending() {
           toast.success(
             `✅ ${summary.successful} emails enviados em ${duration}s`,
             { 
-              description: `Taxa: ${throughput.toFixed(2)} emails/s`,
+              description: `Taxa: ${throughput.toFixed(2)} emails/s | Histórico atualizado!`,
               duration: 6000 
             }
           );
@@ -266,32 +295,6 @@ export function useOptimizedBatchSending() {
           }
         );
       }
-      
-      // Create entries in envios table for successful sends
-      try {
-        const { data: user } = await supabase.auth.getUser();
-        if (user.user) {
-          const successfulResults = results.filter((r: any) => r.success);
-          const envioRecords = successfulResults.map((result: any) => {
-            const email = result.to;
-            const contact = selectedContacts.find(c => c.email === email || (typeof email === 'string' && email.includes(c.email)));
-            
-            return {
-              contato_id: contact?.id,
-              template_id: templateId,
-              status: 'enviado',
-              user_id: user.user.id,
-              data_envio: new Date().toISOString()
-            };
-          }).filter(record => record.contato_id);
-          
-          if (envioRecords.length > 0) {
-            await supabase.from('envios').insert(envioRecords);
-          }
-        }
-      } catch (err) {
-        console.error("Erro ao salvar na tabela envios:", err);
-      }
 
       return {
         success: summary.successful > 0,
@@ -307,11 +310,19 @@ export function useOptimizedBatchSending() {
     } catch (error: any) {
       console.error('Erro no envio ultra-otimizado:', error);
       toast.error(`Erro no envio ultra-otimizado: ${error.message}`);
+      
+      // Still try to refresh histórico in case some emails were sent
+      try {
+        await fetchHistorico();
+      } catch (e) {
+        console.error('Erro ao atualizar histórico:', e);
+      }
+      
       return null;
     } finally {
       setIsProcessing(false);
     }
-  }, []);
+  }, [fetchHistorico]);
 
   return {
     isProcessing,

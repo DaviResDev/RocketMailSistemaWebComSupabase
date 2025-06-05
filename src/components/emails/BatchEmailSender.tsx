@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useOptimizedBatchSending } from '@/hooks/useOptimizedBatchSending';
 import { OptimizedProgressMonitor } from './OptimizedProgressMonitor';
 import { toast } from 'sonner';
-import { Mail, Users, Zap, CheckCircle, XCircle, TrendingUp, BarChart3, Timer, Target } from 'lucide-react';
+import { Mail, Users, Zap, CheckCircle, XCircle, TrendingUp, BarChart3, Timer, Target, Activity } from 'lucide-react';
 
 interface BatchEmailSenderProps {
   selectedContacts: any[];
@@ -42,6 +42,14 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
       
       const startTime = Date.now();
       
+      // Show initial toast with expectations
+      if (selectedContacts.length >= 1000) {
+        toast.info('🚀 ULTRA-OTIMIZAÇÃO ativada para grande volume!', {
+          description: `Meta: 15+ emails/segundo para ${selectedContacts.length} contatos`,
+          duration: 4000
+        });
+      }
+      
       const result = await sendOptimizedBatch(
         selectedContacts,
         templateId,
@@ -59,23 +67,37 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
           peakThroughput: result.peakThroughput || result.avgThroughput
         });
         
-        // Enhanced performance feedback
-        if (result.avgThroughput >= 12) {
+        // Enhanced performance feedback with real-time metrics
+        if (result.avgThroughput >= 15) {
           toast.success('🚀 ULTRA PERFORMANCE ALCANÇADA!', {
-            description: `Taxa excepcional de ${result.avgThroughput.toFixed(2)} emails/segundo`,
-            duration: 8000
+            description: `Taxa excepcional de ${result.avgThroughput.toFixed(2)} emails/segundo! Histórico atualizado automaticamente.`,
+            duration: 10000
           });
-        } else if (result.avgThroughput >= 8) {
+        } else if (result.avgThroughput >= 10) {
           toast.success('⚡ EXCELENTE PERFORMANCE!', {
-            description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo`,
-            duration: 6000
+            description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo! Histórico atualizado.`,
+            duration: 8000
           });
         } else if (result.avgThroughput >= 5) {
           toast.success('💪 BOA PERFORMANCE!', {
-            description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo`,
+            description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo! Histórico atualizado.`,
+            duration: 6000
+          });
+        } else {
+          toast.success('✅ Envio concluído!', {
+            description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo. Histórico atualizado.`,
             duration: 5000
           });
         }
+
+        // Final summary toast
+        setTimeout(() => {
+          toast.success(`📊 Resumo Final: ${result.successCount} sucessos, ${result.errorCount} falhas`, {
+            description: `Taxa de sucesso: ${result.successRate}% | Duração: ${result.totalDuration}s`,
+            duration: 8000
+          });
+        }, 2000);
+        
       } else {
         toast.error('O envio ultra-otimizado falhou. Verifique os logs para mais detalhes.');
       }
@@ -107,8 +129,8 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
   };
 
   const getPerformanceClass = (throughput: number) => {
-    if (throughput >= 12) return 'bg-green-500 text-white';
-    if (throughput >= 8) return 'bg-blue-500 text-white';
+    if (throughput >= 15) return 'bg-green-500 text-white';
+    if (throughput >= 10) return 'bg-blue-500 text-white';
     if (throughput >= 5) return 'bg-yellow-500 text-white';
     return 'bg-gray-500 text-white';
   };
@@ -121,9 +143,12 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
             <CheckCircle className="h-6 w-6 text-green-500" />
             Relatório ULTRA-OTIMIZADO
             <Badge className={getPerformanceClass(results.avgThroughput)}>
-              {results.avgThroughput >= 12 ? '🚀 ULTRA' : 
-               results.avgThroughput >= 8 ? '⚡ EXCELENTE' : 
+              {results.avgThroughput >= 15 ? '🚀 ULTRA' : 
+               results.avgThroughput >= 10 ? '⚡ EXCELENTE' : 
                results.avgThroughput >= 5 ? '💪 BOM' : '📈 PADRÃO'}
+            </Badge>
+            <Badge variant="outline" className="bg-blue-100">
+              HISTÓRICO ATUALIZADO
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -193,8 +218,8 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Badge className={getPerformanceClass(results.avgThroughput)} variant="outline">
-                  {results.avgThroughput >= 12 ? '🚀 ULTRA PERFORMANCE' :
-                   results.avgThroughput >= 8 ? '⚡ EXCELENTE' :
+                  {results.avgThroughput >= 15 ? '🚀 ULTRA PERFORMANCE' :
+                   results.avgThroughput >= 10 ? '⚡ EXCELENTE' :
                    results.avgThroughput >= 5 ? '💪 BOA PERFORMANCE' : '📈 PADRÃO'}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
@@ -204,6 +229,20 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
               <Button onClick={resetResults} variant="outline" size="sm">
                 Novo Envio Ultra-Otimizado
               </Button>
+            </div>
+          </div>
+
+          {/* History Update Confirmation */}
+          <div className="bg-gradient-to-r from-green-100 to-blue-100 border-2 border-green-300 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <Activity className="h-5 w-5 text-green-600" />
+              <div>
+                <div className="font-medium text-green-800">Histórico Atualizado Automaticamente</div>
+                <div className="text-sm text-green-600">
+                  Todos os envios (sucessos e falhas) foram registrados no histórico. 
+                  Acesse "Histórico de Envios" para ver os detalhes completos.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -236,7 +275,7 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-6 w-6 text-blue-600" />
             Envio ULTRA-OTIMIZADO
-            <Badge variant="outline" className="bg-blue-100">NOVA VERSÃO</Badge>
+            <Badge variant="outline" className="bg-blue-100">NOVA VERSÃO V2.0</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -266,13 +305,14 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
               <div className="flex items-center gap-2 text-blue-700 mb-2">
                 <Zap className="h-5 w-5" />
                 <span className="text-sm font-bold">
-                  ULTRA-OTIMIZAÇÃO ATIVADA! 🚀
+                  ULTRA-OTIMIZAÇÃO V2.0 ATIVADA! 🚀
                 </span>
               </div>
               <div className="text-xs text-blue-600 space-y-1">
-                <div>• 25 emails simultâneos • Lotes de 50 • Micro-lotes de 5</div>
-                <div>• Tempo estimado: ~{Math.round(selectedContacts.length / 12 / 60)} minutos</div>
-                <div>• Meta de performance: 12+ emails/segundo</div>
+                <div>• 30 emails simultâneos • Lotes de 60 • Delay mínimo de 300ms</div>
+                <div>• Tempo estimado: ~{Math.round(selectedContacts.length / 15 / 60)} minutos</div>
+                <div>• Meta de performance: 15+ emails/segundo</div>
+                <div>• <strong>Histórico automático:</strong> Todos os envios são registrados em tempo real</div>
               </div>
             </div>
           )}
@@ -286,7 +326,21 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
                 </span>
               </div>
               <div className="text-xs text-blue-600 mt-1">
-                • Performance esperada: 8+ emails/segundo
+                • Performance esperada: 10+ emails/segundo • Histórico automático
+              </div>
+            </div>
+          )}
+
+          {selectedContacts.length > 0 && selectedContacts.length < 500 && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  Volume baixo - Processamento rápido garantido ✅
+                </span>
+              </div>
+              <div className="text-xs text-green-600 mt-1">
+                • Todos os envios serão registrados no histórico automaticamente
               </div>
             </div>
           )}
@@ -300,12 +354,12 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
             {isProcessing ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Processando ULTRA-OTIMIZADO...
+                Processando ULTRA-OTIMIZADO V2.0...
               </span>
             ) : (
               <span className="flex items-center gap-2">
                 <Zap className="h-5 w-5" />
-                🚀 ULTRA-ENVIO para {selectedContacts.length.toLocaleString()} contatos
+                🚀 ULTRA-ENVIO V2.0 para {selectedContacts.length.toLocaleString()} contatos
               </span>
             )}
           </Button>
