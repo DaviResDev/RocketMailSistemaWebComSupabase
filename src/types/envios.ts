@@ -9,6 +9,9 @@ export interface Attachment {
   path?: string;
 }
 
+// Tipos válidos para envio conforme constraint do banco
+export type TipoEnvio = 'individual' | 'lote' | 'agendado' | 'lote_ultra_v3' | 'gmail_optimized_v4' | 'ultra_parallel_v5';
+
 export interface Envio {
   id: string;
   status: string;
@@ -43,6 +46,7 @@ export interface EnvioFormData {
   contato_nome?: string;
   contato_email?: string;
   to?: string; // Explicit recipient email address
+  tipo_envio?: TipoEnvio; // Garantir que apenas valores válidos sejam usados
 }
 
 // Helper function to convert Json attachments to proper typed array
@@ -84,5 +88,38 @@ export function parseAttachments(attachments: Json | undefined): Attachment[] {
   } catch (e) {
     console.error('Error handling attachments:', e);
     return [];
+  }
+}
+
+/**
+ * Valida se um tipo de envio é válido conforme constraint do banco
+ */
+export function isValidTipoEnvio(tipo: string): tipo is TipoEnvio {
+  const validTypes: TipoEnvio[] = ['individual', 'lote', 'agendado', 'lote_ultra_v3', 'gmail_optimized_v4', 'ultra_parallel_v5'];
+  return validTypes.includes(tipo as TipoEnvio);
+}
+
+/**
+ * Converte tipos antigos/inválidos para tipos válidos
+ */
+export function normalizeTipoEnvio(tipo: string): TipoEnvio {
+  switch (tipo?.toLowerCase()) {
+    case 'visão':
+    case 'imediato':
+    case 'single':
+      return 'individual';
+    case 'batch':
+    case 'bulk':
+      return 'lote';
+    case 'scheduled':
+      return 'agendado';
+    case 'ultra_parallel_v5':
+      return 'ultra_parallel_v5';
+    case 'gmail_optimized_v4':
+      return 'gmail_optimized_v4';
+    case 'lote_ultra_v3':
+      return 'lote_ultra_v3';
+    default:
+      return isValidTipoEnvio(tipo) ? tipo as TipoEnvio : 'individual';
   }
 }

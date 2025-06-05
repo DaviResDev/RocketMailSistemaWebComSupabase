@@ -1,4 +1,3 @@
-
 /**
  * Processador de lote otimizado para Gmail com rate limiting inteligente
  */
@@ -108,7 +107,7 @@ export async function processEmailBatchOptimized(
             index: emailJob.index,
             to: emailJob.to,
             duration,
-            provider: 'smtp-optimized'
+            provider: 'gmail_optimized_v4' // Usando valor válido da constraint
           };
         } catch (error: any) {
           const duration = Date.now() - jobStartTime;
@@ -122,7 +121,7 @@ export async function processEmailBatchOptimized(
             to: emailJob.to,
             error: error.message,
             duration,
-            provider: 'smtp-optimized'
+            provider: 'gmail_optimized_v4' // Usando valor válido da constraint
           };
         } finally {
           release();
