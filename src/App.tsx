@@ -18,7 +18,6 @@ import Contatos from "./pages/Contatos";
 import Agendamentos from "./pages/Agendamentos";
 import Metricas from "./pages/Metricas";
 import Configuracoes from "./pages/Configuracoes";
-import Envios from "./pages/Envios";
 import HistoricoEnvios from "./pages/HistoricoEnvios";
 import NotFound from "./pages/NotFound";
 
@@ -60,7 +59,6 @@ const App = () => (
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/contatos" element={<Contatos />} />
                   <Route path="/agendamentos" element={<Agendamentos />} />
-                  <Route path="/envios" element={<Envios />} />
                   <Route path="/historico-envios" element={<HistoricoEnvios />} />
                   <Route path="/metricas" element={<Metricas />} />
                   <Route path="/configuracoes" element={<Configuracoes />} />

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -6,59 +7,20 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Mail, Clock, CheckCircle, XCircle, Filter, Calendar } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-
-interface HistoricoEnvio {
-  id: string;
-  remetente_nome: string;
-  remetente_email: string;
-  destinatario_nome: string;
-  destinatario_email: string;
-  status: 'entregue' | 'falhou';
-  template_nome: string | null;
-  tipo_envio: 'imediato' | 'agendado';
-  mensagem_erro: string | null;
-  data_envio: string;
-}
+import { useHistoricoEnvios } from '@/hooks/useHistoricoEnvios';
+import { useState } from 'react';
 
 export default function HistoricoEnvios() {
-  const [historico, setHistorico] = useState<HistoricoEnvio[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { historico, loading, fetchHistorico } = useHistoricoEnvios();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tipoFilter, setTipoFilter] = useState<string>('all');
-  const { user } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      fetchHistorico();
-    }
-  }, [user]);
-
-  const fetchHistorico = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('envios_historico')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('data_envio', { ascending: false });
-
-      if (error) throw error;
-      
-      // Type assertion to ensure compatibility with our interface
-      const typedData = (data || []) as HistoricoEnvio[];
-      setHistorico(typedData);
-    } catch (error: any) {
-      console.error('Erro ao carregar histórico:', error);
-      toast.error('Erro ao carregar histórico de envios');
-    } finally {
-      setLoading(false);
-    }
-  };
+    fetchHistorico();
+  }, [fetchHistorico]);
 
   const filteredHistorico = historico.filter(envio => {
     const matchesSearch = 

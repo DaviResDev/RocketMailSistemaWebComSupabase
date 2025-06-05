@@ -83,7 +83,7 @@ export function Sidebar() {
     { to: '/contatos', label: 'Contatos', icon: Users },
     { to: '/templates', label: 'Templates', icon: FileText },
     { to: '/agendamentos', label: 'Agendamentos', icon: Calendar },
-    { to: '/envios', label: 'Histórico de Envios', icon: Mail },
+    { to: '/historico-envios', label: 'Histórico de Envios', icon: Mail },
     { to: '/metricas', label: 'Métricas', icon: BarChart2 },
     { to: '/configuracoes', label: 'Configurações', icon: Settings },
   ];
