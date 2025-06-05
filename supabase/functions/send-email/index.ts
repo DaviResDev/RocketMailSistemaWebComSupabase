@@ -428,7 +428,7 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
 }
 
 /**
- * Optimized batch email processing with real-time progress
+ * ULTRA-OPTIMIZED batch email processing with advanced parallelization
  */
 async function processEmailBatchOptimized(
   emailJobs: any[],
@@ -436,76 +436,124 @@ async function processEmailBatchOptimized(
   onProgress?: (current: number, total: number) => void
 ): Promise<any> {
   const config = {
-    maxConcurrent: 15,
-    chunkSize: 25,
-    delayBetweenChunks: 1000,
-    connectionTimeout: 15000,
-    maxRetries: 2
+    maxConcurrent: 25, // Increased from 15 to 25
+    chunkSize: 50, // Increased from 25 to 50
+    delayBetweenChunks: 500, // Reduced from 1000ms to 500ms
+    connectionTimeout: 12000, // Reduced timeout
+    maxRetries: 3, // Increased retries
+    microBatchSize: 5 // New: process in micro-batches within chunks
   };
 
   const startTime = Date.now();
   const results: any[] = [];
   let processed = 0;
 
-  console.log(`🚀 Iniciando processamento otimizado: ${emailJobs.length} emails`);
-  console.log(`📊 Configuração: ${config.maxConcurrent} simultâneos, lotes de ${config.chunkSize}`);
+  console.log(`🚀 ULTRA-OPTIMIZED: Processando ${emailJobs.length} emails`);
+  console.log(`⚡ Config: ${config.maxConcurrent} simultâneos, chunks de ${config.chunkSize}, micro-lotes de ${config.microBatchSize}`);
 
-  // Process in optimized parallel chunks
+  // Process in ultra-optimized parallel chunks
   for (let i = 0; i < emailJobs.length; i += config.chunkSize) {
     const chunk = emailJobs.slice(i, i + config.chunkSize);
     const chunkNumber = Math.floor(i / config.chunkSize) + 1;
     const totalChunks = Math.ceil(emailJobs.length / config.chunkSize);
 
-    console.log(`⚡ Processando lote ${chunkNumber}/${totalChunks} (${chunk.length} emails)`);
+    console.log(`⚡ CHUNK ${chunkNumber}/${totalChunks}: processando ${chunk.length} emails em paralelo máximo`);
 
-    // Create promises for concurrent processing
-    const chunkPromises = chunk.map(async (emailData, chunkIndex) => {
-      const globalIndex = i + chunkIndex;
-      const jobStartTime = Date.now();
+    // Create micro-batches within the chunk for even better parallelization
+    const microBatches: any[][] = [];
+    for (let j = 0; j < chunk.length; j += config.microBatchSize) {
+      microBatches.push(chunk.slice(j, j + config.microBatchSize));
+    }
+
+    // Process all micro-batches simultaneously with Promise.all()
+    const microBatchPromises = microBatches.map(async (microBatch, microIndex) => {
+      const microBatchResults = await Promise.all(
+        microBatch.map(async (emailData, emailIndex) => {
+          const globalIndex = i + (microIndex * config.microBatchSize) + emailIndex;
+          const jobStartTime = Date.now();
+          
+          try {
+            // Retry logic with exponential backoff
+            let lastError: Error;
+            for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+              try {
+                console.log(`📤 [${globalIndex + 1}/${emailJobs.length}] Enviando: ${emailData.to} (tentativa ${attempt + 1})`);
+                
+                const result = await sendEmailViaSMTP(smtpConfig, emailData);
+                const duration = Date.now() - jobStartTime;
+                
+                processed++;
+                onProgress?.(processed, emailJobs.length);
+                
+                console.log(`✅ [${globalIndex + 1}] SUCESSO em ${duration}ms`);
+                
+                return {
+                  success: true,
+                  result: result,
+                  to: emailData.to,
+                  index: globalIndex,
+                  duration,
+                  provider: 'smtp',
+                  attempts: attempt + 1
+                };
+              } catch (error: any) {
+                lastError = error;
+                
+                if (attempt < config.maxRetries) {
+                  const delay = Math.min(500 * Math.pow(2, attempt), 2000); // Exponential backoff
+                  console.log(`⚠️ [${globalIndex + 1}] Retry ${attempt + 1}/${config.maxRetries} em ${delay}ms`);
+                  await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                  console.error(`❌ [${globalIndex + 1}] FALHA FINAL após ${attempt + 1} tentativas: ${error.message}`);
+                }
+              }
+            }
+            
+            // If we get here, all retries failed
+            const duration = Date.now() - jobStartTime;
+            processed++;
+            onProgress?.(processed, emailJobs.length);
+            
+            return {
+              success: false,
+              error: lastError.message,
+              to: emailData.to,
+              index: globalIndex,
+              duration,
+              provider: 'smtp',
+              attempts: config.maxRetries + 1
+            };
+          } catch (error: any) {
+            // Fallback error handling
+            const duration = Date.now() - jobStartTime;
+            processed++;
+            onProgress?.(processed, emailJobs.length);
+            
+            return {
+              success: false,
+              error: error.message,
+              to: emailData.to,
+              index: globalIndex,
+              duration,
+              provider: 'smtp',
+              attempts: 1
+            };
+          }
+        })
+      );
       
-      try {
-        console.log(`📤 Enviando ${globalIndex + 1}/${emailJobs.length}: ${emailData.to}`);
-        
-        const result = await sendEmailViaSMTP(smtpConfig, emailData);
-        const duration = Date.now() - jobStartTime;
-        
-        processed++;
-        
-        console.log(`✅ Email ${globalIndex + 1} enviado (${duration}ms)`);
-        
-        return {
-          success: true,
-          result: result,
-          to: emailData.to,
-          index: globalIndex,
-          duration,
-          provider: 'smtp'
-        };
-      } catch (error: any) {
-        const duration = Date.now() - jobStartTime;
-        processed++;
-        
-        console.error(`❌ Falha email ${globalIndex + 1}: ${error.message}`);
-        
-        return {
-          success: false,
-          error: error.message,
-          to: emailData.to,
-          index: globalIndex,
-          duration,
-          provider: 'smtp'
-        };
-      }
+      return microBatchResults;
     });
 
-    // Wait for all emails in this chunk
-    const chunkResults = await Promise.all(chunkPromises);
-    results.push(...chunkResults);
+    // Wait for all micro-batches in this chunk to complete
+    const chunkResults = await Promise.all(microBatchPromises);
+    
+    // Flatten the results
+    chunkResults.forEach(microBatchResult => {
+      results.push(...microBatchResult);
+    });
 
-    // Progress callback
-    onProgress?.(processed, emailJobs.length);
-
-    // Brief pause between chunks
+    // Minimal delay between chunks - much faster now
     if (i + config.chunkSize < emailJobs.length) {
       await new Promise(resolve => setTimeout(resolve, config.delayBetweenChunks));
     }
@@ -514,10 +562,12 @@ async function processEmailBatchOptimized(
   const totalDuration = Date.now() - startTime;
   const successful = results.filter(r => r.success).length;
   const avgThroughput = (emailJobs.length / totalDuration) * 1000;
+  const avgDuration = results.reduce((sum, r) => sum + r.duration, 0) / results.length;
 
-  console.log(`📊 Processamento concluído em ${Math.round(totalDuration / 1000)}s`);
+  console.log(`📊 ULTRA-OPTIMIZED COMPLETO em ${Math.round(totalDuration / 1000)}s`);
   console.log(`⚡ Taxa média: ${avgThroughput.toFixed(2)} emails/segundo`);
-  console.log(`✅ Sucessos: ${successful}/${emailJobs.length}`);
+  console.log(`✅ Sucessos: ${successful}/${emailJobs.length} (${((successful/emailJobs.length)*100).toFixed(1)}%)`);
+  console.log(`⏱️ Duração média por email: ${Math.round(avgDuration)}ms`);
 
   return {
     results,
@@ -530,7 +580,8 @@ async function processEmailBatchOptimized(
       fallback: 0,
       successRate: emailJobs.length > 0 ? ((successful / emailJobs.length) * 100).toFixed(1) : "0",
       avgThroughput: Math.round(avgThroughput * 100) / 100,
-      totalDuration: Math.round(totalDuration / 1000)
+      totalDuration: Math.round(totalDuration / 1000),
+      avgEmailDuration: Math.round(avgDuration)
     }
   };
 }
@@ -647,7 +698,7 @@ serve(async (req) => {
     
     // Handle optimized batch email sending
     if (requestData.batch && Array.isArray(requestData.emails)) {
-      console.log(`📬 Solicitação de envio otimizado para ${requestData.emails.length} destinatários`);
+      console.log(`📬 Solicitação de envio ULTRA-OTIMIZADO para ${requestData.emails.length} destinatários`);
       console.log(`🔧 SMTP ativado: ${requestData.use_smtp}`);
       
       if (!requestData.use_smtp || !requestData.smtp_settings) {
@@ -755,19 +806,19 @@ serve(async (req) => {
         }
       }
       
-      console.log(`📨 Emails preparados para envio otimizado: ${emailRequests.length}`);
+      console.log(`📨 Emails preparados para ULTRA-OTIMIZAÇÃO: ${emailRequests.length}`);
       
       try {
         const batchResult = requestData.optimized 
           ? await processEmailBatchOptimized(emailRequests, smtpConfig)
           : await processBatchEmailsWithSMTP(emailRequests, smtpConfig);
         
-        console.log("📊 Envio otimizado concluído:", batchResult.summary);
+        console.log("📊 Envio ULTRA-OTIMIZADO concluído:", batchResult.summary);
         
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Envio em lote otimizado concluído",
+            message: "Envio em lote ULTRA-OTIMIZADO concluído",
             summary: batchResult.summary,
             results: batchResult.results.map(r => ({
               to: r.to,
@@ -775,7 +826,8 @@ serve(async (req) => {
               error: r.error || null,
               id: r.result?.id || null,
               provider: r.provider || 'smtp',
-              duration: r.duration || 0
+              duration: r.duration || 0,
+              attempts: r.attempts || 1
             }))
           }),
           {
@@ -784,11 +836,11 @@ serve(async (req) => {
           }
         );
       } catch (error) {
-        console.error("❌ Falha no processamento otimizado:", error);
+        console.error("❌ Falha no processamento ULTRA-OTIMIZADO:", error);
         return new Response(
           JSON.stringify({
             success: false,
-            error: error.message || "Falha no processamento em lote otimizado"
+            error: error.message || "Falha no processamento em lote ultra-otimizado"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },

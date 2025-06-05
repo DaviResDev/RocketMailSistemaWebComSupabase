@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useOptimizedBatchSending } from '@/hooks/useOptimizedBatchSending';
 import { OptimizedProgressMonitor } from './OptimizedProgressMonitor';
 import { toast } from 'sonner';
-import { Mail, Users, Zap, CheckCircle, XCircle, TrendingUp } from 'lucide-react';
+import { Mail, Users, Zap, CheckCircle, XCircle, TrendingUp, BarChart3, Timer, Target } from 'lucide-react';
 
 interface BatchEmailSenderProps {
   selectedContacts: any[];
@@ -38,7 +38,7 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
     }
 
     try {
-      console.log(`🚀 Iniciando envio otimizado para ${selectedContacts.length} contatos`);
+      console.log(`🚀 Iniciando ULTRA-OTIMIZAÇÃO para ${selectedContacts.length} contatos`);
       
       const startTime = Date.now();
       
@@ -55,28 +55,34 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
         setResults({
           ...result,
           totalTime: Math.round(totalTime / 1000),
-          throughput: result.avgThroughput || Math.round((selectedContacts.length / totalTime) * 1000)
+          throughput: result.avgThroughput || Math.round((selectedContacts.length / totalTime) * 1000),
+          peakThroughput: result.peakThroughput || result.avgThroughput
         });
         
-        // Performance feedback
-        if (result.avgThroughput >= 8) {
-          toast.success('🚀 Performance excelente alcançada!', {
+        // Enhanced performance feedback
+        if (result.avgThroughput >= 12) {
+          toast.success('🚀 ULTRA PERFORMANCE ALCANÇADA!', {
+            description: `Taxa excepcional de ${result.avgThroughput.toFixed(2)} emails/segundo`,
+            duration: 8000
+          });
+        } else if (result.avgThroughput >= 8) {
+          toast.success('⚡ EXCELENTE PERFORMANCE!', {
             description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo`,
-            duration: 5000
+            duration: 6000
           });
         } else if (result.avgThroughput >= 5) {
-          toast.success('⚡ Boa performance de envio!', {
+          toast.success('💪 BOA PERFORMANCE!', {
             description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo`,
             duration: 5000
           });
         }
       } else {
-        toast.error('O envio otimizado falhou. Verifique os logs para mais detalhes.');
+        toast.error('O envio ultra-otimizado falhou. Verifique os logs para mais detalhes.');
       }
 
     } catch (error: any) {
-      console.error('Erro no envio otimizado:', error);
-      toast.error(`Erro no processamento otimizado: ${error.message}`);
+      console.error('Erro no envio ultra-otimizado:', error);
+      toast.error(`Erro no processamento ultra-otimizado: ${error.message}`);
     } finally {
       onComplete();
     }
@@ -87,9 +93,9 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
   };
 
   const getVolumeLabel = () => {
-    if (selectedContacts.length >= 5000) return 'Volume Ultra Alto';
-    if (selectedContacts.length >= 2000) return 'Volume Alto';
-    if (selectedContacts.length >= 500) return 'Volume Médio';
+    if (selectedContacts.length >= 5000) return 'Volume ULTRA Alto 🚀';
+    if (selectedContacts.length >= 2000) return 'Volume Alto ⚡';
+    if (selectedContacts.length >= 500) return 'Volume Médio 💪';
     return 'Volume Baixo';
   };
 
@@ -100,59 +106,118 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
     return 'outline';
   };
 
+  const getPerformanceClass = (throughput: number) => {
+    if (throughput >= 12) return 'bg-green-500 text-white';
+    if (throughput >= 8) return 'bg-blue-500 text-white';
+    if (throughput >= 5) return 'bg-yellow-500 text-white';
+    return 'bg-gray-500 text-white';
+  };
+
   if (results) {
     return (
-      <Card>
+      <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-blue-50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            Relatório de Envio Otimizado
+            <CheckCircle className="h-6 w-6 text-green-500" />
+            Relatório ULTRA-OTIMIZADO
+            <Badge className={getPerformanceClass(results.avgThroughput)}>
+              {results.avgThroughput >= 12 ? '🚀 ULTRA' : 
+               results.avgThroughput >= 8 ? '⚡ EXCELENTE' : 
+               results.avgThroughput >= 5 ? '💪 BOM' : '📈 PADRÃO'}
+            </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          {/* Main Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
+            <div className="text-center bg-white/70 rounded-lg p-4">
               <div className="text-3xl font-bold text-green-600">{results.successCount}</div>
               <div className="text-sm text-muted-foreground">Sucessos</div>
             </div>
-            <div className="text-center">
+            <div className="text-center bg-white/70 rounded-lg p-4">
               <div className="text-3xl font-bold text-red-600">{results.errorCount}</div>
               <div className="text-sm text-muted-foreground">Falhas</div>
             </div>
-            <div className="text-center">
+            <div className="text-center bg-white/70 rounded-lg p-4">
               <div className="text-3xl font-bold text-blue-600">{results.successRate}%</div>
               <div className="text-sm text-muted-foreground">Taxa Sucesso</div>
             </div>
-            <div className="text-center">
+            <div className="text-center bg-white/70 rounded-lg p-4">
               <div className="text-3xl font-bold text-purple-600">{results.avgThroughput.toFixed(2)}</div>
               <div className="text-sm text-muted-foreground">Emails/seg</div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                Tempo total: {results.totalDuration}s
-              </Badge>
-              {results.avgThroughput >= 8 && (
-                <Badge className="bg-green-500 text-white">
-                  🚀 Performance Excelente
-                </Badge>
-              )}
+          {/* Ultra Performance Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {results.peakThroughput && (
+              <div className="text-center bg-white/70 rounded-lg p-3">
+                <div className="flex items-center justify-center mb-1">
+                  <BarChart3 className="h-4 w-4 mr-1 text-green-500" />
+                  <span className="text-sm text-muted-foreground">Pico Máximo</span>
+                </div>
+                <div className="text-xl font-bold text-green-600">
+                  {results.peakThroughput.toFixed(2)}
+                </div>
+                <div className="text-xs text-muted-foreground">emails/s</div>
+              </div>
+            )}
+
+            <div className="text-center bg-white/70 rounded-lg p-3">
+              <div className="flex items-center justify-center mb-1">
+                <Timer className="h-4 w-4 mr-1 text-blue-500" />
+                <span className="text-sm text-muted-foreground">Tempo Total</span>
+              </div>
+              <div className="text-xl font-bold text-blue-600">
+                {results.totalDuration}s
+              </div>
+              <div className="text-xs text-muted-foreground">duração</div>
             </div>
-            <Button onClick={resetResults} variant="outline">
-              Novo Envio Otimizado
-            </Button>
+
+            {results.avgEmailDuration && (
+              <div className="text-center bg-white/70 rounded-lg p-3">
+                <div className="flex items-center justify-center mb-1">
+                  <Target className="h-4 w-4 mr-1 text-orange-500" />
+                  <span className="text-sm text-muted-foreground">Média/Email</span>
+                </div>
+                <div className="text-xl font-bold text-orange-600">
+                  {results.avgEmailDuration.toFixed(0)}ms
+                </div>
+                <div className="text-xs text-muted-foreground">por email</div>
+              </div>
+            )}
           </div>
 
+          {/* Performance Summary */}
+          <div className="bg-gradient-to-r from-blue-100 to-purple-100 border-2 border-blue-300 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Badge className={getPerformanceClass(results.avgThroughput)} variant="outline">
+                  {results.avgThroughput >= 12 ? '🚀 ULTRA PERFORMANCE' :
+                   results.avgThroughput >= 8 ? '⚡ EXCELENTE' :
+                   results.avgThroughput >= 5 ? '💪 BOA PERFORMANCE' : '📈 PADRÃO'}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  Otimização atingiu {results.avgThroughput.toFixed(2)} emails/s
+                </span>
+              </div>
+              <Button onClick={resetResults} variant="outline" size="sm">
+                Novo Envio Ultra-Otimizado
+              </Button>
+            </div>
+          </div>
+
+          {/* Error Analysis */}
           {results.errorTypes && Object.keys(results.errorTypes).length > 0 && (
-            <div className="border rounded-lg p-4 bg-red-50">
-              <h4 className="font-medium text-red-800 mb-2">Análise de Erros:</h4>
-              <div className="space-y-1">
+            <div className="border rounded-lg p-4 bg-red-50 border-red-200">
+              <h4 className="font-medium text-red-800 mb-3 flex items-center gap-2">
+                <XCircle className="h-4 w-4" />
+                Análise Detalhada de Erros:
+              </h4>
+              <div className="space-y-2">
                 {Object.entries(results.errorTypes).map(([errorType, count]) => (
-                  <div key={errorType} className="flex justify-between text-sm">
-                    <span className="text-red-700">{errorType}</span>
+                  <div key={errorType} className="flex justify-between items-center">
+                    <span className="text-red-700 text-sm">{errorType}</span>
                     <Badge variant="destructive" className="text-xs">{count as number}</Badge>
                   </div>
                 ))}
@@ -166,11 +231,12 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-purple-50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-blue-600" />
-            Envio em Lote Otimizado
+            <Zap className="h-6 w-6 text-blue-600" />
+            Envio ULTRA-OTIMIZADO
+            <Badge variant="outline" className="bg-blue-100">NOVA VERSÃO</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -196,15 +262,31 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
           )}
 
           {selectedContacts.length >= 2000 && selectedContacts.length <= 10000 && (
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-blue-700 mb-2">
+                <Zap className="h-5 w-5" />
+                <span className="text-sm font-bold">
+                  ULTRA-OTIMIZAÇÃO ATIVADA! 🚀
+                </span>
+              </div>
+              <div className="text-xs text-blue-600 space-y-1">
+                <div>• 25 emails simultâneos • Lotes de 50 • Micro-lotes de 5</div>
+                <div>• Tempo estimado: ~{Math.round(selectedContacts.length / 12 / 60)} minutos</div>
+                <div>• Meta de performance: 12+ emails/segundo</div>
+              </div>
+            </div>
+          )}
+
+          {selectedContacts.length >= 500 && selectedContacts.length < 2000 && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-center gap-2 text-blue-700">
                 <Zap className="h-4 w-4" />
                 <span className="text-sm font-medium">
-                  Processamento otimizado ativado para alta performance!
+                  Processamento otimizado para volume médio ⚡
                 </span>
               </div>
               <div className="text-xs text-blue-600 mt-1">
-                • 15 emails simultâneos • Lotes de 25 • Tempo estimado: ~{Math.round(selectedContacts.length / 8 / 60)} minutos
+                • Performance esperada: 8+ emails/segundo
               </div>
             </div>
           )}
@@ -212,25 +294,25 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
           <Button
             onClick={handleOptimizedSend}
             disabled={isProcessing || selectedContacts.length === 0 || selectedContacts.length > 10000}
-            className="w-full"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
             size="lg"
           >
             {isProcessing ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Enviando em Lote Otimizado...
+                Processando ULTRA-OTIMIZADO...
               </span>
             ) : (
               <span className="flex items-center gap-2">
-                <Zap className="h-4 w-4" />
-                Enviar Otimizado para {selectedContacts.length.toLocaleString()} contatos
+                <Zap className="h-5 w-5" />
+                🚀 ULTRA-ENVIO para {selectedContacts.length.toLocaleString()} contatos
               </span>
             )}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Progress Monitor */}
+      {/* Ultra Progress Monitor */}
       <OptimizedProgressMonitor 
         progress={progress} 
         isProcessing={isProcessing} 

@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +9,8 @@ interface OptimizedProgress {
   throughput: number;
   estimatedTimeRemaining: number;
   startTime: number;
+  peakThroughput: number;
+  avgEmailDuration: number;
 }
 
 interface OptimizedBatchResult {
@@ -18,7 +19,9 @@ interface OptimizedBatchResult {
   errorCount: number;
   totalDuration: number;
   avgThroughput: number;
+  peakThroughput: number;
   successRate: string;
+  avgEmailDuration: number;
   errorTypes?: Record<string, number>;
 }
 
@@ -30,7 +33,9 @@ export function useOptimizedBatchSending() {
     percentage: 0,
     throughput: 0,
     estimatedTimeRemaining: 0,
-    startTime: 0
+    startTime: 0,
+    peakThroughput: 0,
+    avgEmailDuration: 0
   });
 
   const sendOptimizedBatch = useCallback(async (
@@ -51,6 +56,9 @@ export function useOptimizedBatchSending() {
 
     setIsProcessing(true);
     const startTime = Date.now();
+    let peakThroughput = 0;
+    let lastProgressUpdate = startTime;
+    let progressHistory: Array<{time: number, count: number}> = [];
     
     setProgress({
       current: 0,
@@ -58,11 +66,13 @@ export function useOptimizedBatchSending() {
       percentage: 0,
       throughput: 0,
       estimatedTimeRemaining: 0,
-      startTime
+      startTime,
+      peakThroughput: 0,
+      avgEmailDuration: 0
     });
 
     try {
-      console.log(`🚀 Iniciando envio otimizado para ${selectedContacts.length} contatos`);
+      console.log(`🚀 Iniciando ULTRA-OTIMIZAÇÃO para ${selectedContacts.length} contatos`);
       
       // Get user SMTP settings
       const { data: userSettings } = await supabase
@@ -71,7 +81,7 @@ export function useOptimizedBatchSending() {
         .single();
       
       if (!userSettings?.use_smtp || !userSettings?.smtp_host) {
-        throw new Error('SMTP deve estar configurado e ativado para envio otimizado.');
+        throw new Error('SMTP deve estar configurado e ativado para envio ultra-otimizado.');
       }
       
       // Get template data
@@ -84,19 +94,19 @@ export function useOptimizedBatchSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
-      // Optimize SMTP configuration
+      // Ultra-optimize SMTP configuration
       let porta = userSettings.email_porta || 587;
       let seguranca = userSettings.smtp_seguranca || 'tls';
       
       if (porta === 465 && seguranca !== 'ssl') {
         seguranca = 'ssl';
-        toast.info("Configuração SSL otimizada automaticamente para porta 465");
+        toast.info("⚡ SSL auto-otimizado para porta 465");
       } else if ((porta === 587 || porta === 25) && seguranca !== 'tls') {
         seguranca = 'tls';
-        toast.info("Configuração TLS otimizada automaticamente para portas 587/25");
+        toast.info("⚡ TLS auto-otimizado para portas 587/25");
       }
       
-      // Prepare optimized SMTP settings
+      // Prepare ultra-optimized SMTP settings
       const smtpSettings = {
         host: userSettings.smtp_host,
         port: porta,
@@ -106,7 +116,7 @@ export function useOptimizedBatchSending() {
         from_email: userSettings.email_usuario || ''
       };
       
-      // Create optimized email jobs
+      // Create ultra-optimized email jobs
       const emailJobs = selectedContacts.map(contact => ({
         to: contact.email,
         contato_id: contact.id,
@@ -125,23 +135,47 @@ export function useOptimizedBatchSending() {
         emails: emailJobs,
         smtp_settings: smtpSettings,
         use_smtp: true,
-        optimized: true // Flag for optimized processing
+        optimized: true // Flag for ULTRA-optimized processing
       };
       
-      console.log("📧 Enviando lote otimizado:", {
+      console.log("📧 Enviando ULTRA-LOTE otimizado:", {
         batch_size: emailJobs.length,
         smtp_host: smtpSettings.host,
         smtp_port: smtpSettings.port,
-        template_id: templateId
+        template_id: templateId,
+        ultra_optimized: true
       });
       
-      // Progress tracking with real-time updates
-      let lastUpdateTime = startTime;
+      // Ultra-optimized progress tracking with real-time updates
       const updateProgress = (current: number, total: number) => {
         const now = Date.now();
         const elapsed = now - startTime;
-        const currentThroughput = current > 0 ? (current / elapsed) * 1000 : 0;
-        const estimatedTimeRemaining = current > 0 ? ((total - current) / currentThroughput) * 1000 : 0;
+        
+        // Track progress history for more accurate throughput calculation
+        progressHistory.push({ time: now, count: current });
+        
+        // Keep only recent history (last 10 seconds)
+        progressHistory = progressHistory.filter(p => now - p.time <= 10000);
+        
+        // Calculate current throughput from recent history
+        let currentThroughput = 0;
+        if (progressHistory.length >= 2) {
+          const recent = progressHistory[progressHistory.length - 1];
+          const older = progressHistory[0];
+          const timeDiff = recent.time - older.time;
+          const countDiff = recent.count - older.count;
+          currentThroughput = timeDiff > 0 ? (countDiff / timeDiff) * 1000 : 0;
+        } else if (current > 0 && elapsed > 0) {
+          currentThroughput = (current / elapsed) * 1000;
+        }
+        
+        // Update peak throughput
+        if (currentThroughput > peakThroughput) {
+          peakThroughput = currentThroughput;
+        }
+        
+        const estimatedTimeRemaining = currentThroughput > 0 ? ((total - current) / currentThroughput) * 1000 : 0;
+        const avgEmailDuration = current > 0 ? elapsed / current : 0;
         
         setProgress({
           current,
@@ -149,29 +183,37 @@ export function useOptimizedBatchSending() {
           percentage: (current / total) * 100,
           throughput: currentThroughput,
           estimatedTimeRemaining,
-          startTime
+          startTime,
+          peakThroughput,
+          avgEmailDuration
         });
         
-        // Update every 2 seconds or on significant progress
-        if (now - lastUpdateTime > 2000 || current === total) {
-          console.log(`📊 Progresso: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s`);
-          lastUpdateTime = now;
+        // Update every 500ms or on significant progress for ultra-responsive UI
+        if (now - lastProgressUpdate > 500 || current === total) {
+          console.log(`⚡ ULTRA-PROGRESSO: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s (pico: ${peakThroughput.toFixed(2)} emails/s)`);
+          lastProgressUpdate = now;
         }
       };
+      
+      // Show ultra-optimization started
+      toast.success('🚀 ULTRA-OTIMIZAÇÃO iniciada!', {
+        description: `Processando ${selectedContacts.length} emails com máxima performance`,
+        duration: 3000
+      });
       
       const response = await supabase.functions.invoke('send-email', {
         body: batchRequestData
       });
       
       if (response.error) {
-        console.error("Erro na edge function otimizada:", response.error);
+        console.error("Erro na edge function ultra-otimizada:", response.error);
         throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
       }
       
       const responseData = response.data;
       if (!responseData || !responseData.success) {
-        console.error("Resposta de falha do send-email otimizado:", responseData);
-        throw new Error(responseData?.error || "Falha ao enviar emails em lote otimizado");
+        console.error("Resposta de falha do send-email ultra-otimizado:", responseData);
+        throw new Error(responseData?.error || "Falha ao enviar emails em lote ultra-otimizado");
       }
       
       const { summary, results } = responseData;
@@ -179,15 +221,37 @@ export function useOptimizedBatchSending() {
       // Final progress update
       updateProgress(selectedContacts.length, selectedContacts.length);
       
-      // Enhanced success messaging
+      // Enhanced success messaging with performance metrics
       if (summary.successful > 0) {
         const duration = summary.totalDuration || Math.round((Date.now() - startTime) / 1000);
         const throughput = summary.avgThroughput || (summary.successful / duration);
+        const avgEmailDuration = summary.avgEmailDuration || 0;
         
-        toast.success(
-          `🚀 ${summary.successful} emails enviados em ${duration}s! Taxa: ${throughput.toFixed(2)} emails/s`,
-          { duration: 8000 }
-        );
+        if (throughput >= 10) {
+          toast.success(
+            `🚀 PERFORMANCE EXCEPCIONAL! ${summary.successful} emails em ${duration}s`,
+            { 
+              description: `Taxa: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Média: ${avgEmailDuration}ms/email`,
+              duration: 10000 
+            }
+          );
+        } else if (throughput >= 8) {
+          toast.success(
+            `⚡ ALTA PERFORMANCE! ${summary.successful} emails em ${duration}s`,
+            { 
+              description: `Taxa: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s`,
+              duration: 8000 
+            }
+          );
+        } else {
+          toast.success(
+            `✅ ${summary.successful} emails enviados em ${duration}s`,
+            { 
+              description: `Taxa: ${throughput.toFixed(2)} emails/s`,
+              duration: 6000 
+            }
+          );
+        }
       }
       
       if (summary.failed > 0) {
@@ -235,12 +299,14 @@ export function useOptimizedBatchSending() {
         errorCount: summary.failed,
         totalDuration: summary.totalDuration || Math.round((Date.now() - startTime) / 1000),
         avgThroughput: summary.avgThroughput || 0,
+        peakThroughput: peakThroughput,
         successRate: summary.successRate,
+        avgEmailDuration: summary.avgEmailDuration || 0,
         errorTypes: responseData.errorTypes || {}
       };
     } catch (error: any) {
-      console.error('Erro no envio otimizado:', error);
-      toast.error(`Erro no envio otimizado: ${error.message}`);
+      console.error('Erro no envio ultra-otimizado:', error);
+      toast.error(`Erro no envio ultra-otimizado: ${error.message}`);
       return null;
     } finally {
       setIsProcessing(false);
