@@ -11,6 +11,7 @@ import { Layout } from "./components/layout/Layout";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import Contatos from "./pages/Contatos";
@@ -18,6 +19,7 @@ import Agendamentos from "./pages/Agendamentos";
 import Metricas from "./pages/Metricas";
 import Configuracoes from "./pages/Configuracoes";
 import Envios from "./pages/Envios";
+import HistoricoEnvios from "./pages/HistoricoEnvios";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +52,7 @@ const App = () => (
                 <Route path="/" element={<Landing />} />
                 <Route path="/login" element={<NonAuthRoute><Login /></NonAuthRoute>} />
                 <Route path="/cadastro" element={<NonAuthRoute><Signup /></NonAuthRoute>} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 
                 {/* Protected routes with layout */}
                 <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
@@ -58,6 +61,7 @@ const App = () => (
                   <Route path="/contatos" element={<Contatos />} />
                   <Route path="/agendamentos" element={<Agendamentos />} />
                   <Route path="/envios" element={<Envios />} />
+                  <Route path="/historico-envios" element={<HistoricoEnvios />} />
                   <Route path="/metricas" element={<Metricas />} />
                   <Route path="/configuracoes" element={<Configuracoes />} />
                 </Route>

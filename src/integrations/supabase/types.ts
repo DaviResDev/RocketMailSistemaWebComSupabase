@@ -201,6 +201,57 @@ export type Database = {
           },
         ]
       }
+      envios_historico: {
+        Row: {
+          contato_id: string | null
+          created_at: string
+          data_envio: string
+          destinatario_email: string
+          destinatario_nome: string
+          id: string
+          mensagem_erro: string | null
+          remetente_email: string
+          remetente_nome: string
+          status: string
+          template_id: string | null
+          template_nome: string | null
+          tipo_envio: string
+          user_id: string
+        }
+        Insert: {
+          contato_id?: string | null
+          created_at?: string
+          data_envio?: string
+          destinatario_email: string
+          destinatario_nome: string
+          id?: string
+          mensagem_erro?: string | null
+          remetente_email: string
+          remetente_nome: string
+          status: string
+          template_id?: string | null
+          template_nome?: string | null
+          tipo_envio: string
+          user_id: string
+        }
+        Update: {
+          contato_id?: string | null
+          created_at?: string
+          data_envio?: string
+          destinatario_email?: string
+          destinatario_nome?: string
+          id?: string
+          mensagem_erro?: string | null
+          remetente_email?: string
+          remetente_nome?: string
+          status?: string
+          template_id?: string | null
+          template_nome?: string | null
+          tipo_envio?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
