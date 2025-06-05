@@ -1,9 +1,10 @@
+
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useHistoricoEnvios } from './useHistoricoEnvios';
 
-interface UltraOptimizedProgress {
+interface OptimizedProgress {
   current: number;
   total: number;
   percentage: number;
@@ -14,11 +15,16 @@ interface UltraOptimizedProgress {
   avgEmailDuration: number;
   successCount: number;
   errorCount: number;
-  targetThroughput: number; // 100+ emails/second target
-  performanceLevel: 'ULTRA' | 'ALTA' | 'BOA' | 'PADRÃO';
+  targetThroughput: number;
+  performanceLevel: 'EXCELENTE' | 'BOA' | 'PADRÃO' | 'BAIXA';
+  chunkProgress: {
+    current: number;
+    total: number;
+    chunkNumber: number;
+  };
 }
 
-interface UltraOptimizedBatchResult {
+interface OptimizedBatchResult {
   success: boolean;
   successCount: number;
   errorCount: number;
@@ -27,13 +33,14 @@ interface UltraOptimizedBatchResult {
   peakThroughput: number;
   successRate: string;
   avgEmailDuration: number;
-  targetAchieved: boolean; // Whether 100+ emails/s was achieved
+  targetAchieved: boolean;
   errorTypes?: Record<string, number>;
+  gmailOptimized: boolean;
 }
 
 export function useOptimizedBatchSending() {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState<UltraOptimizedProgress>({
+  const [progress, setProgress] = useState<OptimizedProgress>({
     current: 0,
     total: 0,
     percentage: 0,
@@ -44,8 +51,13 @@ export function useOptimizedBatchSending() {
     avgEmailDuration: 0,
     successCount: 0,
     errorCount: 0,
-    targetThroughput: 100, // 100+ emails/second target
-    performanceLevel: 'PADRÃO'
+    targetThroughput: 15, // 15 emails/s para Gmail otimizado
+    performanceLevel: 'PADRÃO',
+    chunkProgress: {
+      current: 0,
+      total: 0,
+      chunkNumber: 0
+    }
   });
 
   const { fetchHistorico } = useHistoricoEnvios();
@@ -55,14 +67,14 @@ export function useOptimizedBatchSending() {
     templateId: string,
     customSubject?: string,
     customContent?: string
-  ): Promise<UltraOptimizedBatchResult | null> => {
+  ): Promise<OptimizedBatchResult | null> => {
     if (!selectedContacts || selectedContacts.length === 0) {
       toast.error('Nenhum contato selecionado para envio');
       return null;
     }
 
-    if (selectedContacts.length > 10000) {
-      toast.error('Limite máximo de 10.000 contatos por lote ultra-otimizado');
+    if (selectedContacts.length > 5000) {
+      toast.error('Limite máximo de 5.000 contatos por lote otimizado');
       return null;
     }
 
@@ -71,15 +83,13 @@ export function useOptimizedBatchSending() {
     let peakThroughput = 0;
     let successCount = 0;
     let errorCount = 0;
-    let lastProgressUpdate = startTime;
     let progressHistory: Array<{time: number, count: number}> = [];
     
-    // Calculate performance level based on throughput
-    const getPerformanceLevel = (throughput: number): 'ULTRA' | 'ALTA' | 'BOA' | 'PADRÃO' => {
-      if (throughput >= 100) return 'ULTRA'; // Target achieved
-      if (throughput >= 50) return 'ALTA';
-      if (throughput >= 20) return 'BOA';
-      return 'PADRÃO';
+    const getPerformanceLevel = (throughput: number): 'EXCELENTE' | 'BOA' | 'PADRÃO' | 'BAIXA' => {
+      if (throughput >= 12) return 'EXCELENTE'; // 80% do target
+      if (throughput >= 8) return 'BOA';
+      if (throughput >= 4) return 'PADRÃO';
+      return 'BAIXA';
     };
     
     setProgress({
@@ -93,25 +103,30 @@ export function useOptimizedBatchSending() {
       avgEmailDuration: 0,
       successCount: 0,
       errorCount: 0,
-      targetThroughput: 100,
-      performanceLevel: 'PADRÃO'
+      targetThroughput: 15,
+      performanceLevel: 'PADRÃO',
+      chunkProgress: {
+        current: 0,
+        total: Math.ceil(selectedContacts.length / 200),
+        chunkNumber: 0
+      }
     });
 
     try {
-      console.log(`🚀 ULTRA-OTIMIZAÇÃO V3.0 para ${selectedContacts.length} contatos`);
-      console.log(`🎯 Meta: 100+ emails/segundo com 500 conexões simultâneas`);
+      console.log(`🚀 ENVIO OTIMIZADO GMAIL para ${selectedContacts.length} contatos`);
+      console.log(`🎯 Meta: 15 emails/segundo com chunks de 200 emails`);
       
-      // Get user SMTP settings
+      // Busca configurações SMTP do usuário
       const { data: userSettings } = await supabase
         .from('configuracoes')
         .select('signature_image, email_usuario, use_smtp, smtp_host, smtp_pass, smtp_from_name, email_porta, smtp_seguranca')
         .single();
       
       if (!userSettings?.use_smtp || !userSettings?.smtp_host) {
-        throw new Error('SMTP deve estar configurado e ativado para envio ultra-otimizado V3.0.');
+        throw new Error('SMTP deve estar configurado e ativado para envio otimizado.');
       }
       
-      // Get template data
+      // Busca dados do template
       const { data: templateData, error: templateError } = await supabase
         .from('templates')
         .select('*')
@@ -121,19 +136,21 @@ export function useOptimizedBatchSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
-      // Ultra-optimize SMTP configuration for maximum performance
+      // Configuração SMTP otimizada para Gmail
       let porta = userSettings.email_porta || 587;
       let seguranca = userSettings.smtp_seguranca || 'tls';
       
-      if (porta === 465 && seguranca !== 'ssl') {
-        seguranca = 'ssl';
-        toast.info("⚡ SSL ultra-otimizado para porta 465");
-      } else if ((porta === 587 || porta === 25) && seguranca !== 'tls') {
-        seguranca = 'tls';
-        toast.info("⚡ TLS ultra-otimizado para portas 587/25");
+      // Otimizações específicas para Gmail
+      if (userSettings.smtp_host.includes('gmail.com')) {
+        if (porta === 465) {
+          seguranca = 'ssl';
+          toast.info("⚡ SSL otimizado para Gmail (porta 465)");
+        } else if (porta === 587) {
+          seguranca = 'tls';
+          toast.info("⚡ TLS otimizado para Gmail (porta 587)");
+        }
       }
       
-      // Prepare ultra-optimized SMTP settings for 500 connections
       const smtpSettings = {
         host: userSettings.smtp_host,
         port: porta,
@@ -143,8 +160,8 @@ export function useOptimizedBatchSending() {
         from_email: userSettings.email_usuario || ''
       };
       
-      // Create ultra-optimized email jobs for 10K emails
-      const emailJobs = selectedContacts.map(contact => ({
+      // Prepara jobs de email otimizados
+      const emailJobs = selectedContacts.map((contact, index) => ({
         to: contact.email,
         contato_id: contact.id,
         template_id: templateId,
@@ -155,7 +172,8 @@ export function useOptimizedBatchSending() {
         contact: contact,
         image_url: templateData.image_url,
         signature_image: userSettings?.signature_image || templateData.signature_image,
-        attachments: templateData.attachments
+        attachments: templateData.attachments,
+        index: index
       }));
 
       const batchRequestData = {
@@ -163,39 +181,37 @@ export function useOptimizedBatchSending() {
         emails: emailJobs,
         smtp_settings: smtpSettings,
         use_smtp: true,
-        ultra_optimized: true, // V3.0 ultra-optimization flag
-        target_throughput: 100, // 100+ emails/second target
-        max_concurrent: 500, // 500 simultaneous connections
-        chunk_size: 1000 // Process 1000 emails per chunk
+        gmail_optimized: true,
+        target_throughput: 15,
+        max_concurrent: 25,
+        chunk_size: 200,
+        rate_limit: {
+          emails_per_second: 14,
+          burst_limit: 100
+        }
       };
       
-      console.log("📧 Enviando ULTRA-LOTE V3.0:", {
+      console.log("📧 Enviando lote otimizado:", {
         batch_size: emailJobs.length,
-        target_throughput: "100+ emails/s",
-        max_concurrent: 500,
-        chunk_size: 1000,
+        target_throughput: "15 emails/s",
+        max_concurrent: 25,
+        chunk_size: 200,
         smtp_host: smtpSettings.host,
-        smtp_port: smtpSettings.port,
-        template_id: templateId,
-        estimated_duration: Math.ceil(selectedContacts.length / 100) + "s"
+        gmail_optimized: true,
+        estimated_duration: Math.ceil(selectedContacts.length / 15) + "s"
       });
       
-      // Ultra-optimized progress tracking with 500ms real-time updates
+      // Monitoramento de progresso otimizado
       const updateProgress = (current: number, total: number, isSuccess?: boolean) => {
         const now = Date.now();
         const elapsed = now - startTime;
         
-        // Update success/error counts
         if (isSuccess === true) successCount++;
         if (isSuccess === false) errorCount++;
         
-        // Track progress history for accurate throughput calculation
         progressHistory.push({ time: now, count: current });
+        progressHistory = progressHistory.filter(p => now - p.time <= 10000); // 10s de histórico
         
-        // Keep only recent history (last 5 seconds for more responsive calculation)
-        progressHistory = progressHistory.filter(p => now - p.time <= 5000);
-        
-        // Calculate current throughput from recent history
         let currentThroughput = 0;
         if (progressHistory.length >= 2) {
           const recent = progressHistory[progressHistory.length - 1];
@@ -207,7 +223,6 @@ export function useOptimizedBatchSending() {
           currentThroughput = (current / elapsed) * 1000;
         }
         
-        // Update peak throughput
         if (currentThroughput > peakThroughput) {
           peakThroughput = currentThroughput;
         }
@@ -215,6 +230,16 @@ export function useOptimizedBatchSending() {
         const estimatedTimeRemaining = currentThroughput > 0 ? ((total - current) / currentThroughput) * 1000 : 0;
         const avgEmailDuration = current > 0 ? elapsed / current : 0;
         const performanceLevel = getPerformanceLevel(currentThroughput);
+        
+        // Calcula progresso do chunk atual
+        const chunkSize = 200;
+        const currentChunk = Math.floor(current / chunkSize);
+        const totalChunks = Math.ceil(total / chunkSize);
+        const chunkProgress = {
+          current: current % chunkSize || (current === total ? chunkSize : current % chunkSize),
+          total: chunkSize,
+          chunkNumber: currentChunk + 1
+        };
         
         setProgress({
           current,
@@ -227,95 +252,85 @@ export function useOptimizedBatchSending() {
           avgEmailDuration,
           successCount,
           errorCount,
-          targetThroughput: 100,
-          performanceLevel
+          targetThroughput: 15,
+          performanceLevel,
+          chunkProgress
         });
         
-        // Real-time performance notifications
-        if (current % 50 === 0 && current > 0) {
+        // Notificações de progresso mais específicas
+        if (current % 100 === 0 && current > 0) {
           const successRate = ((successCount / current) * 100).toFixed(1);
-          const performanceEmoji = currentThroughput >= 100 ? '🚀' : 
-                                   currentThroughput >= 50 ? '⚡' : 
-                                   currentThroughput >= 20 ? '💪' : '📈';
+          const performanceEmoji = currentThroughput >= 12 ? '🚀' : 
+                                   currentThroughput >= 8 ? '⚡' : 
+                                   currentThroughput >= 4 ? '💪' : '📈';
           
           toast.success(`${performanceEmoji} ${current}/${total} processados (${successRate}% sucesso) - ${currentThroughput.toFixed(1)} emails/s`, {
-            duration: 2000
+            duration: 3000
           });
         }
         
-        // Update every 500ms for ultra-responsive UI
-        if (now - lastProgressUpdate > 500 || current === total) {
-          console.log(`⚡ ULTRA-PROGRESSO V3.0: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s (pico: ${peakThroughput.toFixed(2)} emails/s) - Level: ${performanceLevel}`);
-          lastProgressUpdate = now;
-        }
+        console.log(`📊 Progresso: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s (pico: ${peakThroughput.toFixed(2)}) - Level: ${performanceLevel}`);
       };
       
-      // Show ultra-optimization V3.0 started with performance targets
-      if (selectedContacts.length >= 1000) {
-        toast.success('🚀 ULTRA-OTIMIZAÇÃO V3.0 ATIVADA!', {
-          description: `Meta: 100+ emails/s com 500 conexões para ${selectedContacts.length} contatos em ~${Math.ceil(selectedContacts.length / 100)}s`,
-          duration: 4000
-        });
-      } else {
-        toast.success('⚡ PROCESSAMENTO ULTRA-RÁPIDO ATIVADO!', {
-          description: `Processando ${selectedContacts.length} contatos com máxima performance`,
-          duration: 3000
-        });
-      }
+      // Notificação inicial otimizada
+      const estimatedTime = Math.ceil(selectedContacts.length / 15);
+      toast.success('⚡ ENVIO OTIMIZADO PARA GMAIL INICIADO!', {
+        description: `Processando ${selectedContacts.length} contatos em ~${estimatedTime}s com rate limiting inteligente`,
+        duration: 4000
+      });
       
       const response = await supabase.functions.invoke('send-email', {
         body: batchRequestData
       });
       
       if (response.error) {
-        console.error("Erro na edge function ultra-otimizada V3.0:", response.error);
+        console.error("Erro na função otimizada:", response.error);
         throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
       }
       
       const responseData = response.data;
       if (!responseData || !responseData.success) {
-        console.error("Resposta de falha do send-email ultra-otimizado V3.0:", responseData);
-        throw new Error(responseData?.error || "Falha ao enviar emails em lote ultra-otimizado V3.0");
+        console.error("Resposta de falha:", responseData);
+        throw new Error(responseData?.error || "Falha ao enviar emails em lote otimizado");
       }
       
       const { summary, results } = responseData;
       
-      // Final progress update
+      // Atualização final do progresso
       updateProgress(selectedContacts.length, selectedContacts.length);
       
-      // Refresh histórico to show new records
+      // Atualiza histórico
       await fetchHistorico();
       
-      // Calculate if target was achieved
-      const targetAchieved = summary.avgThroughput >= 100 || peakThroughput >= 100;
+      const targetAchieved = summary.avgThroughput >= 12 || peakThroughput >= 12; // 80% do target
       
-      // Enhanced success messaging with V3.0 performance metrics
+      // Mensagens de sucesso otimizadas
       if (summary.successful > 0) {
         const duration = summary.totalDuration || Math.round((Date.now() - startTime) / 1000);
         const throughput = summary.avgThroughput || (summary.successful / duration);
         
         if (targetAchieved) {
           toast.success(
-            `🚀 META ALCANÇADA! ${summary.successful} emails em ${duration}s`,
+            `🚀 EXCELENTE PERFORMANCE! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `🏆 ULTRA PERFORMANCE: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
-              duration: 12000 
+              description: `⚡ Gmail otimizado: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
+              duration: 10000 
             }
           );
-        } else if (throughput >= 50) {
+        } else if (throughput >= 8) {
           toast.success(
-            `⚡ EXCELENTE PERFORMANCE! ${summary.successful} emails em ${duration}s`,
+            `⚡ BOA PERFORMANCE! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `Alta velocidade: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
-              duration: 10000 
+              description: `Gmail: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
+              duration: 8000 
             }
           );
         } else {
           toast.success(
             `✅ ${summary.successful} emails enviados em ${duration}s`,
             { 
-              description: `Taxa: ${throughput.toFixed(2)} emails/s | Histórico atualizado automaticamente!`,
-              duration: 8000 
+              description: `Taxa: ${throughput.toFixed(2)} emails/s | Histórico atualizado!`,
+              duration: 6000 
             }
           );
         }
@@ -329,7 +344,7 @@ export function useOptimizedBatchSending() {
           `⚠️ ${summary.failed} emails falharam. Taxa de sucesso: ${summary.successRate}%`,
           {
             description: errorMessages.join('; '),
-            duration: 10000
+            duration: 8000
           }
         );
       }
@@ -344,13 +359,13 @@ export function useOptimizedBatchSending() {
         successRate: summary.successRate,
         avgEmailDuration: summary.avgEmailDuration || 0,
         targetAchieved,
-        errorTypes: responseData.errorTypes || {}
+        errorTypes: responseData.errorTypes || {},
+        gmailOptimized: true
       };
     } catch (error: any) {
-      console.error('Erro no envio ultra-otimizado V3.0:', error);
-      toast.error(`Erro no envio ultra-otimizado V3.0: ${error.message}`);
+      console.error('Erro no envio otimizado:', error);
+      toast.error(`Erro no envio otimizado: ${error.message}`);
       
-      // Still try to refresh histórico in case some emails were sent
       try {
         await fetchHistorico();
       } catch (e) {

@@ -13,10 +13,11 @@ import {
   BarChart3,
   Activity,
   Target,
-  Trophy
+  Mail,
+  Layers
 } from 'lucide-react';
 
-interface UltraOptimizedProgress {
+interface OptimizedProgress {
   current: number;
   total: number;
   percentage: number;
@@ -27,12 +28,17 @@ interface UltraOptimizedProgress {
   avgEmailDuration: number;
   successCount: number;
   errorCount: number;
-  targetThroughput: number; // 100+ emails/second target
-  performanceLevel: 'ULTRA' | 'ALTA' | 'BOA' | 'PADRÃO';
+  targetThroughput: number;
+  performanceLevel: 'EXCELENTE' | 'BOA' | 'PADRÃO' | 'BAIXA';
+  chunkProgress: {
+    current: number;
+    total: number;
+    chunkNumber: number;
+  };
 }
 
 interface OptimizedProgressMonitorProps {
-  progress: UltraOptimizedProgress;
+  progress: OptimizedProgress;
   isProcessing: boolean;
 }
 
@@ -52,7 +58,8 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
     successCount,
     errorCount,
     targetThroughput,
-    performanceLevel
+    performanceLevel,
+    chunkProgress
   } = progress;
 
   const elapsedTime = Date.now() - startTime;
@@ -61,14 +68,14 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
 
   const getPerformanceData = (level: string) => {
     switch (level) {
-      case 'ULTRA':
-        return { color: 'bg-green-500', icon: '🚀', label: 'ULTRA PERFORMANCE', textColor: 'text-green-600' };
-      case 'ALTA':
-        return { color: 'bg-blue-500', icon: '⚡', label: 'ALTA PERFORMANCE', textColor: 'text-blue-600' };
+      case 'EXCELENTE':
+        return { color: 'bg-green-500', icon: '🚀', label: 'EXCELENTE', textColor: 'text-green-600' };
       case 'BOA':
-        return { color: 'bg-yellow-500', icon: '💪', label: 'BOA PERFORMANCE', textColor: 'text-yellow-600' };
+        return { color: 'bg-blue-500', icon: '⚡', label: 'BOA PERFORMANCE', textColor: 'text-blue-600' };
+      case 'PADRÃO':
+        return { color: 'bg-yellow-500', icon: '💪', label: 'PERFORMANCE PADRÃO', textColor: 'text-yellow-600' };
       default:
-        return { color: 'bg-gray-500', icon: '📈', label: 'PADRÃO', textColor: 'text-gray-600' };
+        return { color: 'bg-gray-500', icon: '📈', label: 'BAIXA PERFORMANCE', textColor: 'text-gray-600' };
     }
   };
 
@@ -91,20 +98,20 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Activity className="h-6 w-6 text-blue-600 animate-pulse" />
-          Monitor ULTRA-OTIMIZADO V3.0
+          Monitor Gmail Otimizado
           <Badge className={`${performance.color} text-white`}>
             {performance.icon} {performance.label}
           </Badge>
-          {throughput >= targetThroughput && (
-            <Badge className="bg-gold-500 text-white">
-              <Trophy className="h-4 w-4 mr-1" />
-              META ALCANÇADA
+          {throughput >= (targetThroughput * 0.8) && (
+            <Badge className="bg-green-500 text-white">
+              <Target className="h-4 w-4 mr-1" />
+              META ATINGIDA
             </Badge>
           )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Main Progress Bar */}
+        {/* Progresso Geral */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-sm font-medium">Progresso Geral</span>
@@ -115,25 +122,42 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
           <Progress value={percentage} className="h-3" />
         </div>
 
-        {/* Target Performance Indicator */}
+        {/* Progresso do Chunk Atual */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-medium">Meta de Performance (100+ emails/s)</span>
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-blue-500" />
+              <span className="text-sm font-medium">Chunk {chunkProgress.chunkNumber}</span>
+            </div>
             <span className="text-sm text-muted-foreground">
-              {throughput.toFixed(1)}/{targetThroughput}+ emails/s
+              {chunkProgress.current}/{chunkProgress.total} no chunk atual
+            </span>
+          </div>
+          <Progress 
+            value={(chunkProgress.current / chunkProgress.total) * 100} 
+            className="h-2" 
+          />
+        </div>
+
+        {/* Meta de Performance Gmail */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium">Performance Gmail (Meta: {targetThroughput} emails/s)</span>
+            <span className="text-sm text-muted-foreground">
+              {throughput.toFixed(1)}/{targetThroughput} emails/s
             </span>
           </div>
           <div className="relative">
             <Progress value={targetProgress} className="h-2" />
-            {throughput >= targetThroughput && (
+            {throughput >= (targetThroughput * 0.8) && (
               <div className="absolute top-0 right-0 text-xs text-green-600 font-bold">
-                🎯 ALCANÇADA!
+                🎯 ATINGIDA!
               </div>
             )}
           </div>
         </div>
 
-        {/* Real-time Metrics Grid */}
+        {/* Métricas em Tempo Real */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center bg-white/70 rounded-lg p-3">
             <div className="flex items-center justify-center mb-1">
@@ -178,8 +202,8 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
           </div>
         </div>
 
-        {/* Enhanced Time Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Métricas de Tempo */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="text-center bg-white/70 rounded-lg p-3">
             <div className="flex items-center justify-center mb-1">
               <Clock className="h-4 w-4 mr-1 text-gray-500" />
@@ -209,20 +233,9 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
               {avgEmailDuration > 0 ? `${Math.round(avgEmailDuration)}ms` : '-'}
             </div>
           </div>
-
-          <div className="text-center bg-white/70 rounded-lg p-3">
-            <div className="flex items-center justify-center mb-1">
-              <Target className="h-4 w-4 mr-1 text-indigo-500" />
-              <span className="text-sm text-muted-foreground">Conexões</span>
-            </div>
-            <div className="text-lg font-bold text-indigo-600">
-              500
-            </div>
-            <div className="text-xs text-muted-foreground">simultâneas</div>
-          </div>
         </div>
 
-        {/* Ultra Performance Indicator */}
+        {/* Indicador de Performance Gmail */}
         <div className="bg-gradient-to-r from-blue-100 to-purple-100 border-2 border-blue-300 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -230,9 +243,9 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
                 {performance.icon} {performance.label}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {throughput >= targetThroughput 
-                  ? `🎯 META ALCANÇADA: ${throughput.toFixed(2)} emails/s` 
-                  : `Velocidade atual: ${throughput.toFixed(2)} emails/s (meta: ${targetThroughput}+)`
+                {throughput >= (targetThroughput * 0.8)
+                  ? `🎯 Meta Gmail atingida: ${throughput.toFixed(2)} emails/s` 
+                  : `Velocidade atual: ${throughput.toFixed(2)} emails/s (meta: ${targetThroughput})`
                 }
               </span>
             </div>
@@ -240,48 +253,49 @@ export const OptimizedProgressMonitor: React.FC<OptimizedProgressMonitorProps> =
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-sm font-medium text-green-600">
-                  {throughput >= targetThroughput ? 'ULTRA PROCESSANDO' : 'Processando...'}
+                  {throughput >= (targetThroughput * 0.8) ? 'PERFORMANCE EXCELENTE' : 'Processando...'}
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Ultra Status Updates */}
+        {/* Status de Processamento */}
         {isProcessing && current > 0 && (
           <div className={`text-center border rounded-lg p-3 ${
-            throughput >= targetThroughput 
+            throughput >= (targetThroughput * 0.8)
               ? 'bg-green-50 border-green-200' 
               : 'bg-blue-50 border-blue-200'
           }`}>
             <div className={`text-sm font-bold ${
-              throughput >= targetThroughput ? 'text-green-700' : 'text-blue-700'
+              throughput >= (targetThroughput * 0.8) ? 'text-green-700' : 'text-blue-700'
             }`}>
-              <strong>ULTRA-OTIMIZAÇÃO V3.0:</strong> Processando email {current + 1} de {total}
-              {throughput >= targetThroughput && ' 🚀 META ALCANÇADA!'}
+              <Mail className="inline h-4 w-4 mr-1" />
+              <strong>Gmail Otimizado:</strong> Processando email {current + 1} de {total}
+              {throughput >= (targetThroughput * 0.8) && ' 🚀 META ATINGIDA!'}
             </div>
             <div className={`text-xs mt-1 ${
-              throughput >= targetThroughput ? 'text-green-600' : 'text-blue-600'
+              throughput >= (targetThroughput * 0.8) ? 'text-green-600' : 'text-blue-600'
             }`}>
-              Taxa atual: {throughput.toFixed(1)} emails/s | 
+              Taxa: {throughput.toFixed(1)} emails/s | 
               Pico: {peakThroughput.toFixed(1)} emails/s |
               Sucesso: {successRate}% |
-              500 conexões simultâneas |
-              Chunks de 1000 emails
+              Chunk {chunkProgress.chunkNumber} |
+              Rate Limiting: 14 emails/s
             </div>
           </div>
         )}
 
-        {/* Performance Achievement Banner */}
-        {throughput >= targetThroughput && (
+        {/* Banner de Conquista */}
+        {throughput >= (targetThroughput * 0.8) && (
           <div className="bg-gradient-to-r from-green-100 to-yellow-100 border-2 border-green-300 rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <Trophy className="h-6 w-6 text-yellow-600" />
+              <Target className="h-6 w-6 text-green-600" />
               <div>
-                <div className="font-bold text-green-800">🎯 META DE PERFORMANCE ALCANÇADA!</div>
+                <div className="font-bold text-green-800">🎯 META GMAIL ATINGIDA!</div>
                 <div className="text-sm text-green-600">
-                  Sistema atingiu {throughput.toFixed(2)} emails/segundo com 500 conexões simultâneas.
-                  Performance ULTRA confirmada! ⚡
+                  Sistema otimizado atingiu {throughput.toFixed(2)} emails/s com rate limiting inteligente.
+                  Performance excelente para Gmail! ⚡
                 </div>
               </div>
             </div>
