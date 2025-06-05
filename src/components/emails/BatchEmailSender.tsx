@@ -1,12 +1,12 @@
 
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useBatchEmailSending } from '@/hooks/useBatchEmailSending';
+import { useOptimizedBatchSending } from '@/hooks/useOptimizedBatchSending';
+import { OptimizedProgressMonitor } from './OptimizedProgressMonitor';
 import { toast } from 'sonner';
-import { Mail, Users, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Mail, Users, Zap, CheckCircle, XCircle, TrendingUp } from 'lucide-react';
 
 interface BatchEmailSenderProps {
   selectedContacts: any[];
@@ -23,12 +23,10 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
   customContent,
   onComplete
 }) => {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<any>(null);
-  const { sendEmailsInBatch } = useBatchEmailSending();
+  const { isProcessing, progress, sendOptimizedBatch } = useOptimizedBatchSending();
 
-  const handleBatchSend = useCallback(async () => {
+  const handleOptimizedSend = useCallback(async () => {
     if (selectedContacts.length === 0) {
       toast.error('Selecione ao menos um contato para envio');
       return;
@@ -39,16 +37,12 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
       return;
     }
 
-    setIsProcessing(true);
-    setProgress({ current: 0, total: selectedContacts.length });
-    
     try {
-      console.log(`Iniciando envio em lote para ${selectedContacts.length} contatos`);
+      console.log(`🚀 Iniciando envio otimizado para ${selectedContacts.length} contatos`);
       
       const startTime = Date.now();
       
-      // Use the updated sendEmailsInBatch function with all contact data
-      const result = await sendEmailsInBatch(
+      const result = await sendOptimizedBatch(
         selectedContacts,
         templateId,
         customSubject,
@@ -61,24 +55,49 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
         setResults({
           ...result,
           totalTime: Math.round(totalTime / 1000),
-          throughput: Math.round((selectedContacts.length / totalTime) * 1000)
+          throughput: result.avgThroughput || Math.round((selectedContacts.length / totalTime) * 1000)
         });
+        
+        // Performance feedback
+        if (result.avgThroughput >= 8) {
+          toast.success('🚀 Performance excelente alcançada!', {
+            description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo`,
+            duration: 5000
+          });
+        } else if (result.avgThroughput >= 5) {
+          toast.success('⚡ Boa performance de envio!', {
+            description: `Taxa de ${result.avgThroughput.toFixed(2)} emails/segundo`,
+            duration: 5000
+          });
+        }
       } else {
-        toast.error('O envio falhou. Verifique os logs para mais detalhes.');
+        toast.error('O envio otimizado falhou. Verifique os logs para mais detalhes.');
       }
 
     } catch (error: any) {
-      console.error('Erro no envio em lote:', error);
-      toast.error(`Erro no processamento em lote: ${error.message}`);
+      console.error('Erro no envio otimizado:', error);
+      toast.error(`Erro no processamento otimizado: ${error.message}`);
     } finally {
-      setIsProcessing(false);
       onComplete();
     }
-  }, [selectedContacts, templateId, customSubject, customContent, sendEmailsInBatch, onComplete]);
+  }, [selectedContacts, templateId, customSubject, customContent, sendOptimizedBatch, onComplete]);
 
   const resetResults = () => {
     setResults(null);
-    setProgress({ current: 0, total: 0 });
+  };
+
+  const getVolumeLabel = () => {
+    if (selectedContacts.length >= 5000) return 'Volume Ultra Alto';
+    if (selectedContacts.length >= 2000) return 'Volume Alto';
+    if (selectedContacts.length >= 500) return 'Volume Médio';
+    return 'Volume Baixo';
+  };
+
+  const getVolumeColor = () => {
+    if (selectedContacts.length >= 5000) return 'destructive';
+    if (selectedContacts.length >= 2000) return 'default';
+    if (selectedContacts.length >= 500) return 'secondary';
+    return 'outline';
   };
 
   if (results) {
@@ -87,42 +106,49 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-500" />
-            Relatório de Envio em Lote
+            Relatório de Envio Otimizado
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{results.successCount}</div>
+              <div className="text-3xl font-bold text-green-600">{results.successCount}</div>
               <div className="text-sm text-muted-foreground">Sucessos</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">{results.errorCount}</div>
+              <div className="text-3xl font-bold text-red-600">{results.errorCount}</div>
               <div className="text-sm text-muted-foreground">Falhas</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{results.successRate}%</div>
+              <div className="text-3xl font-bold text-blue-600">{results.successRate}%</div>
               <div className="text-sm text-muted-foreground">Taxa Sucesso</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">{results.throughput}</div>
+              <div className="text-3xl font-bold text-purple-600">{results.avgThroughput.toFixed(2)}</div>
               <div className="text-sm text-muted-foreground">Emails/seg</div>
             </div>
           </div>
 
           <div className="flex items-center justify-between">
-            <Badge variant="outline" className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Tempo total: {results.totalTime}s
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                Tempo total: {results.totalDuration}s
+              </Badge>
+              {results.avgThroughput >= 8 && (
+                <Badge className="bg-green-500 text-white">
+                  🚀 Performance Excelente
+                </Badge>
+              )}
+            </div>
             <Button onClick={resetResults} variant="outline">
-              Novo Envio
+              Novo Envio Otimizado
             </Button>
           </div>
 
           {results.errorTypes && Object.keys(results.errorTypes).length > 0 && (
             <div className="border rounded-lg p-4 bg-red-50">
-              <h4 className="font-medium text-red-800 mb-2">Tipos de Erro:</h4>
+              <h4 className="font-medium text-red-800 mb-2">Análise de Erros:</h4>
               <div className="space-y-1">
                 {Object.entries(results.errorTypes).map(([errorType, count]) => (
                   <div key={errorType} className="flex justify-between text-sm">
@@ -139,63 +165,76 @@ export const BatchEmailSender: React.FC<BatchEmailSenderProps> = ({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-5 w-5" />
-          Envio em Lote
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-muted-foreground" />
-            <span className="text-sm font-medium">
-              {selectedContacts.length.toLocaleString()} contatos selecionados
-            </span>
-          </div>
-          {selectedContacts.length > 5000 && (
-            <Badge variant="secondary">Volume Alto</Badge>
-          )}
-        </div>
-
-        {selectedContacts.length > 10000 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 text-red-700">
-              <XCircle className="h-4 w-4" />
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-blue-600" />
+            Envio em Lote Otimizado
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
               <span className="text-sm font-medium">
-                Limite excedido: máximo 10.000 contatos por lote
+                {selectedContacts.length.toLocaleString()} contatos selecionados
               </span>
             </div>
+            <Badge variant={getVolumeColor()}>{getVolumeLabel()}</Badge>
           </div>
-        )}
 
-        {isProcessing && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Processando...</span>
-              <span>{progress.current} de {progress.total}</span>
+          {selectedContacts.length > 10000 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-red-700">
+                <XCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  Limite excedido: máximo 10.000 contatos por lote
+                </span>
+              </div>
             </div>
-            <Progress 
-              value={(progress.current / progress.total) * 100} 
-              className="w-full"
-            />
-          </div>
-        )}
-
-        <Button
-          onClick={handleBatchSend}
-          disabled={isProcessing || selectedContacts.length === 0 || selectedContacts.length > 10000}
-          className="w-full"
-          size="lg"
-        >
-          {isProcessing ? (
-            'Enviando...'
-          ) : (
-            `Enviar para ${selectedContacts.length.toLocaleString()} contatos`
           )}
-        </Button>
-      </CardContent>
-    </Card>
+
+          {selectedContacts.length >= 2000 && selectedContacts.length <= 10000 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-blue-700">
+                <Zap className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  Processamento otimizado ativado para alta performance!
+                </span>
+              </div>
+              <div className="text-xs text-blue-600 mt-1">
+                • 15 emails simultâneos • Lotes de 25 • Tempo estimado: ~{Math.round(selectedContacts.length / 8 / 60)} minutos
+              </div>
+            </div>
+          )}
+
+          <Button
+            onClick={handleOptimizedSend}
+            disabled={isProcessing || selectedContacts.length === 0 || selectedContacts.length > 10000}
+            className="w-full"
+            size="lg"
+          >
+            {isProcessing ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Enviando em Lote Otimizado...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Zap className="h-4 w-4" />
+                Enviar Otimizado para {selectedContacts.length.toLocaleString()} contatos
+              </span>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Progress Monitor */}
+      <OptimizedProgressMonitor 
+        progress={progress} 
+        isProcessing={isProcessing} 
+      />
+    </div>
   );
 };

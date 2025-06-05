@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -429,6 +428,114 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
 }
 
 /**
+ * Optimized batch email processing with real-time progress
+ */
+async function processEmailBatchOptimized(
+  emailJobs: any[],
+  smtpConfig: any,
+  onProgress?: (current: number, total: number) => void
+): Promise<any> {
+  const config = {
+    maxConcurrent: 15,
+    chunkSize: 25,
+    delayBetweenChunks: 1000,
+    connectionTimeout: 15000,
+    maxRetries: 2
+  };
+
+  const startTime = Date.now();
+  const results: any[] = [];
+  let processed = 0;
+
+  console.log(`🚀 Iniciando processamento otimizado: ${emailJobs.length} emails`);
+  console.log(`📊 Configuração: ${config.maxConcurrent} simultâneos, lotes de ${config.chunkSize}`);
+
+  // Process in optimized parallel chunks
+  for (let i = 0; i < emailJobs.length; i += config.chunkSize) {
+    const chunk = emailJobs.slice(i, i + config.chunkSize);
+    const chunkNumber = Math.floor(i / config.chunkSize) + 1;
+    const totalChunks = Math.ceil(emailJobs.length / config.chunkSize);
+
+    console.log(`⚡ Processando lote ${chunkNumber}/${totalChunks} (${chunk.length} emails)`);
+
+    // Create promises for concurrent processing
+    const chunkPromises = chunk.map(async (emailData, chunkIndex) => {
+      const globalIndex = i + chunkIndex;
+      const jobStartTime = Date.now();
+      
+      try {
+        console.log(`📤 Enviando ${globalIndex + 1}/${emailJobs.length}: ${emailData.to}`);
+        
+        const result = await sendEmailViaSMTP(smtpConfig, emailData);
+        const duration = Date.now() - jobStartTime;
+        
+        processed++;
+        
+        console.log(`✅ Email ${globalIndex + 1} enviado (${duration}ms)`);
+        
+        return {
+          success: true,
+          result: result,
+          to: emailData.to,
+          index: globalIndex,
+          duration,
+          provider: 'smtp'
+        };
+      } catch (error: any) {
+        const duration = Date.now() - jobStartTime;
+        processed++;
+        
+        console.error(`❌ Falha email ${globalIndex + 1}: ${error.message}`);
+        
+        return {
+          success: false,
+          error: error.message,
+          to: emailData.to,
+          index: globalIndex,
+          duration,
+          provider: 'smtp'
+        };
+      }
+    });
+
+    // Wait for all emails in this chunk
+    const chunkResults = await Promise.all(chunkPromises);
+    results.push(...chunkResults);
+
+    // Progress callback
+    onProgress?.(processed, emailJobs.length);
+
+    // Brief pause between chunks
+    if (i + config.chunkSize < emailJobs.length) {
+      await new Promise(resolve => setTimeout(resolve, config.delayBetweenChunks));
+    }
+  }
+
+  const totalDuration = Date.now() - startTime;
+  const successful = results.filter(r => r.success).length;
+  const avgThroughput = (emailJobs.length / totalDuration) * 1000;
+
+  console.log(`📊 Processamento concluído em ${Math.round(totalDuration / 1000)}s`);
+  console.log(`⚡ Taxa média: ${avgThroughput.toFixed(2)} emails/segundo`);
+  console.log(`✅ Sucessos: ${successful}/${emailJobs.length}`);
+
+  return {
+    results,
+    summary: {
+      total: emailJobs.length,
+      successful,
+      failed: emailJobs.length - successful,
+      smtp: successful,
+      resend: 0,
+      fallback: 0,
+      successRate: emailJobs.length > 0 ? ((successful / emailJobs.length) * 100).toFixed(1) : "0",
+      avgThroughput: Math.round(avgThroughput * 100) / 100,
+      totalDuration: Math.round(totalDuration / 1000)
+    }
+  };
+}
+
+/**
  * Process multiple emails in controlled batches with improved rate limiting
  */
 async function processBatchEmailsWithSMTP(emailRequests: any[], smtpConfig: any): Promise<any> {
@@ -538,18 +645,16 @@ serve(async (req) => {
       );
     }
     
-    // Handle batch email sending
+    // Handle optimized batch email sending
     if (requestData.batch && Array.isArray(requestData.emails)) {
-      console.log(`📬 Recebida solicitação de envio em lote para ${requestData.emails.length} destinatários`);
-      console.log(`🔧 Use SMTP: ${requestData.use_smtp}`);
-      console.log(`📧 SMTP configurado: ${!!requestData.smtp_settings}`);
+      console.log(`📬 Solicitação de envio otimizado para ${requestData.emails.length} destinatários`);
+      console.log(`🔧 SMTP ativado: ${requestData.use_smtp}`);
       
-      // Validate SMTP configuration when use_smtp is true
-      if (requestData.use_smtp && !requestData.smtp_settings) {
+      if (!requestData.use_smtp || !requestData.smtp_settings) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "SMTP ativado mas configurações não fornecidas"
+            error: "SMTP deve estar configurado para envio em lote otimizado"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -558,20 +663,7 @@ serve(async (req) => {
         );
       }
       
-      if (!requestData.use_smtp) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Envio em lote requer SMTP configurado. Por favor, configure o SMTP nas configurações."
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          }
-        );
-      }
-      
-      // Prepare SMTP configuration with corrected field mapping
+      // Prepare optimized SMTP configuration
       const smtpConfig = {
         host: requestData.smtp_settings.host,
         port: requestData.smtp_settings.port,
@@ -582,41 +674,34 @@ serve(async (req) => {
         smtp_nome: requestData.smtp_settings.from_name
       };
       
-      // Build email requests with proper template processing
+      // Build optimized email requests
       const emailRequests = [];
       
       for (const emailData of requestData.emails) {
         try {
-          // Get template content from database if template_id is provided
           let templateContent = emailData.content || '';
           let templateSubject = emailData.subject || 'Sem assunto';
           
           if (emailData.template_id) {
-            console.log(`📋 Buscando template ${emailData.template_id} no banco de dados`);
-            
             const { data: templateData, error: templateError } = await supabase
               .from('templates')
               .select('*')
               .eq('id', emailData.template_id)
               .single();
               
-            if (templateError) {
-              console.error(`Erro ao buscar template ${emailData.template_id}:`, templateError);
-            } else if (templateData) {
+            if (!templateError && templateData) {
               templateContent = templateData.conteudo || '';
               templateSubject = emailData.subject || templateData.descricao || templateData.nome || 'Sem assunto';
-              console.log(`✅ Template ${emailData.template_id} carregado: ${templateData.nome}`);
             }
           }
           
-          // Process template variables with contact data
+          // Process template variables
           let processedContent = templateContent;
           if (emailData.contact) {
             processedContent = processTemplateVariables(templateContent, emailData.contact);
-            console.log(`🔄 Variáveis processadas para contato: ${emailData.contact.nome}`);
           }
           
-          // Build email HTML with proper structure
+          // Build optimized email HTML
           let finalContent = `
 <!DOCTYPE html>
 <html>
@@ -652,7 +737,7 @@ serve(async (req) => {
 </body>
 </html>`;
           
-          // Format the recipient email properly
+          // Format recipient email
           let toAddress = emailData.to;
           if (emailData.contato_nome && !toAddress.includes('<')) {
             toAddress = `"${emailData.contato_nome}" <${emailData.to}>`;
@@ -667,21 +752,22 @@ serve(async (req) => {
           
         } catch (error) {
           console.error(`Erro ao processar email para ${emailData.to}:`, error);
-          // Continue processing other emails even if one fails
         }
       }
       
-      console.log(`📨 Processados ${emailRequests.length} emails para envio via SMTP`);
+      console.log(`📨 Emails preparados para envio otimizado: ${emailRequests.length}`);
       
       try {
-        const batchResult = await processBatchEmailsWithSMTP(emailRequests, smtpConfig);
+        const batchResult = requestData.optimized 
+          ? await processEmailBatchOptimized(emailRequests, smtpConfig)
+          : await processBatchEmailsWithSMTP(emailRequests, smtpConfig);
         
-        console.log("📊 Processamento em lote SMTP concluído:", batchResult.summary);
+        console.log("📊 Envio otimizado concluído:", batchResult.summary);
         
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Processamento em lote SMTP concluído",
+            message: "Envio em lote otimizado concluído",
             summary: batchResult.summary,
             results: batchResult.results.map(r => ({
               to: r.to,
@@ -689,7 +775,7 @@ serve(async (req) => {
               error: r.error || null,
               id: r.result?.id || null,
               provider: r.provider || 'smtp',
-              method: r.method || 'SMTP Nativo'
+              duration: r.duration || 0
             }))
           }),
           {
@@ -698,11 +784,11 @@ serve(async (req) => {
           }
         );
       } catch (error) {
-        console.error("❌ Falha no processamento em lote SMTP:", error);
+        console.error("❌ Falha no processamento otimizado:", error);
         return new Response(
           JSON.stringify({
             success: false,
-            error: error.message || "Falha no processamento em lote SMTP"
+            error: error.message || "Falha no processamento em lote otimizado"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
