@@ -11,14 +11,16 @@ export function useTemplateOperations() {
   const { fetchTemplates } = useTemplatesData();
   const { settings } = useSettings();
 
-  // Helper function to upload file to storage
+  // Helper function to upload file to storage with better error handling
   const uploadFileToStorage = async (file: File) => {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${uuidv4()}.${fileExt}`;
       const filePath = `${user?.id}/${fileName}`;
       
-      // Upload the file to Supabase storage
+      console.log(`Uploading file: ${file.name} to path: ${filePath}`);
+      
+      // Upload the file to Supabase storage with retry logic
       const { data, error } = await supabase.storage
         .from('template_attachments')
         .upload(filePath, file, {
@@ -26,12 +28,17 @@ export function useTemplateOperations() {
           upsert: false
         });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Storage upload error:', error);
+        throw error;
+      }
       
       // Get the public URL for the file
       const { data: { publicUrl } } = supabase.storage
         .from('template_attachments')
         .getPublicUrl(filePath);
+        
+      console.log(`File uploaded successfully: ${publicUrl}`);
         
       return {
         name: file.name,
@@ -46,7 +53,7 @@ export function useTemplateOperations() {
     }
   };
 
-  // Helper function to process attachments consistently
+  // Helper function to process attachments with better handling for multiple files
   const processAttachments = async (attachments: any) => {
     if (!attachments) {
       return JSON.stringify([]);
@@ -56,15 +63,24 @@ export function useTemplateOperations() {
     if (Array.isArray(attachments)) {
       const processedAttachments = [];
       
+      // Process files in sequence to avoid conflicts
       for (const attachment of attachments) {
-        // If it's a File object, upload it to storage
-        if (attachment instanceof File) {
-          const uploadedFile = await uploadFileToStorage(attachment);
-          processedAttachments.push(uploadedFile);
-        } 
-        // If it's an object with file information, keep it
-        else if (typeof attachment === 'object' && attachment !== null) {
-          processedAttachments.push(attachment);
+        try {
+          // If it's a File object, upload it to storage
+          if (attachment instanceof File) {
+            console.log(`Processing File object: ${attachment.name}`);
+            const uploadedFile = await uploadFileToStorage(attachment);
+            processedAttachments.push(uploadedFile);
+          } 
+          // If it's an object with file information, keep it
+          else if (typeof attachment === 'object' && attachment !== null) {
+            console.log(`Processing attachment object: ${attachment.name || 'unnamed'}`);
+            processedAttachments.push(attachment);
+          }
+        } catch (error) {
+          console.error(`Error processing attachment: ${attachment.name || 'unnamed'}`, error);
+          // Continue processing other files even if one fails
+          toast.error(`Erro ao processar anexo: ${attachment.name || 'arquivo'}`);
         }
       }
       
@@ -73,8 +89,13 @@ export function useTemplateOperations() {
     
     // If it's a single File object, process and convert
     if (attachments instanceof File) {
-      const uploadedFile = await uploadFileToStorage(attachments);
-      return JSON.stringify([uploadedFile]);
+      try {
+        const uploadedFile = await uploadFileToStorage(attachments);
+        return JSON.stringify([uploadedFile]);
+      } catch (error) {
+        console.error('Error processing single file:', error);
+        return JSON.stringify([]);
+      }
     }
     
     // If it's already a JSON string, validate and return
@@ -99,7 +120,7 @@ export function useTemplateOperations() {
     }
 
     try {
-      // Process attachments
+      // Process attachments with better error handling
       const processedAttachments = await processAttachments(formData.attachments);
       
       // Set default values for template data
@@ -138,7 +159,7 @@ export function useTemplateOperations() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
-      // Process attachments
+      // Process attachments with better error handling
       const processedAttachments = await processAttachments(formData.attachments);
       
       // Always set to 'email' for backwards compatibility

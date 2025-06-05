@@ -45,24 +45,24 @@
 
   .dark {
     --background: 215 28% 17%;
-    --foreground: 0 0% 98%;
-    --card: 215 28% 17%;
-    --card-foreground: 0 0% 98%;
-    --popover: 215 28% 17%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 215 28% 17%;
+    --foreground: 210 40% 98%;
+    --card: 220 27% 22%;
+    --card-foreground: 210 40% 98%;
+    --popover: 220 27% 22%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
     --primary-foreground: 210 40% 98%;
     --secondary: 215 28% 25%;
     --secondary-foreground: 210 40% 98%;
     --muted: 215 28% 25%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted-foreground: 210 20% 75%;
     --accent: 215 28% 25%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 100%; /* Borda branca no modo escuro */
-    --input: 215 28% 17%;
-    --ring: 240 4.9% 83.9%;
+    --destructive: 0 62.8% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 210 30% 35%;
+    --input: 220 27% 22%;
+    --ring: 217 91% 60%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -96,6 +96,82 @@
     border-color: hsl(var(--sidebar-border)) !important;
   }
 
+  /* Enhanced dark mode styles for better contrast */
+  .dark {
+    /* Enhanced button contrast */
+    button:not([data-sidebar]):not(.ghost):not(.link) {
+      background-color: hsl(var(--primary)) !important;
+      color: hsl(var(--primary-foreground)) !important;
+      border: 1px solid hsl(var(--border)) !important;
+    }
+
+    /* Enhanced card contrast */
+    .card {
+      background-color: hsl(var(--card)) !important;
+      border: 1px solid hsl(var(--border)) !important;
+    }
+
+    /* Enhanced badge contrast */
+    .badge {
+      border: 1px solid hsl(var(--border)) !important;
+    }
+
+    /* Enhanced table contrast */
+    table {
+      border: 1px solid hsl(var(--border)) !important;
+    }
+
+    table th,
+    table td {
+      border-bottom: 1px solid hsl(var(--border)) !important;
+    }
+
+    /* Enhanced input contrast */
+    input:not([data-sidebar]),
+    textarea:not([data-sidebar]),
+    select:not([data-sidebar]) {
+      background-color: hsl(var(--input)) !important;
+      border: 1px solid hsl(var(--border)) !important;
+      color: hsl(var(--foreground)) !important;
+    }
+
+    /* Enhanced text contrast */
+    .text-muted-foreground {
+      color: hsl(var(--muted-foreground)) !important;
+    }
+
+    /* Status badges enhanced contrast */
+    .bg-green-100 {
+      background-color: hsl(142 71% 25%) !important;
+      color: hsl(142 76% 85%) !important;
+    }
+
+    .bg-blue-100 {
+      background-color: hsl(213 94% 25%) !important;
+      color: hsl(213 94% 85%) !important;
+    }
+
+    .text-green-800 {
+      color: hsl(142 76% 85%) !important;
+    }
+
+    .text-blue-800 {
+      color: hsl(213 94% 85%) !important;
+    }
+
+    .text-red-600 {
+      color: hsl(0 84% 75%) !important;
+    }
+
+    .text-purple-600 {
+      color: hsl(270 91% 75%) !important;
+    }
+
+    .text-gray-600 {
+      color: hsl(var(--muted-foreground)) !important;
+    }
+  }
+
   /* Dark mode border styles for ALL interactive elements */
   .dark input:not([data-sidebar]),
   .dark textarea:not([data-sidebar]),
@@ -109,7 +185,7 @@
   .dark [data-radix-checkbox-root]:not([data-sidebar]),
   .dark [data-radix-radio-item]:not([data-sidebar]),
   .dark [data-radix-switch-root]:not([data-sidebar]) {
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    border: 1px solid hsl(var(--border)) !important;
     border-radius: 4px !important;
     box-shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.1), 0 2px 4px -1px rgba(255, 255, 255, 0.06) !important;
     transition: all 0.2s ease-in-out !important;
@@ -126,7 +202,7 @@
   .dark [data-radix-checkbox-root]:not([data-sidebar]):hover,
   .dark [data-radix-radio-item]:not([data-sidebar]):hover,
   .dark [data-radix-switch-root]:not([data-sidebar]):hover {
-    border-color: rgba(255, 255, 255, 0.5) !important;
+    border-color: hsl(var(--primary)) !important;
     box-shadow: 0 8px 15px -3px rgba(255, 255, 255, 0.15), 0 4px 6px -2px rgba(255, 255, 255, 0.1) !important;
     transform: translateY(-1px) !important;
   }
@@ -142,7 +218,7 @@
   .dark [data-radix-checkbox-root]:not([data-sidebar]):focus-visible,
   .dark [data-radix-radio-item]:not([data-sidebar]):focus-visible,
   .dark [data-radix-switch-root]:not([data-sidebar]):focus-visible {
-    border-color: rgba(255, 255, 255, 0.7) !important;
+    border-color: hsl(var(--primary)) !important;
     box-shadow: 0 8px 15px -3px rgba(255, 255, 255, 0.2), 0 4px 6px -2px rgba(255, 255, 255, 0.15) !important;
     transform: translateY(-1px) !important;
   }
@@ -197,7 +273,7 @@
   .dark input[type="date"],
   .dark input[type="datetime-local"],
   .dark textarea {
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    border: 1px solid hsl(var(--border)) !important;
   }
 }
 

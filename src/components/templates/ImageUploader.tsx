@@ -17,7 +17,7 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
   const [isUploading, setIsUploading] = useState(false);
   const { user } = useAuth();
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // Aumentado para 10MB
   const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml'];
 
   // Update local state when the initialImageUrl prop changes
@@ -28,9 +28,10 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
   }, [initialImageUrl]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (!file) return;
+    const file = files[0]; // Para imagem única, pega apenas o primeiro arquivo
 
     // Validate file type
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
@@ -40,12 +41,12 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
 
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
-      toast.error('Arquivo muito grande. O tamanho máximo é 5MB.');
+      toast.error('Arquivo muito grande. O tamanho máximo é 10MB.');
       return;
     }
 
     setIsUploading(true);
-    toast.loading('Fazendo upload da imagem...');
+    const uploadToast = toast.loading('Fazendo upload da imagem...');
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -78,14 +79,16 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
 
       setImageUrl(publicUrl);
       onImageUploaded(publicUrl);
-      toast.dismiss();
+      toast.dismiss(uploadToast);
       toast.success('Imagem carregada com sucesso!');
     } catch (error: any) {
-      toast.dismiss();
+      toast.dismiss(uploadToast);
       console.error('Erro ao fazer upload da imagem:', error);
       toast.error(`Erro ao fazer upload da imagem: ${error.message}`);
     } finally {
       setIsUploading(false);
+      // Clear the input value to allow re-uploading the same file
+      e.target.value = '';
     }
   };
 
@@ -120,7 +123,7 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
   return (
     <div className="space-y-4">
       {!imageUrl ? (
-        <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-6 bg-muted/50">
+        <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-6 bg-muted/50">
           <Upload className="h-8 w-8 text-muted-foreground mb-2" />
           <p className="text-muted-foreground mb-4">Arraste uma imagem ou clique para fazer upload</p>
           <input
@@ -137,7 +140,7 @@ export const ImageUploader = ({ initialImageUrl, onImageUploaded }: ImageUploade
             </Button>
           </label>
           <p className="text-xs text-muted-foreground mt-2">
-            Formatos suportados: PNG, JPG, JPEG, GIF, WEBP, SVG (máx. 5MB)
+            Formatos suportados: PNG, JPG, JPEG, GIF, WEBP, SVG (máx. 10MB)
           </p>
         </div>
       ) : (
