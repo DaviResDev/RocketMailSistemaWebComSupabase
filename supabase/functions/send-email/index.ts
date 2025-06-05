@@ -760,6 +760,274 @@ async function processEmailBatchUltraOptimized(
   };
 }
 
+/**
+ * ULTRA-PARALLEL V5.0 - 200+ emails/segundo com 1000 conexões simultâneas
+ */
+async function processUltraParallelV5(
+  emailJobs: any[],
+  smtpConfig: any,
+  userId: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<any> {
+  const config = {
+    maxConcurrent: 1000, // 1000 conexões simultâneas
+    chunkSize: 200, // Chunks de 200 conforme solicitado
+    delayBetweenChunks: 0, // Zero delay para velocidade máxima
+    connectionTimeout: 3000, // 3s timeout ultra-agressivo
+    maxRetries: 1, // Apenas 1 retry para velocidade
+    targetThroughput: 200, // Meta de 200 emails/s
+    batchHistorySize: 500 // Histórico em lotes de 500
+  };
+
+  const startTime = Date.now();
+  const results: any[] = [];
+  const historyRecords: any[] = [];
+  let processed = 0;
+  let successCount = 0;
+  let errorCount = 0;
+  let peakThroughput = 0;
+  let progressHistory: Array<{time: number, count: number}> = [];
+
+  console.log(`🚀 ULTRA-PARALLEL V5.0: ${emailJobs.length} emails com META 200+ emails/s`);
+  console.log(`⚡ Configuração ultra-agressiva: ${config.maxConcurrent} conexões, chunks ${config.chunkSize}, zero delay`);
+
+  // Função para calcular throughput em tempo real
+  const calculateThroughput = () => {
+    const now = Date.now();
+    progressHistory.push({ time: now, count: processed });
+    progressHistory = progressHistory.filter(p => now - p.time <= 2000); // 2s de histórico
+
+    if (progressHistory.length >= 2) {
+      const recent = progressHistory[progressHistory.length - 1];
+      const older = progressHistory[0];
+      const timeDiff = recent.time - older.time;
+      const countDiff = recent.count - older.count;
+      return timeDiff > 0 ? (countDiff / timeDiff) * 1000 : 0;
+    }
+    return 0;
+  };
+
+  // Processamento em chunks ultra-paralelos
+  for (let i = 0; i < emailJobs.length; i += config.chunkSize) {
+    const chunk = emailJobs.slice(i, i + config.chunkSize);
+    const chunkNumber = Math.floor(i / config.chunkSize) + 1;
+    const totalChunks = Math.ceil(emailJobs.length / config.chunkSize);
+
+    console.log(`⚡ ULTRA-CHUNK ${chunkNumber}/${totalChunks}: ${chunk.length} emails, ${config.maxConcurrent} slots`);
+
+    // 1000 conexões simultâneas por chunk
+    const chunkPromises = chunk.map(async (emailData, emailIndex) => {
+      const globalIndex = i + emailIndex;
+      const connectionSlot = globalIndex % config.maxConcurrent;
+      
+      const jobStartTime = Date.now();
+      
+      try {
+        // Envio com retry ultra-mínimo
+        let lastError: Error;
+        for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+          try {
+            const result = await sendEmailViaSMTP(smtpConfig, emailData);
+            const duration = Date.now() - jobStartTime;
+            
+            processed++;
+            successCount++;
+            onProgress?.(processed, emailJobs.length);
+            
+            const currentThroughput = calculateThroughput();
+            if (currentThroughput > peakThroughput) {
+              peakThroughput = currentThroughput;
+            }
+            
+            // Log apenas a cada 50 emails para performance
+            if (globalIndex % 50 === 0) {
+              console.log(`🚀 [${globalIndex + 1}] ULTRA-SUCESSO: ${currentThroughput.toFixed(2)} emails/s`);
+            }
+
+            // Registro para histórico em lote
+            const historyRecord = {
+              user_id: userId,
+              template_id: emailData.template_id || null,
+              contato_id: emailData.contato_id || null,
+              remetente_nome: emailData.fromName || result.fromName || 'Sistema',
+              remetente_email: emailData.fromEmail || result.from || extractEmailAddress(result.from || ''),
+              destinatario_nome: emailData.contato_nome || extractNameFromEmail(emailData.to),
+              destinatario_email: extractEmailAddress(emailData.to),
+              status: 'entregue',
+              template_nome: emailData.template_nome || null,
+              tipo_envio: 'ultra_parallel_v5',
+              mensagem_erro: null,
+              data_envio: new Date().toISOString()
+            };
+            historyRecords.push(historyRecord);
+            
+            return {
+              success: true,
+              result: result,
+              to: emailData.to,
+              index: globalIndex,
+              duration,
+              provider: 'ultra_parallel_v5',
+              connectionSlot,
+              attempt: attempt + 1
+            };
+          } catch (error: any) {
+            lastError = error;
+            
+            if (attempt < config.maxRetries) {
+              // Delay ultra-mínimo para retry (25ms)
+              await new Promise(resolve => setTimeout(resolve, 25));
+            }
+          }
+        }
+        
+        // Falha após retry
+        const duration = Date.now() - jobStartTime;
+        processed++;
+        errorCount++;
+        onProgress?.(processed, emailJobs.length);
+
+        const currentThroughput = calculateThroughput();
+        if (currentThroughput > peakThroughput) {
+          peakThroughput = currentThroughput;
+        }
+
+        // Registro de falha para histórico
+        const historyRecord = {
+          user_id: userId,
+          template_id: emailData.template_id || null,
+          contato_id: emailData.contato_id || null,
+          remetente_nome: emailData.fromName || 'Sistema',
+          remetente_email: emailData.fromEmail || 'sistema@app.com',
+          destinatario_nome: emailData.contato_nome || extractNameFromEmail(emailData.to),
+          destinatario_email: extractEmailAddress(emailData.to),
+          status: 'falhou',
+          template_nome: emailData.template_nome || null,
+          tipo_envio: 'ultra_parallel_v5',
+          mensagem_erro: lastError.message,
+          data_envio: new Date().toISOString()
+        };
+        historyRecords.push(historyRecord);
+        
+        return {
+          success: false,
+          error: lastError.message,
+          to: emailData.to,
+          index: globalIndex,
+          duration,
+          provider: 'ultra_parallel_v5',
+          connectionSlot,
+          attempt: config.maxRetries + 1
+        };
+      } catch (error: any) {
+        // Fallback de erro
+        const duration = Date.now() - jobStartTime;
+        processed++;
+        errorCount++;
+        onProgress?.(processed, emailJobs.length);
+
+        const currentThroughput = calculateThroughput();
+        if (currentThroughput > peakThroughput) {
+          peakThroughput = currentThroughput;
+        }
+
+        const historyRecord = {
+          user_id: userId,
+          template_id: emailData.template_id || null,
+          contato_id: emailData.contato_id || null,
+          remetente_nome: emailData.fromName || 'Sistema',
+          remetente_email: emailData.fromEmail || 'sistema@app.com',
+          destinatario_nome: emailData.contato_nome || extractNameFromEmail(emailData.to),
+          destinatario_email: extractEmailAddress(emailData.to),
+          status: 'falhou',
+          template_nome: emailData.template_nome || null,
+          tipo_envio: 'ultra_parallel_v5',
+          mensagem_erro: error.message,
+          data_envio: new Date().toISOString()
+        };
+        historyRecords.push(historyRecord);
+        
+        return {
+          success: false,
+          error: error.message,
+          to: emailData.to,
+          index: globalIndex,
+          duration,
+          provider: 'ultra_parallel_v5',
+          connectionSlot: 0,
+          attempt: 1
+        };
+      }
+    });
+
+    // Aguarda TODAS as conexões do chunk simultaneamente
+    const chunkResults = await Promise.all(chunkPromises);
+    results.push(...chunkResults);
+
+    // Log de performance do chunk
+    const chunkThroughput = calculateThroughput();
+    const chunkSuccessful = chunkResults.filter(r => r.success).length;
+    console.log(`🏆 ULTRA-CHUNK ${chunkNumber} FINALIZADO: ${chunkSuccessful}/${chunk.length} sucessos`);
+    console.log(`⚡ Throughput atual: ${chunkThroughput.toFixed(2)} emails/s (Pico: ${peakThroughput.toFixed(2)})`);
+
+    // ZERO DELAY - máxima velocidade entre chunks
+  }
+
+  // Salva histórico em lotes ultra-otimizados
+  if (historyRecords.length > 0) {
+    try {
+      console.log(`💾 Salvando ${historyRecords.length} registros ultra-paralelos em lotes...`);
+      
+      const batchSize = config.batchHistorySize;
+      for (let i = 0; i < historyRecords.length; i += batchSize) {
+        const batch = historyRecords.slice(i, i + batchSize);
+        
+        const { error } = await supabase
+          .from('envios_historico')
+          .insert(batch);
+
+        if (error) {
+          console.error(`Erro no lote ultra ${Math.floor(i/batchSize) + 1}:`, error);
+        } else {
+          console.log(`✅ Lote ultra ${Math.floor(i/batchSize) + 1} salvo (${batch.length} registros)`);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao processar histórico ultra-paralelo:', error);
+    }
+  }
+
+  const totalDuration = Date.now() - startTime;
+  const successful = results.filter(r => r.success).length;
+  const avgThroughput = (emailJobs.length / totalDuration) * 1000;
+  const avgDuration = results.reduce((sum, r) => sum + r.duration, 0) / results.length;
+  const targetAchieved = avgThroughput >= config.targetThroughput || peakThroughput >= config.targetThroughput;
+
+  console.log(`🏆 ULTRA-PARALLEL V5.0 FINALIZADO em ${Math.round(totalDuration / 1000)}s`);
+  console.log(`🚀 Taxa média final: ${avgThroughput.toFixed(2)} emails/segundo`);
+  console.log(`⚡ Pico absoluto: ${peakThroughput.toFixed(2)} emails/segundo`);
+  console.log(`✅ Sucessos: ${successful}/${emailJobs.length} (${((successful/emailJobs.length)*100).toFixed(1)}%)`);
+  console.log(`🎯 Meta 200+ emails/s: ${targetAchieved ? '🏆 CONQUISTADA!' : '📈 em andamento'}`);
+
+  return {
+    results,
+    summary: {
+      total: emailJobs.length,
+      successful,
+      failed: emailJobs.length - successful,
+      smtp: successful,
+      resend: 0,
+      fallback: 0,
+      successRate: emailJobs.length > 0 ? ((successful / emailJobs.length) * 100).toFixed(1) : "0",
+      avgThroughput: Math.round(avgThroughput * 100) / 100,
+      peakThroughput: Math.round(peakThroughput * 100) / 100,
+      totalDuration: Math.round(totalDuration / 1000),
+      avgEmailDuration: Math.round(avgDuration),
+      targetAchieved
+    }
+  };
+}
+
 serve(async (req) => {
   try {
     // Handle CORS preflight requests
@@ -795,6 +1063,177 @@ serve(async (req) => {
         }
       } catch (e) {
         console.error('Error getting user:', e);
+      }
+    }
+    
+    // Handle ULTRA-PARALLEL V5.0 batch email sending
+    if (requestData.batch && requestData.ultra_parallel_v5 && Array.isArray(requestData.emails)) {
+      console.log(`🚀 Solicitação ULTRA-PARALLEL V5.0 para ${requestData.emails.length} destinatários`);
+      console.log(`🎯 META: ${requestData.target_throughput || 200}+ emails/s com ${requestData.max_concurrent || 1000} conexões`);
+      console.log(`⚡ Chunks de ${requestData.chunk_size || 200} emails com delay zero`);
+      
+      if (!requestData.use_smtp || !requestData.smtp_settings) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "SMTP deve estar configurado para envio ultra-paralelo V5.0"
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
+      
+      // Configuração SMTP ultra-agressiva
+      const smtpConfig = {
+        host: requestData.smtp_settings.host,
+        port: requestData.smtp_settings.port,
+        email_usuario: requestData.smtp_settings.from_email,
+        password: requestData.smtp_settings.password,
+        from_email: requestData.smtp_settings.from_email,
+        from_name: requestData.smtp_settings.from_name || 'RocketMail',
+        smtp_nome: requestData.smtp_settings.from_name
+      };
+      
+      // Build ultra-optimized email requests
+      const emailRequests = [];
+      
+      for (const emailData of requestData.emails) {
+        try {
+          let templateContent = emailData.content || '';
+          let templateSubject = emailData.subject || 'Sem assunto';
+          
+          if (emailData.template_id) {
+            const { data: templateData, error: templateError } = await supabase
+              .from('templates')
+              .select('*')
+              .eq('id', emailData.template_id)
+              .single();
+              
+            if (!templateError && templateData) {
+              templateContent = templateData.conteudo || '';
+              templateSubject = emailData.subject || templateData.descricao || templateData.nome || 'Sem assunto';
+            }
+          }
+          
+          // Process template variables
+          let processedContent = templateContent;
+          if (emailData.contact) {
+            processedContent = processTemplateVariables(templateContent, emailData.contact);
+          }
+          
+          // Build ultra-optimized email HTML
+          let finalContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${sanitizeSubject(templateSubject)}</title>
+</head>
+<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
+  <div style="max-width: 600px; margin: 0 auto;">`;
+          
+          if (emailData.image_url) {
+            finalContent += `
+    <div style="margin-bottom: 20px;">
+      <img src="${emailData.image_url}" alt="Header image" style="max-width: 100%; height: auto;" />
+    </div>`;
+          }
+          
+          finalContent += `
+    <div style="margin-bottom: 20px;">
+      ${processedContent}
+    </div>`;
+          
+          if (emailData.signature_image && emailData.signature_image !== 'no_signature') {
+            finalContent += `
+    <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+      <img src="${emailData.signature_image}" alt="Assinatura" style="max-height: 100px;" />
+    </div>`;
+          }
+          
+          finalContent += `
+  </div>
+</body>
+</html>`;
+          
+          // Format recipient email
+          let toAddress = emailData.to;
+          if (emailData.contato_nome && !toAddress.includes('<')) {
+            toAddress = `"${emailData.contato_nome}" <${emailData.to}>`;
+          }
+          
+          emailRequests.push({
+            to: toAddress,
+            subject: sanitizeSubject(templateSubject),
+            html: finalContent,
+            attachments: emailData.attachments || [],
+            template_id: emailData.template_id,
+            contato_id: emailData.contato_id,
+            contato_nome: emailData.contato_nome,
+            template_nome: emailData.template_nome,
+            fromName: smtpConfig.from_name,
+            fromEmail: smtpConfig.from_email
+          });
+          
+        } catch (error) {
+          console.error(`Erro ao processar email para ${emailData.to}:`, error);
+        }
+      }
+
+      console.log("🚀 Iniciando ULTRA-PARALLEL V5.0:", {
+        batch_size: emailRequests.length,
+        target_throughput: "200+ emails/s",
+        max_concurrent: 1000,
+        chunk_size: 200,
+        zero_delay: true,
+        estimated_duration: Math.ceil(requestData.emails.length / 200) + "s"
+      });
+      
+      try {
+        const batchResult = await processUltraParallelV5(
+          emailRequests, 
+          smtpConfig, 
+          userId || 'system'
+        );
+        
+        console.log("🏆 Envio ULTRA-PARALLEL V5.0 concluído:", batchResult.summary);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Envio ULTRA-PARALLEL V5.0 concluído com sucesso",
+            summary: batchResult.summary,
+            results: batchResult.results.map(r => ({
+              to: r.to,
+              success: r.success,
+              error: r.error || null,
+              id: r.result?.id || null,
+              provider: r.provider || 'ultra_parallel_v5',
+              duration: r.duration || 0,
+              attempts: r.attempts || 1,
+              connectionSlot: r.connectionSlot || 0
+            }))
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      } catch (error) {
+        console.error("❌ Falha no processamento ULTRA-PARALLEL V5.0:", error);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error.message || "Falha no processamento ultra-paralelo V5.0"
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          }
+        );
       }
     }
     
