@@ -55,9 +55,27 @@ export function useSettings() {
         throw new Error('Você precisa estar logado para salvar configurações');
       }
       
+      // Validar e corrigir configuração SSL/TLS com base na porta
+      const porta = values.email_porta || 587;
+      let seguranca = values.smtp_seguranca || 'tls';
+      
+      if (porta === 465 && seguranca !== 'ssl') {
+        console.log("⚠️ Porta 465 detectada com segurança TLS. Ajustando para SSL.");
+        seguranca = 'ssl';
+        values.smtp_seguranca = 'ssl';
+        toast.info("A porta 465 requer segurança SSL. A configuração foi ajustada automaticamente.");
+      } else if ((porta === 587 || porta === 25) && seguranca !== 'tls') {
+        console.log("⚠️ Porta 587/25 detectada com segurança SSL. Ajustando para TLS.");
+        seguranca = 'tls';
+        values.smtp_seguranca = 'tls';
+        toast.info("As portas 587 e 25 requerem segurança TLS. A configuração foi ajustada automaticamente.");
+      }
+      
       console.log("Saving settings with SMTP configuration:", {
         use_smtp: values.use_smtp,
         smtp_host: values.smtp_host,
+        smtp_port: values.email_porta,
+        smtp_security: values.smtp_seguranca,
         smtp_from_name: values.smtp_from_name,
         signature_image: values.signature_image
       });
@@ -89,11 +107,26 @@ export function useSettings() {
   
   const testSmtpConnection = async (formData: SettingsFormData) => {
     try {
+      // Validar e corrigir porta/segurança antes de testar
+      const porta = formData.email_porta || 587;
+      let seguranca = formData.smtp_seguranca || 'tls';
+      
+      // Correção automática SSL/TLS com base na porta
+      if (porta === 465 && seguranca !== 'ssl') {
+        console.log("⚠️ Porta 465 detectada com segurança TLS. Ajustando para SSL.");
+        seguranca = 'ssl';
+        toast.info("A porta 465 requer segurança SSL. A configuração foi ajustada para o teste.");
+      } else if ((porta === 587 || porta === 25) && seguranca !== 'tls') {
+        console.log("⚠️ Porta 587/25 detectada com segurança SSL. Ajustando para TLS.");
+        seguranca = 'tls';
+        toast.info("As portas 587 e 25 requerem segurança TLS. A configuração foi ajustada para o teste.");
+      }
+      
       console.log("Testing SMTP connection with data:", {
         smtp_host: formData.smtp_host,
-        email_porta: formData.email_porta,
+        email_porta: porta,
         email_usuario: formData.email_usuario,
-        smtp_seguranca: formData.smtp_seguranca
+        smtp_seguranca: seguranca
       });
 
       const response = await fetch('/api/test-smtp', {
@@ -103,10 +136,10 @@ export function useSettings() {
         },
         body: JSON.stringify({
           smtp_host: formData.smtp_host,
-          email_porta: formData.email_porta,
+          email_porta: porta,
           email_usuario: formData.email_usuario,
           smtp_pass: formData.smtp_pass,
-          smtp_seguranca: formData.smtp_seguranca,
+          smtp_seguranca: seguranca,
           smtp_from_name: formData.smtp_from_name
         }),
       });

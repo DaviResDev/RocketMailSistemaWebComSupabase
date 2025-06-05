@@ -54,11 +54,24 @@ export function useBatchEmailSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
+      // Verificar configuração de porta/segurança
+      let porta = userSettings.email_porta || 587;
+      let seguranca = userSettings.smtp_seguranca || 'tls';
+      
+      // Corrigir automaticamente configurações SSL/TLS com base na porta
+      if (porta === 465 && seguranca !== 'ssl') {
+        console.log("⚠️ Porta 465 detectada com segurança TLS. Ajustando para SSL.");
+        seguranca = 'ssl';
+      } else if ((porta === 587 || porta === 25) && seguranca !== 'tls') {
+        console.log("⚠️ Porta 587/25 detectada com segurança SSL. Ajustando para TLS.");
+        seguranca = 'tls';
+      }
+      
       // Prepare SMTP settings
       const smtpSettings = {
         host: userSettings.smtp_host,
-        port: userSettings.email_porta || 587,
-        secure: userSettings.smtp_seguranca === 'ssl' || userSettings.email_porta === 465,
+        port: porta,
+        secure: seguranca === 'ssl',
         password: userSettings.smtp_pass,
         from_name: userSettings.smtp_from_name || 'RocketMail',
         from_email: userSettings.email_usuario || ''
@@ -120,7 +133,16 @@ export function useBatchEmailSending() {
       
       if (summary.failed > 0) {
         const failedEmails = results.filter((r: any) => !r.success);
-        const errorMessages = [...new Set(failedEmails.map((r: any) => r.error))].slice(0, 3);
+        
+        // Agrupar erros por tipo para melhor diagnóstico
+        const errorTypes: Record<string, number> = {};
+        failedEmails.forEach((email: any) => {
+          const errorMsg = email.error || "Erro desconhecido";
+          const errorType = errorMsg.split(':')[0];
+          errorTypes[errorType] = (errorTypes[errorType] || 0) + 1;
+        });
+        
+        const errorMessages = [...new Set(failedEmails.slice(0, 3).map((r: any) => r.error))];
         
         toast.error(
           `${summary.failed} emails falharam no envio. Taxa de sucesso: ${summary.successRate}%`,
@@ -131,6 +153,7 @@ export function useBatchEmailSending() {
         );
         
         console.warn("Emails com falha:", failedEmails);
+        console.warn("Tipos de erro:", errorTypes);
       }
       
       // Create entries in envios table for successful sends
@@ -163,7 +186,8 @@ export function useBatchEmailSending() {
         success: summary.successful > 0,
         successCount: summary.successful,
         errorCount: summary.failed,
-        successRate: summary.successRate
+        successRate: summary.successRate,
+        errorTypes: responseData.errorTypes || {}
       };
     } catch (error: any) {
       console.error('Erro no envio em lote:', error);

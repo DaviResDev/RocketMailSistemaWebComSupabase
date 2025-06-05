@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -150,36 +151,80 @@ function validateAndSanitizeAttachments(attachments: any): any[] {
 }
 
 /**
- * Send email via SMTP using native Deno APIs
+ * Validate SMTP configuration and normalize settings
+ */
+function validateAndNormalizeSMTPConfig(smtpSettings: any): any {
+  if (!smtpSettings || !smtpSettings.host) {
+    throw new Error("SMTP host é obrigatório");
+  }
+  
+  if (!smtpSettings.email_usuario && !smtpSettings.from_email) {
+    throw new Error("Email do usuário é obrigatório");
+  }
+  
+  if (!smtpSettings.password && !smtpSettings.smtp_pass) {
+    throw new Error("Senha SMTP é obrigatória");
+  }
+  
+  const port = parseInt(smtpSettings.port) || 587;
+  const host = smtpSettings.host.trim();
+  const email = smtpSettings.email_usuario || smtpSettings.from_email;
+  const password = smtpSettings.password || smtpSettings.smtp_pass;
+  const fromName = smtpSettings.from_name || smtpSettings.smtp_nome || 'RocketMail';
+  
+  // Auto-detect SSL/TLS based on port if not specified
+  let isSecure = false;
+  if (port === 465) {
+    isSecure = true; // SSL
+  } else if (port === 587 || port === 25) {
+    isSecure = false; // TLS/STARTTLS
+  } else {
+    console.warn(`Porta SMTP não padrão: ${port}. Assumindo TLS.`);
+  }
+  
+  // Validate email format
+  if (!isValidEmail(email)) {
+    throw new Error(`Email inválido: ${email}`);
+  }
+  
+  console.log(`✅ Configuração SMTP validada: ${host}:${port} (${isSecure ? 'SSL' : 'TLS'}) para ${email}`);
+  
+  return {
+    host,
+    port,
+    email,
+    password,
+    fromName,
+    isSecure
+  };
+}
+
+/**
+ * Send email via SMTP using native Deno APIs with improved error handling
  */
 async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
+  let conn;
+  
   try {
-    if (!smtpConfig || !smtpConfig.host || !smtpConfig.email_usuario || !smtpConfig.password) {
-      throw new Error("SMTP configuração incompleta");
-    }
-
+    // Validate and normalize SMTP configuration
+    const config = validateAndNormalizeSMTPConfig(smtpConfig);
+    
     // Extract and validate recipient email
     const recipientEmail = extractEmailAddress(payload.to);
     if (!isValidEmail(recipientEmail)) {
-      throw new Error(`Email inválido: ${payload.to}`);
+      throw new Error(`Email destinatário inválido: ${payload.to}`);
     }
 
     const sanitizedSubject = sanitizeSubject(payload.subject);
-    const fromEmail = smtpConfig.from_email || smtpConfig.email_usuario;
-    const fromName = smtpConfig.from_name || smtpConfig.smtp_nome || 'RocketMail';
     
-    console.log(`📧 Tentando envio SMTP para: ${recipientEmail}`);
-    console.log(`📋 Config SMTP: ${smtpConfig.host}:${smtpConfig.port} (${fromEmail})`);
-    
-    // Validate SMTP settings
-    if (!smtpConfig.port || (smtpConfig.port !== 587 && smtpConfig.port !== 465 && smtpConfig.port !== 25)) {
-      throw new Error(`Porta SMTP inválida: ${smtpConfig.port}. Use 587 (TLS), 465 (SSL) ou 25`);
-    }
+    console.log(`📧 Enviando SMTP para: ${recipientEmail}`);
+    console.log(`🔧 Servidor: ${config.host}:${config.port} (${config.isSecure ? 'SSL' : 'TLS'})`);
+    console.log(`👤 Remetente: ${config.fromName} <${config.email}>`);
 
     // Create email message in RFC 5322 format
     const boundary = `----boundary_${Date.now()}_${Math.random().toString(36)}`;
     
-    let emailMessage = `From: "${fromName}" <${fromEmail}>\r\n`;
+    let emailMessage = `From: "${config.fromName}" <${config.email}>\r\n`;
     emailMessage += `To: ${recipientEmail}\r\n`;
     emailMessage += `Subject: ${sanitizedSubject}\r\n`;
     emailMessage += `MIME-Version: 1.0\r\n`;
@@ -219,21 +264,20 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
       emailMessage += `${payload.html}\r\n`;
     }
 
-    // Connect to SMTP server
-    const isSecure = smtpConfig.port === 465;
-    let conn;
-    
+    // Connect to SMTP server with proper SSL/TLS handling
     try {
-      if (isSecure) {
+      if (config.isSecure) {
+        // Direct SSL connection (port 465)
         conn = await Deno.connectTls({
-          hostname: smtpConfig.host,
-          port: smtpConfig.port,
+          hostname: config.host,
+          port: config.port,
         });
-        console.log("✅ Conexão TLS estabelecida");
+        console.log("✅ Conexão SSL estabelecida");
       } else {
+        // Plain connection for STARTTLS (ports 587, 25)
         conn = await Deno.connect({
-          hostname: smtpConfig.host,
-          port: smtpConfig.port,
+          hostname: config.host,
+          port: config.port,
         });
         console.log("✅ Conexão TCP estabelecida");
       }
@@ -241,20 +285,32 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
 
-      // Helper function to read response
-      async function readResponse(): Promise<string> {
+      // Helper function to read response with timeout
+      async function readResponse(timeoutMs = 10000): Promise<string> {
         const buffer = new Uint8Array(4096);
-        const n = await conn.read(buffer);
+        
+        const readPromise = conn.read(buffer);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout de ${timeoutMs}ms na leitura SMTP`)), timeoutMs);
+        });
+        
+        const n = await Promise.race([readPromise, timeoutPromise]);
         if (n === null) throw new Error("Conexão SMTP fechada inesperadamente");
         return decoder.decode(buffer.subarray(0, n));
       }
 
-      // Helper function to send command
-      async function sendCommand(command: string): Promise<string> {
-        console.log(`→ ${command.trim()}`);
+      // Helper function to send command with logging
+      async function sendCommand(command: string, hideLog = false): Promise<string> {
+        if (!hideLog) {
+          console.log(`→ ${command.trim()}`);
+        } else {
+          console.log(`→ [COMANDO OCULTO]`);
+        }
         await conn.write(encoder.encode(command + "\r\n"));
         const response = await readResponse();
-        console.log(`← ${response.trim()}`);
+        if (!hideLog) {
+          console.log(`← ${response.trim()}`);
+        }
         return response;
       }
 
@@ -263,80 +319,84 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
       console.log(`← ${response.trim()}`);
       
       if (!response.startsWith('220')) {
-        throw new Error(`SMTP servidor rejeitou conexão: ${response}`);
+        throw new Error(`SMTP servidor rejeitou conexão: ${response.trim()}`);
       }
 
       // EHLO
-      response = await sendCommand(`EHLO ${smtpConfig.host}`);
+      response = await sendCommand(`EHLO ${config.host}`);
       if (!response.startsWith('250')) {
-        throw new Error(`EHLO falhou: ${response}`);
+        throw new Error(`EHLO falhou: ${response.trim()}`);
       }
 
-      // STARTTLS for non-SSL connections
-      if (!isSecure && smtpConfig.port === 587) {
+      // STARTTLS for non-SSL connections (port 587, 25)
+      if (!config.isSecure && config.port === 587) {
         response = await sendCommand("STARTTLS");
         if (!response.startsWith('220')) {
-          throw new Error(`STARTTLS falhou: ${response}`);
+          throw new Error(`STARTTLS falhou: ${response.trim()}`);
         }
         
         // Upgrade to TLS
-        const tlsConn = await Deno.startTls(conn, { hostname: smtpConfig.host });
+        const tlsConn = await Deno.startTls(conn, { hostname: config.host });
         conn.close();
         conn = tlsConn;
         console.log("✅ Upgrade para TLS concluído");
         
         // Send EHLO again after TLS
-        response = await sendCommand(`EHLO ${smtpConfig.host}`);
+        response = await sendCommand(`EHLO ${config.host}`);
         if (!response.startsWith('250')) {
-          throw new Error(`EHLO pós-TLS falhou: ${response}`);
+          throw new Error(`EHLO pós-TLS falhou: ${response.trim()}`);
         }
       }
 
       // AUTH LOGIN
       response = await sendCommand("AUTH LOGIN");
       if (!response.startsWith('334')) {
-        throw new Error(`AUTH LOGIN falhou: ${response}`);
+        throw new Error(`AUTH LOGIN falhou: ${response.trim()}`);
       }
 
       // Send username (base64 encoded)
-      const username = btoa(smtpConfig.email_usuario);
-      response = await sendCommand(username);
+      const username = btoa(config.email);
+      response = await sendCommand(username, true);
       if (!response.startsWith('334')) {
-        throw new Error(`Autenticação usuário falhou: ${response}`);
+        throw new Error(`Autenticação usuário falhou: ${response.trim()}`);
       }
 
       // Send password (base64 encoded)
-      const password = btoa(smtpConfig.password);
-      response = await sendCommand(password);
+      const password = btoa(config.password);
+      response = await sendCommand(password, true);
       if (!response.startsWith('235')) {
-        throw new Error(`Autenticação senha falhou: ${response}`);
+        // Provide more specific error message for authentication failures
+        if (response.includes('5.7.8') || response.includes('BadCredentials')) {
+          throw new Error(`Credenciais inválidas. Verifique o email e senha/App Password. Para Gmail, use App Password em vez da senha normal.`);
+        }
+        throw new Error(`Autenticação falhou: ${response.trim()}`);
       }
 
       console.log("✅ Autenticação SMTP bem-sucedida");
 
       // MAIL FROM
-      response = await sendCommand(`MAIL FROM:<${fromEmail}>`);
+      response = await sendCommand(`MAIL FROM:<${config.email}>`);
       if (!response.startsWith('250')) {
-        throw new Error(`MAIL FROM falhou: ${response}`);
+        throw new Error(`MAIL FROM falhou: ${response.trim()}`);
       }
 
       // RCPT TO
       response = await sendCommand(`RCPT TO:<${recipientEmail}>`);
       if (!response.startsWith('250')) {
-        throw new Error(`RCPT TO falhou: ${response}`);
+        throw new Error(`RCPT TO falhou: ${response.trim()}`);
       }
 
       // DATA
       response = await sendCommand("DATA");
       if (!response.startsWith('354')) {
-        throw new Error(`DATA falhou: ${response}`);
+        throw new Error(`DATA falhou: ${response.trim()}`);
       }
 
       // Send email content
       await conn.write(encoder.encode(emailMessage));
       response = await sendCommand(".");
       if (!response.startsWith('250')) {
-        throw new Error(`Envio da mensagem falhou: ${response}`);
+        throw new Error(`Envio da mensagem falhou: ${response.trim()}`);
       }
 
       // QUIT
@@ -350,7 +410,7 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
         id: `smtp_${Date.now()}`,
         provider: "smtp",
         method: "SMTP Nativo",
-        from: `"${fromName}" <${fromEmail}>`,
+        from: `"${config.fromName}" <${config.email}>`,
         to: recipientEmail,
         attachments: hasAttachments ? validatedAttachments.length : 0
       };
@@ -369,16 +429,16 @@ async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
 }
 
 /**
- * Process multiple emails in controlled batches using SMTP exclusively
+ * Process multiple emails in controlled batches with improved rate limiting
  */
 async function processBatchEmailsWithSMTP(emailRequests: any[], smtpConfig: any): Promise<any> {
-  const batchSize = 20; // Batch size for SMTP to avoid overwhelming the server
-  const delayBetweenBatches = 2000; // 2 seconds between batches
-  const delayBetweenEmails = 1000; // 1 second between individual emails
+  const batchSize = 10; // Reduced batch size
+  const delayBetweenBatches = 5000; // 5 seconds between batches
+  const delayBetweenEmails = 2000; // 2 seconds between individual emails
   const results: any[] = [];
   
   console.log(`📬 Processando ${emailRequests.length} emails via SMTP em lotes de ${batchSize}`);
-  console.log(`📧 Configuração SMTP: ${smtpConfig.host}:${smtpConfig.port}`);
+  console.log(`📧 Configuração SMTP validada para processamento em lote`);
   
   for (let i = 0; i < emailRequests.length; i += batchSize) {
     const batch = emailRequests.slice(i, i + batchSize);
@@ -511,7 +571,7 @@ serve(async (req) => {
         );
       }
       
-      // Prepare SMTP configuration
+      // Prepare SMTP configuration with corrected field mapping
       const smtpConfig = {
         host: requestData.smtp_settings.host,
         port: requestData.smtp_settings.port,
