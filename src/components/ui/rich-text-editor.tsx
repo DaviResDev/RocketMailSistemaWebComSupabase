@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -140,8 +139,11 @@ export function RichTextEditor({
       if (editor) {
         const spans = editor.querySelectorAll('font[size="7"]');
         spans.forEach(span => {
-          span.style.fontSize = `${customFontSize}px`;
-          span.removeAttribute('size');
+          // FIXED: Properly cast Element to HTMLElement to access style property
+          if (span instanceof HTMLElement) {
+            span.style.fontSize = `${customFontSize}px`;
+            span.removeAttribute('size');
+          }
         });
       }
     }
