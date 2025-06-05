@@ -182,6 +182,5 @@ async function sendEmailOptimized(
  */
 async function sendEmailViaSMTP(smtpConfig: any, payload: any): Promise<any> {
   // This function will be imported from the main send-email module
-  // Implementation details remain the same as the existing SMTP logic
   throw new Error('Implementation will be imported from main module');
 }

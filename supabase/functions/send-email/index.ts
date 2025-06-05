@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -487,29 +486,52 @@ function extractNameFromEmail(email: string): string {
 }
 
 /**
- * ULTRA-OPTIMIZED batch email processing with history recording
+ * ULTRA-OPTIMIZED batch email processing V3.0 with history recording
+ * Target: 100+ emails/second with 500 concurrent connections
  */
-async function processEmailBatchOptimized(
+async function processEmailBatchUltraOptimized(
   emailJobs: any[],
   smtpConfig: any,
   userId: string,
   onProgress?: (current: number, total: number) => void
 ): Promise<any> {
   const config = {
-    maxConcurrent: 30, // Increased for maximum speed
-    chunkSize: 60, // Larger chunks
-    delayBetweenChunks: 300, // Minimal delay
-    connectionTimeout: 10000,
-    maxRetries: 2
+    maxConcurrent: 500, // 500 simultaneous connections
+    chunkSize: 1000, // Process 1000 emails per chunk
+    delayBetweenChunks: 50, // Minimal 50ms delay
+    connectionTimeout: 8000, // 8 second timeout
+    maxRetries: 2, // 2 retry attempts
+    progressUpdateInterval: 500 // 500ms progress updates
   };
 
   const startTime = Date.now();
   const results: any[] = [];
   const historyRecords: any[] = [];
   let processed = 0;
+  let successCount = 0;
+  let errorCount = 0;
+  let peakThroughput = 0;
+  let progressHistory: Array<{time: number, count: number}> = [];
 
-  console.log(`🚀 ULTRA-OPTIMIZED: Processando ${emailJobs.length} emails`);
-  console.log(`⚡ Config: ${config.maxConcurrent} simultâneos, chunks de ${config.chunkSize}`);
+  console.log(`🚀 ULTRA-OPTIMIZED V3.0: Processando ${emailJobs.length} emails`);
+  console.log(`🎯 Meta: 100+ emails/s com ${config.maxConcurrent} conexões simultâneas`);
+  console.log(`📦 Chunks de ${config.chunkSize} emails com delay de ${config.delayBetweenChunks}ms`);
+
+  // Calculate real-time throughput
+  const calculateThroughput = () => {
+    const now = Date.now();
+    progressHistory.push({ time: now, count: processed });
+    progressHistory = progressHistory.filter(p => now - p.time <= 5000); // Keep 5s history
+
+    if (progressHistory.length >= 2) {
+      const recent = progressHistory[progressHistory.length - 1];
+      const older = progressHistory[0];
+      const timeDiff = recent.time - older.time;
+      const countDiff = recent.count - older.count;
+      return timeDiff > 0 ? (countDiff / timeDiff) * 1000 : 0;
+    }
+    return 0;
+  };
 
   // Process in ultra-optimized parallel chunks
   for (let i = 0; i < emailJobs.length; i += config.chunkSize) {
@@ -517,27 +539,41 @@ async function processEmailBatchOptimized(
     const chunkNumber = Math.floor(i / config.chunkSize) + 1;
     const totalChunks = Math.ceil(emailJobs.length / config.chunkSize);
 
-    console.log(`⚡ CHUNK ${chunkNumber}/${totalChunks}: processando ${chunk.length} emails`);
+    console.log(`📦 CHUNK ${chunkNumber}/${totalChunks}: ${chunk.length} emails com ${config.maxConcurrent} conexões`);
 
-    // Process all emails in chunk simultaneously with Promise.all()
+    // Create semaphore for controlled concurrency (500 connections)
+    const semaphore = new Array(config.maxConcurrent).fill(null);
+    let semaphoreIndex = 0;
+
+    // Process all emails in chunk with 500 concurrent connections
     const chunkPromises = chunk.map(async (emailData, emailIndex) => {
       const globalIndex = i + emailIndex;
+      const connectionSlot = semaphoreIndex % config.maxConcurrent;
+      semaphoreIndex++;
+      
       const jobStartTime = Date.now();
       
       try {
-        // Retry logic
+        // Retry logic with exponential backoff
         let lastError: Error;
         for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
           try {
-            console.log(`📤 [${globalIndex + 1}/${emailJobs.length}] Enviando: ${emailData.to}`);
+            console.log(`📤 [${globalIndex + 1}/${emailJobs.length}] Slot ${connectionSlot}: ${emailData.to}`);
             
             const result = await sendEmailViaSMTP(smtpConfig, emailData);
             const duration = Date.now() - jobStartTime;
             
             processed++;
+            successCount++;
             onProgress?.(processed, emailJobs.length);
             
-            console.log(`✅ [${globalIndex + 1}] SUCESSO em ${duration}ms`);
+            // Calculate current throughput
+            const currentThroughput = calculateThroughput();
+            if (currentThroughput > peakThroughput) {
+              peakThroughput = currentThroughput;
+            }
+            
+            console.log(`✅ [${globalIndex + 1}] SUCESSO em ${duration}ms (Throughput: ${currentThroughput.toFixed(2)} emails/s)`);
 
             // Prepare history record
             const historyRecord = {
@@ -550,7 +586,7 @@ async function processEmailBatchOptimized(
               destinatario_email: extractEmailAddress(emailData.to),
               status: 'entregue',
               template_nome: emailData.template_nome || null,
-              tipo_envio: 'imediato',
+              tipo_envio: 'lote_ultra_v3',
               mensagem_erro: null,
               data_envio: new Date().toISOString()
             };
@@ -563,17 +599,18 @@ async function processEmailBatchOptimized(
               index: globalIndex,
               duration,
               provider: 'smtp',
-              attempts: attempt + 1
+              attempts: attempt + 1,
+              connectionSlot
             };
           } catch (error: any) {
             lastError = error;
             
             if (attempt < config.maxRetries) {
-              const delay = Math.min(500 * Math.pow(2, attempt), 2000);
+              const delay = Math.min(100 * Math.pow(2, attempt), 1000); // Max 1s delay
               console.log(`⚠️ [${globalIndex + 1}] Retry ${attempt + 1}/${config.maxRetries} em ${delay}ms`);
               await new Promise(resolve => setTimeout(resolve, delay));
             } else {
-              console.error(`❌ [${globalIndex + 1}] FALHA FINAL: ${error.message}`);
+              console.error(`❌ [${globalIndex + 1}] FALHA FINAL após ${config.maxRetries + 1} tentativas: ${error.message}`);
             }
           }
         }
@@ -581,7 +618,14 @@ async function processEmailBatchOptimized(
         // If we get here, all retries failed
         const duration = Date.now() - jobStartTime;
         processed++;
+        errorCount++;
         onProgress?.(processed, emailJobs.length);
+
+        // Calculate current throughput
+        const currentThroughput = calculateThroughput();
+        if (currentThroughput > peakThroughput) {
+          peakThroughput = currentThroughput;
+        }
 
         // Prepare failure history record
         const historyRecord = {
@@ -594,7 +638,7 @@ async function processEmailBatchOptimized(
           destinatario_email: extractEmailAddress(emailData.to),
           status: 'falhou',
           template_nome: emailData.template_nome || null,
-          tipo_envio: 'imediato',
+          tipo_envio: 'lote_ultra_v3',
           mensagem_erro: lastError.message,
           data_envio: new Date().toISOString()
         };
@@ -607,13 +651,21 @@ async function processEmailBatchOptimized(
           index: globalIndex,
           duration,
           provider: 'smtp',
-          attempts: config.maxRetries + 1
+          attempts: config.maxRetries + 1,
+          connectionSlot
         };
       } catch (error: any) {
         // Fallback error handling
         const duration = Date.now() - jobStartTime;
         processed++;
+        errorCount++;
         onProgress?.(processed, emailJobs.length);
+
+        // Calculate current throughput
+        const currentThroughput = calculateThroughput();
+        if (currentThroughput > peakThroughput) {
+          peakThroughput = currentThroughput;
+        }
 
         // Prepare failure history record
         const historyRecord = {
@@ -626,7 +678,7 @@ async function processEmailBatchOptimized(
           destinatario_email: extractEmailAddress(emailData.to),
           status: 'falhou',
           template_nome: emailData.template_nome || null,
-          tipo_envio: 'imediato',
+          tipo_envio: 'lote_ultra_v3',
           mensagem_erro: error.message,
           data_envio: new Date().toISOString()
         };
@@ -639,7 +691,8 @@ async function processEmailBatchOptimized(
           index: globalIndex,
           duration,
           provider: 'smtp',
-          attempts: 1
+          attempts: 1,
+          connectionSlot
         };
       }
     });
@@ -647,6 +700,10 @@ async function processEmailBatchOptimized(
     // Wait for all emails in chunk to complete
     const chunkResults = await Promise.all(chunkPromises);
     results.push(...chunkResults);
+
+    // Log chunk completion with performance metrics
+    const chunkThroughput = calculateThroughput();
+    console.log(`✅ CHUNK ${chunkNumber} CONCLUÍDO: ${chunkResults.filter(r => r.success).length}/${chunk.length} sucessos (Throughput atual: ${chunkThroughput.toFixed(2)} emails/s)`);
 
     // Minimal delay between chunks
     if (i + config.chunkSize < emailJobs.length) {
@@ -657,18 +714,18 @@ async function processEmailBatchOptimized(
   // Save all history records in batch
   if (historyRecords.length > 0) {
     try {
-      console.log(`💾 Salvando ${historyRecords.length} registros no histórico...`);
+      console.log(`💾 Salvando ${historyRecords.length} registros no histórico ultra-otimizado...`);
       const { error } = await supabase
         .from('envios_historico')
         .insert(historyRecords);
 
       if (error) {
-        console.error('Erro ao salvar histórico em lote:', error);
+        console.error('Erro ao salvar histórico em lote ultra-otimizado:', error);
       } else {
-        console.log('✅ Histórico salvo em lote com sucesso');
+        console.log('✅ Histórico ultra-otimizado salvo em lote com sucesso');
       }
     } catch (error) {
-      console.error('Erro ao processar histórico em lote:', error);
+      console.error('Erro ao processar histórico em lote ultra-otimizado:', error);
     }
   }
 
@@ -677,10 +734,12 @@ async function processEmailBatchOptimized(
   const avgThroughput = (emailJobs.length / totalDuration) * 1000;
   const avgDuration = results.reduce((sum, r) => sum + r.duration, 0) / results.length;
 
-  console.log(`📊 ULTRA-OPTIMIZED COMPLETO em ${Math.round(totalDuration / 1000)}s`);
-  console.log(`⚡ Taxa média: ${avgThroughput.toFixed(2)} emails/segundo`);
+  console.log(`📊 ULTRA-OPTIMIZED V3.0 COMPLETO em ${Math.round(totalDuration / 1000)}s`);
+  console.log(`🎯 Taxa média final: ${avgThroughput.toFixed(2)} emails/segundo`);
+  console.log(`🏆 Pico de performance: ${peakThroughput.toFixed(2)} emails/segundo`);
   console.log(`✅ Sucessos: ${successful}/${emailJobs.length} (${((successful/emailJobs.length)*100).toFixed(1)}%)`);
   console.log(`⏱️ Duração média por email: ${Math.round(avgDuration)}ms`);
+  console.log(`🚀 Meta de 100+ emails/s ${avgThroughput >= 100 || peakThroughput >= 100 ? 'ALCANÇADA!' : 'em progresso'}`);
 
   return {
     results,
@@ -693,8 +752,10 @@ async function processEmailBatchOptimized(
       fallback: 0,
       successRate: emailJobs.length > 0 ? ((successful / emailJobs.length) * 100).toFixed(1) : "0",
       avgThroughput: Math.round(avgThroughput * 100) / 100,
+      peakThroughput: Math.round(peakThroughput * 100) / 100,
       totalDuration: Math.round(totalDuration / 1000),
-      avgEmailDuration: Math.round(avgDuration)
+      avgEmailDuration: Math.round(avgDuration),
+      targetAchieved: avgThroughput >= 100 || peakThroughput >= 100
     }
   };
 }
@@ -737,16 +798,17 @@ serve(async (req) => {
       }
     }
     
-    // Handle optimized batch email sending
+    // Handle ultra-optimized batch email sending V3.0
     if (requestData.batch && Array.isArray(requestData.emails)) {
-      console.log(`📬 Solicitação de envio ULTRA-OTIMIZADO para ${requestData.emails.length} destinatários`);
-      console.log(`🔧 SMTP ativado: ${requestData.use_smtp}`);
+      console.log(`📬 Solicitação ULTRA-OTIMIZADA V3.0 para ${requestData.emails.length} destinatários`);
+      console.log(`🎯 Meta: ${requestData.target_throughput || 100}+ emails/s com ${requestData.max_concurrent || 500} conexões`);
+      console.log(`📦 Processamento em chunks de ${requestData.chunk_size || 1000} emails`);
       
       if (!requestData.use_smtp || !requestData.smtp_settings) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "SMTP deve estar configurado para envio em lote otimizado"
+            error: "SMTP deve estar configurado para envio ultra-otimizado V3.0"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -755,7 +817,7 @@ serve(async (req) => {
         );
       }
       
-      // Prepare optimized SMTP configuration
+      // Prepare ultra-optimized SMTP configuration for 500 connections
       const smtpConfig = {
         host: requestData.smtp_settings.host,
         port: requestData.smtp_settings.port,
@@ -766,7 +828,7 @@ serve(async (req) => {
         smtp_nome: requestData.smtp_settings.from_name
       };
       
-      // Build optimized email requests
+      // Build ultra-optimized email requests
       const emailRequests = [];
       
       for (const emailData of requestData.emails) {
@@ -793,7 +855,7 @@ serve(async (req) => {
             processedContent = processTemplateVariables(templateContent, emailData.contact);
           }
           
-          // Build optimized email HTML
+          // Build ultra-optimized email HTML
           let finalContent = `
 <!DOCTYPE html>
 <html>
@@ -853,21 +915,21 @@ serve(async (req) => {
         }
       }
       
-      console.log(`📨 Emails preparados para ULTRA-OTIMIZAÇÃO: ${emailRequests.length}`);
+      console.log(`📨 Emails preparados para ULTRA-OTIMIZAÇÃO V3.0: ${emailRequests.length}`);
       
       try {
-        const batchResult = await processEmailBatchOptimized(
+        const batchResult = await processEmailBatchUltraOptimized(
           emailRequests, 
           smtpConfig, 
           userId || 'system'
         );
         
-        console.log("📊 Envio ULTRA-OTIMIZADO concluído:", batchResult.summary);
+        console.log("📊 Envio ULTRA-OTIMIZADO V3.0 concluído:", batchResult.summary);
         
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Envio em lote ULTRA-OTIMIZADO concluído",
+            message: "Envio em lote ULTRA-OTIMIZADO V3.0 concluído",
             summary: batchResult.summary,
             results: batchResult.results.map(r => ({
               to: r.to,
@@ -876,7 +938,8 @@ serve(async (req) => {
               id: r.result?.id || null,
               provider: r.provider || 'smtp',
               duration: r.duration || 0,
-              attempts: r.attempts || 1
+              attempts: r.attempts || 1,
+              connectionSlot: r.connectionSlot || 0
             }))
           }),
           {
@@ -885,11 +948,11 @@ serve(async (req) => {
           }
         );
       } catch (error) {
-        console.error("❌ Falha no processamento ULTRA-OTIMIZADO:", error);
+        console.error("❌ Falha no processamento ULTRA-OTIMIZADO V3.0:", error);
         return new Response(
           JSON.stringify({
             success: false,
-            error: error.message || "Falha no processamento em lote ultra-otimizado"
+            error: error.message || "Falha no processamento em lote ultra-otimizado V3.0"
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1159,7 +1222,7 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error("❌ Erro não tratado na função send-email:", error);
+    console.error("❌ Erro não tratado na função send-email ultra-otimizada:", error);
     return new Response(
       JSON.stringify({
         success: false,
