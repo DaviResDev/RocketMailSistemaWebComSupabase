@@ -25,29 +25,35 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
     }
   }, []);
   
-  // Load signature image on component mount and when settings change
+  // Load signature image on component mount
   useEffect(() => {
     const loadSignatureImage = async () => {
-      // Always prioritize the current settings signature image
+      // First try to use the settings signature image if available
       if (settings?.signature_image) {
-        console.log("Using signature from current settings:", settings.signature_image);
+        console.log("Using signature from settings:", settings.signature_image);
         setSignatureImage(settings.signature_image);
         return;
       }
       
-      // Try to fetch from Supabase if not available in current settings
+      // If template has a specific signature image, use it
+      if (template.signature_image && template.signature_image !== 'no_signature') {
+        console.log("Using signature from template:", template.signature_image);
+        setSignatureImage(template.signature_image);
+        return;
+      }
+      
+      // Try to fetch from Supabase if not available in settings
       const signatureUrl = await getSignatureUrl();
       if (signatureUrl) {
         console.log("Using signature from Supabase:", signatureUrl);
         setSignatureImage(signatureUrl);
       } else {
         console.log("No signature image available");
-        setSignatureImage(null);
       }
     };
     
     loadSignatureImage();
-  }, [settings, getSignatureUrl]);
+  }, [settings, template, getSignatureUrl]);
   
   // Memoized content processing for better performance
   const processedContent = useMemo(() => {
@@ -92,11 +98,11 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
     if (attachmentsList.length === 0) return null;
     
     return (
-      <div className="mt-4 pt-4 border-t border-border">
-        <h4 className="text-sm font-medium mb-2 text-foreground">Anexos ({attachmentsList.length}):</h4>
+      <div className="mt-4 pt-4 border-t">
+        <h4 className="text-sm font-medium mb-2">Anexos ({attachmentsList.length}):</h4>
         <ul className="space-y-1">
           {attachmentsList.map((attachment: any, index: number) => (
-            <li key={index} className="flex items-center text-sm text-muted-foreground">
+            <li key={index} className="flex items-center text-sm">
               <span className="inline-flex items-center">
                 📎 {attachment.name || attachment.file_name || 'Arquivo'}
                 {attachment.size && ` (${(attachment.size / 1024).toFixed(1)} KB)`}
@@ -109,11 +115,9 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
   };
   
   return (
-    <Card className="p-6 bg-card border-border">
+    <Card className="p-6">
       <div className="space-y-4">
-        <h3 className="text-lg font-medium border-b border-border pb-2 text-foreground">
-          {template.nome || 'Preview do Template'}
-        </h3>
+        <h3 className="text-lg font-medium border-b pb-2">{template.nome || 'Preview do Template'}</h3>
         
         {/* Display description if present */}
         {template.descricao && (
@@ -128,19 +132,14 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
             <img 
               src={template.image_url} 
               alt="Imagem do template" 
-              className="max-w-full h-auto rounded-md border"
-              onError={(e) => {
-                console.error("Error loading template image:", e);
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-              }}
+              className="max-w-full h-auto rounded-md"
             />
           </div>
         )}
         
         {/* Main content with proper font rendering and explicit styles */}
         <div 
-          className="prose max-w-none template-preview-content text-foreground"
+          className="prose max-w-none template-preview-content"
           dir="ltr"
           style={{ 
             direction: 'ltr', 
@@ -158,18 +157,17 @@ export const TemplatePreview = ({ template }: TemplatePreviewProps) => {
         
         {/* Display signature if present - Always at the end */}
         {signatureImage && (
-          <div className="pt-4 border-t border-border mt-6">
+          <div className="pt-4 border-t mt-6">
             <p className="text-sm text-muted-foreground mb-2">Assinatura:</p>
             <img 
               src={signatureImage} 
               alt="Assinatura" 
-              className="max-h-24 border rounded" 
+              className="max-h-24" 
               style={{ maxWidth: '100%' }}
               onError={(e) => {
                 console.error("Error loading signature image:", e);
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
-                setSignatureImage(null);
               }}
             />
           </div>

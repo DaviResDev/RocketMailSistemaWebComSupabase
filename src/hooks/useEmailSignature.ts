@@ -19,8 +19,8 @@ export const useEmailSignature = () => {
       setUploading(true);
       
       // Validações básicas
-      if (file.size > 5 * 1024 * 1024) { // Aumentado para 5MB
-        throw new Error('Arquivo muito grande. Tamanho máximo: 5MB');
+      if (file.size > 2 * 1024 * 1024) {
+        throw new Error('Arquivo muito grande. Tamanho máximo: 2MB');
       }
       
       const fileExt = file.name.split('.').pop()?.toLowerCase();
@@ -53,19 +53,42 @@ export const useEmailSignature = () => {
       
       console.log("Signature image uploaded successfully:", publicUrl);
       
-      // Salvar URL da assinatura nas configurações do usuário com upsert
-      const { error: upsertError } = await supabase
+      // Salvar URL da assinatura nas configurações do usuário
+      const { data: settingsData, error: settingsError } = await supabase
         .from('configuracoes')
-        .upsert({
-          user_id: user.id,
-          signature_image: publicUrl
-        }, {
-          onConflict: 'user_id'
-        });
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
       
-      if (upsertError) {
-        console.error('Error upserting signature URL in settings:', upsertError);
-        throw new Error('Erro ao salvar a URL da assinatura nas configurações');
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        console.error('Error checking existing settings:', settingsError);
+        throw new Error('Erro ao verificar configurações existentes');
+      }
+        
+      if (settingsData) {
+        // Atualizar configurações existentes
+        const { error: updateError } = await supabase
+          .from('configuracoes')
+          .update({ signature_image: publicUrl })
+          .eq('id', settingsData.id);
+          
+        if (updateError) {
+          console.error('Error updating signature URL in settings:', updateError);
+          throw new Error('Erro ao salvar a URL da assinatura nas configurações');
+        }
+      } else {
+        // Criar nova entrada de configurações
+        const { error: insertError } = await supabase
+          .from('configuracoes')
+          .insert({
+            user_id: user.id,
+            signature_image: publicUrl
+          });
+          
+        if (insertError) {
+          console.error('Error creating settings with signature URL:', insertError);
+          throw new Error('Erro ao criar configurações com a assinatura');
+        }
       }
       
       toast.success('Imagem de assinatura enviada com sucesso!');
