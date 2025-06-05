@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,10 +14,12 @@ import {
   Image as ImageIcon,
   Link as LinkIcon,
   Unlink,
+  Type,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface RichTextEditorProps {
   value?: string;
@@ -42,6 +45,8 @@ export function RichTextEditor({
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
+  const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
+  const [customFontSize, setCustomFontSize] = useState('16');
 
   // Format commands that can be applied to selected text
   const formatText = (action: string) => {
@@ -104,6 +109,9 @@ export function RichTextEditor({
       case 'unlink':
         document.execCommand('unlink', false);
         break;
+      case 'font-size':
+        setFontSizePopoverOpen(true);
+        break;
     }
 
     // After applying format, update state
@@ -113,6 +121,43 @@ export function RichTextEditor({
       onChange(editor.innerHTML);
     }
   };
+
+  // Apply font size to selected text
+  const applyFontSize = (size: string) => {
+    const selection = window.getSelection();
+    if (selection && selection.toString()) {
+      // Use CSS styling instead of deprecated fontSize command
+      document.execCommand('styleWithCSS', false, 'true');
+      document.execCommand('insertHTML', false, `<span style="font-size: ${size}px;">${selection.toString()}</span>`);
+      
+      // Clear selection
+      selection.removeAllRanges();
+    } else if (customFontSize) {
+      // If no selection, apply to future text
+      document.execCommand('styleWithCSS', false, 'true');
+      document.execCommand('fontSize', false, '7'); // This will be overridden by CSS
+      const editor = editorRef.current;
+      if (editor) {
+        const spans = editor.querySelectorAll('font[size="7"]');
+        spans.forEach(span => {
+          span.style.fontSize = `${customFontSize}px`;
+          span.removeAttribute('size');
+        });
+      }
+    }
+    
+    setFontSizePopoverOpen(false);
+    
+    // Update state
+    if (editorRef.current) {
+      setEditorContent(editorRef.current.innerHTML);
+      checkIfEmpty(editorRef.current.innerHTML);
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
+  // Predefined font sizes
+  const fontSizes = ['10', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48'];
 
   // Insert link using the URL from popover
   const insertLink = () => {
@@ -280,6 +325,62 @@ export function RichTextEditor({
         >
           <span className="font-bold text-sm">H3</span>
         </Button>
+        
+        <Popover open={fontSizePopoverOpen} onOpenChange={setFontSizePopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => formatText('font-size')}
+            >
+              <Type className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          
+          <PopoverContent className="w-80 p-4" align="start">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="font-size-select">Tamanho da Fonte</Label>
+                <Select value={customFontSize} onValueChange={setCustomFontSize}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tamanho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fontSizes.map(size => (
+                      <SelectItem key={size} value={size}>
+                        {size}px
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="custom-font-size">Tamanho Personalizado (px)</Label>
+                  <Input
+                    id="custom-font-size"
+                    type="number"
+                    value={customFontSize}
+                    onChange={(e) => setCustomFontSize(e.target.value)}
+                    placeholder="16"
+                    min="8"
+                    max="100"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-between">
+                <Button type="button" variant="outline" onClick={() => setFontSizePopoverOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" onClick={() => applyFontSize(customFontSize)}>
+                  Aplicar Tamanho
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         
         <span className="w-px h-6 bg-border mx-1" />
         

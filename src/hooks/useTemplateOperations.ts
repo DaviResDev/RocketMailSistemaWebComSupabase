@@ -46,7 +46,7 @@ export function useTemplateOperations() {
     }
   };
 
-  // Helper function to process attachments consistently
+  // Helper function to process attachments consistently - UPDATED to handle more files
   const processAttachments = async (attachments: any) => {
     if (!attachments) {
       return JSON.stringify([]);
@@ -56,9 +56,20 @@ export function useTemplateOperations() {
     if (Array.isArray(attachments)) {
       const processedAttachments = [];
       
-      for (const attachment of attachments) {
+      // Process up to 20 attachments (increased from previous limit)
+      const maxFiles = Math.min(attachments.length, 20);
+      
+      for (let i = 0; i < maxFiles; i++) {
+        const attachment = attachments[i];
+        
         // If it's a File object, upload it to storage
         if (attachment instanceof File) {
+          // Check file size - increased to 50MB per file
+          if (attachment.size > 50 * 1024 * 1024) {
+            toast.error(`Arquivo ${attachment.name} é muito grande. Tamanho máximo: 50MB`);
+            continue;
+          }
+          
           const uploadedFile = await uploadFileToStorage(attachment);
           processedAttachments.push(uploadedFile);
         } 
@@ -68,11 +79,21 @@ export function useTemplateOperations() {
         }
       }
       
+      if (attachments.length > 20) {
+        toast.warning(`Apenas os primeiros 20 arquivos foram processados. ${attachments.length - 20} arquivos foram ignorados.`);
+      }
+      
       return JSON.stringify(processedAttachments);
     }
     
     // If it's a single File object, process and convert
     if (attachments instanceof File) {
+      // Check file size
+      if (attachments.size > 50 * 1024 * 1024) {
+        toast.error(`Arquivo muito grande. Tamanho máximo: 50MB`);
+        return JSON.stringify([]);
+      }
+      
       const uploadedFile = await uploadFileToStorage(attachments);
       return JSON.stringify([uploadedFile]);
     }

@@ -82,7 +82,7 @@ export default function HistoricoEnvios() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando histórico...</p>
+          <p className="mt-4 text-foreground">Carregando histórico...</p>
         </div>
       </div>
     );
@@ -91,8 +91,8 @@ export default function HistoricoEnvios() {
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Histórico de Envios</h1>
-        <p className="text-gray-600">Acompanhe todos os emails enviados pela plataforma</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Histórico de Envios</h1>
+        <p className="text-foreground">Acompanhe todos os emails enviados pela plataforma</p>
       </div>
 
       {/* Stats Cards */}
@@ -102,8 +102,8 @@ export default function HistoricoEnvios() {
             <div className="flex items-center">
               <Mail className="h-8 w-8 text-blue-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-sm font-medium text-foreground">Total</p>
+                <p className="text-2xl font-bold text-foreground">{stats.total}</p>
               </div>
             </div>
           </CardContent>
@@ -114,7 +114,7 @@ export default function HistoricoEnvios() {
             <div className="flex items-center">
               <CheckCircle className="h-8 w-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Entregues</p>
+                <p className="text-sm font-medium text-foreground">Entregues</p>
                 <p className="text-2xl font-bold text-green-600">{stats.entregues}</p>
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function HistoricoEnvios() {
             <div className="flex items-center">
               <XCircle className="h-8 w-8 text-red-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Falhas</p>
+                <p className="text-sm font-medium text-foreground">Falhas</p>
                 <p className="text-2xl font-bold text-red-600">{stats.falhas}</p>
               </div>
             </div>
@@ -138,7 +138,7 @@ export default function HistoricoEnvios() {
             <div className="flex items-center">
               <Mail className="h-8 w-8 text-blue-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Imediatos</p>
+                <p className="text-sm font-medium text-foreground">Imediatos</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.imediatos}</p>
               </div>
             </div>
@@ -150,7 +150,7 @@ export default function HistoricoEnvios() {
             <div className="flex items-center">
               <Clock className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Agendados</p>
+                <p className="text-sm font-medium text-foreground">Agendados</p>
                 <p className="text-2xl font-bold text-purple-600">{stats.agendados}</p>
               </div>
             </div>
@@ -161,7 +161,7 @@ export default function HistoricoEnvios() {
       {/* Filters */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-foreground">
             <Filter className="h-5 w-5" />
             Filtros
           </CardTitle>
@@ -206,26 +206,26 @@ export default function HistoricoEnvios() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Histórico de Envios ({filteredHistorico.length} registros)</CardTitle>
+          <CardTitle className="text-foreground">Histórico de Envios ({filteredHistorico.length} registros)</CardTitle>
         </CardHeader>
         <CardContent>
           {filteredHistorico.length === 0 ? (
             <div className="text-center py-8">
               <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">Nenhum envio encontrado</p>
+              <p className="text-foreground">Nenhum envio encontrado</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data/Hora</TableHead>
-                    <TableHead>Destinatário</TableHead>
-                    <TableHead>Remetente</TableHead>
-                    <TableHead>Template</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Erro</TableHead>
+                    <TableHead className="text-foreground">Data/Hora</TableHead>
+                    <TableHead className="text-foreground">Destinatário</TableHead>
+                    <TableHead className="text-foreground">Remetente</TableHead>
+                    <TableHead className="text-foreground">Template</TableHead>
+                    <TableHead className="text-foreground">Tipo</TableHead>
+                    <TableHead className="text-foreground">Status</TableHead>
+                    <TableHead className="text-foreground">Erro</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -235,10 +235,10 @@ export default function HistoricoEnvios() {
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-400" />
                           <div>
-                            <p className="font-medium">
+                            <p className="font-medium text-foreground">
                               {format(new Date(envio.data_envio), 'dd/MM/yyyy')}
                             </p>
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-foreground">
                               {format(new Date(envio.data_envio), 'HH:mm:ss')}
                             </p>
                           </div>
@@ -246,14 +246,14 @@ export default function HistoricoEnvios() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{envio.destinatario_nome}</p>
-                          <p className="text-sm text-gray-600">{envio.destinatario_email}</p>
+                          <p className="font-medium text-foreground">{envio.destinatario_nome}</p>
+                          <p className="text-sm text-foreground">{envio.destinatario_email}</p>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{envio.remetente_nome}</p>
-                          <p className="text-sm text-gray-600">{envio.remetente_email}</p>
+                          <p className="font-medium text-foreground">{envio.remetente_nome}</p>
+                          <p className="text-sm text-foreground">{envio.remetente_email}</p>
                         </div>
                       </TableCell>
                       <TableCell>
