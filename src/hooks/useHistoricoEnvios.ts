@@ -51,7 +51,10 @@ export function useHistoricoEnvios() {
         .order('data_envio', { ascending: false });
 
       if (error) throw error;
-      setHistorico(data || []);
+      
+      // Type assertion to ensure compatibility with our interface
+      const typedData = (data || []) as HistoricoEnvio[];
+      setHistorico(typedData);
     } catch (error: any) {
       console.error('Erro ao carregar histórico:', error);
       toast.error('Erro ao carregar histórico de envios');

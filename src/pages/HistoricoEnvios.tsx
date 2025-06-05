@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -49,7 +48,10 @@ export default function HistoricoEnvios() {
         .order('data_envio', { ascending: false });
 
       if (error) throw error;
-      setHistorico(data || []);
+      
+      // Type assertion to ensure compatibility with our interface
+      const typedData = (data || []) as HistoricoEnvio[];
+      setHistorico(typedData);
     } catch (error: any) {
       console.error('Erro ao carregar histórico:', error);
       toast.error('Erro ao carregar histórico de envios');
