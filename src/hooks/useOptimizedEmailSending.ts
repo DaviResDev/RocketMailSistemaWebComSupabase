@@ -58,6 +58,7 @@ export function useOptimizedEmailSending() {
 
     let attempt = 0;
     let lastError: Error | null = null;
+    let currentRetryDelay = retryDelay; // Create mutable local variable
 
     while (attempt < maxRetries) {
       try {
@@ -153,11 +154,11 @@ export function useOptimizedEmailSending() {
         console.error(`❌ Attempt ${attempt} failed:`, error);
 
         if (attempt < maxRetries) {
-          console.log(`⏳ Waiting ${retryDelay}ms before retry...`);
-          toast.info(`Attempt ${attempt} failed, retrying in ${retryDelay/1000}s...`);
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          // Exponential backoff
-          retryDelay *= 1.5;
+          console.log(`⏳ Waiting ${currentRetryDelay}ms before retry...`);
+          toast.info(`Attempt ${attempt} failed, retrying in ${currentRetryDelay/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, currentRetryDelay));
+          // Exponential backoff using the mutable local variable
+          currentRetryDelay *= 1.5;
         }
       }
     }
