@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,12 +15,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEmailSignature } from '@/hooks/useEmailSignature';
 import { useSettings } from '@/hooks/useSettings';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { SaveIcon, Send, FileText, PencilIcon, Variable } from "lucide-react";
+import { SaveIcon, Send, FileText, PencilIcon, Variable, Upload, X, CheckCircle } from "lucide-react";
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from '@/integrations/supabase/client';
 import { TemplatePreview } from './TemplatePreview';
 import { TemplateFormProps } from '../templates/TemplateFormProps';
+import { Progress } from '@/components/ui/progress';
 
 const templateSchema = z.object({
   nome: z.string().min(1, { message: 'Nome é obrigatório' }),
@@ -48,9 +48,19 @@ const VARIABLES = [
   { key: 'vencimento', label: 'Vencimento' }
 ];
 
+interface AttachmentUploadProgress {
+  file: File;
+  progress: number;
+  status: 'uploading' | 'success' | 'error';
+  error?: string;
+  url?: string;
+  path?: string;
+}
+
 export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) => {
   const { settings } = useSettings();
   const [attachments, setAttachments] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<AttachmentUploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const { uploadSignatureImage, deleteSignatureImage } = useEmailSignature();
@@ -68,8 +78,8 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       descricao: template?.descricao || '',
       conteudo: template?.conteudo || '',
       canal: template?.canal || 'email',
-      assinatura: 'sim', // Always use signature
-      signature_image: settings?.signature_image || 'default_signature', // Always use from settings
+      assinatura: 'sim',
+      signature_image: settings?.signature_image || 'default_signature',
       attachments: template?.attachments || [],
       image_url: template?.image_url || null,
     },
@@ -121,84 +131,176 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     form.setValue('attachments', newAttachments);
   };
 
+  // SISTEMA DE UPLOAD OTIMIZADO COM PROCESSAMENTO PARALELO
   const handleAttachmentUpload = async (files: FileList | null) => {
     if (!files || files.length === 0 || isUploading) return;
     
     setIsUploading(true);
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_CONCURRENT_UPLOADS = 3; // Uploads paralelos controlados
     const newAttachments = [...attachments];
-    let hasErrors = false;
-    let successCount = 0;
+    
+    // Valida arquivos antes do upload
+    const validFiles: File[] = [];
+    const invalidFiles: { file: File, reason: string }[] = [];
+    
+    Array.from(files).forEach(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        invalidFiles.push({ file, reason: `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB > 10MB)` });
+      } else {
+        validFiles.push(file);
+      }
+    });
+    
+    // Notifica arquivos inválidos
+    if (invalidFiles.length > 0) {
+      invalidFiles.forEach(({ file, reason }) => {
+        toast.error(`${file.name}: ${reason}`);
+      });
+    }
+    
+    if (validFiles.length === 0) {
+      setIsUploading(false);
+      return;
+    }
 
-    // Show initial loading toast
-    const uploadToastId = toast.loading(`Fazendo upload de ${files.length} arquivo(s)...`);
+    // Inicializa progresso dos uploads
+    const initialProgress: AttachmentUploadProgress[] = validFiles.map(file => ({
+      file,
+      progress: 0,
+      status: 'uploading' as const
+    }));
+    setUploadProgress(initialProgress);
 
+    console.log(`🚀 Iniciando upload PARALELO OTIMIZADO de ${validFiles.length} arquivos (máx ${MAX_CONCURRENT_UPLOADS} simultâneos)`);
+    
+    // Toast de progresso geral
+    const uploadToastId = toast.loading(`Uploading ${validFiles.length} arquivo(s) em paralelo...`);
+    
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      // Função para upload individual com retry
+      const uploadSingleFile = async (file: File, index: number): Promise<void> => {
+        const maxRetries = 2;
+        let attempt = 0;
         
-        // Check file size
-        if (file.size > MAX_FILE_SIZE) {
-          toast.error(`O arquivo ${file.name} excede o tamanho máximo de 10MB`);
-          hasErrors = true;
-          continue;
+        while (attempt <= maxRetries) {
+          try {
+            console.log(`📤 Upload ${index + 1}/${validFiles.length}: ${file.name} (tentativa ${attempt + 1})`);
+            
+            // Simula progresso durante upload
+            const progressInterval = setInterval(() => {
+              setUploadProgress(prev => prev.map((p, i) => 
+                i === index && p.status === 'uploading' 
+                  ? { ...p, progress: Math.min(p.progress + Math.random() * 20, 90) }
+                  : p
+              ));
+            }, 200);
+            
+            // Upload real para Supabase
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}-${index}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+            const filePath = `attachments/${fileName}`;
+            
+            const { data, error } = await supabase.storage
+              .from('template_attachments')
+              .upload(filePath, file);
+            
+            clearInterval(progressInterval);
+            
+            if (error) throw error;
+            
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+              .from('template_attachments')
+              .getPublicUrl(data.path);
+            
+            // Atualiza progresso para sucesso
+            setUploadProgress(prev => prev.map((p, i) => 
+              i === index 
+                ? { ...p, progress: 100, status: 'success' as const, url: publicUrl, path: data.path }
+                : p
+            ));
+            
+            // Adiciona ao array de anexos
+            newAttachments.push({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              url: publicUrl,
+              path: data.path
+            });
+            
+            console.log(`✅ Upload ${index + 1} concluído: ${file.name}`);
+            return; // Sucesso, sai do loop de retry
+            
+          } catch (error: any) {
+            attempt++;
+            console.error(`❌ Erro no upload ${index + 1} (tentativa ${attempt}):`, error);
+            
+            if (attempt > maxRetries) {
+              // Falha final
+              setUploadProgress(prev => prev.map((p, i) => 
+                i === index 
+                  ? { ...p, status: 'error' as const, error: error.message }
+                  : p
+              ));
+              throw error;
+            } else {
+              // Aguarda antes do retry
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+          }
         }
+      };
+      
+      // Processa uploads em lotes paralelos controlados
+      const uploadPromises: Promise<void>[] = [];
+      for (let i = 0; i < validFiles.length; i += MAX_CONCURRENT_UPLOADS) {
+        const batch = validFiles.slice(i, i + MAX_CONCURRENT_UPLOADS);
+        const batchPromises = batch.map((file, batchIndex) => 
+          uploadSingleFile(file, i + batchIndex)
+        );
         
-        try {
-          console.log(`Iniciando upload do arquivo: ${file.name}`);
-          
-          // Upload file to Supabase
-          const { data, error } = await supabase.storage
-            .from('template_attachments')
-            .upload(`attachments/${Date.now()}-${i}-${file.name}`, file);
-          
-          if (error) throw error;
-          
-          // Get public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('template_attachments')
-            .getPublicUrl(data.path);
-          
-          newAttachments.push({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            url: publicUrl,
-            path: data.path
-          });
-          
-          successCount++;
-          console.log(`Arquivo ${file.name} enviado com sucesso`);
-        } catch (error) {
-          console.error('Erro ao fazer upload do arquivo:', error);
-          hasErrors = true;
+        // Aguarda conclusão do lote atual
+        await Promise.allSettled(batchPromises);
+        
+        // Pequeno delay entre lotes para não sobrecarregar
+        if (i + MAX_CONCURRENT_UPLOADS < validFiles.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       
-      // Update attachments state
+      // Atualiza estado dos anexos
       handleAttachmentChange(newAttachments);
       
-      // Update toast with results
+      // Conta sucessos e falhas
+      const successCount = uploadProgress.filter(p => p.status === 'success').length;
+      const errorCount = uploadProgress.filter(p => p.status === 'error').length;
+      
+      // Atualiza toast final
       toast.dismiss(uploadToastId);
       
-      if (successCount > 0 && !hasErrors) {
-        toast.success(`${successCount} arquivo(s) carregado(s) com sucesso`);
-      } else if (successCount > 0 && hasErrors) {
-        toast.success(`${successCount} arquivo(s) carregado(s) com sucesso. Alguns uploads falharam.`);
+      if (successCount > 0 && errorCount === 0) {
+        toast.success(`🎉 ${successCount} arquivo(s) carregado(s) com sucesso!`);
+      } else if (successCount > 0 && errorCount > 0) {
+        toast.success(`✅ ${successCount} sucesso(s), ❌ ${errorCount} falha(s)`);
       } else {
-        toast.error('Erro ao fazer upload dos arquivos');
+        toast.error('❌ Falha no upload de todos os arquivos');
       }
       
     } catch (error) {
-      console.error('Erro geral no upload:', error);
+      console.error('💥 Erro geral no upload paralelo:', error);
       toast.dismiss(uploadToastId);
-      toast.error('Erro ao fazer upload dos arquivos');
+      toast.error('❌ Erro no sistema de upload paralelo');
     } finally {
       setIsUploading(false);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      
+      // Limpa progresso após delay
+      setTimeout(() => setUploadProgress([]), 3000);
     }
   };
 
@@ -207,7 +309,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
     const newAttachments = [...attachments];
     
     try {
-      // If the attachment has a path, remove it from storage
+      // Remove do storage se tiver path
       if (attachmentToRemove.path) {
         await supabase.storage
           .from('template_attachments')
@@ -216,10 +318,10 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
       
       newAttachments.splice(index, 1);
       handleAttachmentChange(newAttachments);
-      toast.success('Anexo removido com sucesso');
+      toast.success('📎 Anexo removido com sucesso');
     } catch (error) {
       console.error('Erro ao remover anexo:', error);
-      toast.error('Erro ao remover anexo');
+      toast.error('❌ Erro ao remover anexo');
     }
   };
 
@@ -335,7 +437,7 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-medium">Conteúdo</h3>
                 <div className="flex space-x-2">
-                  {/* File attachment button */}
+                  {/* File attachment button OTIMIZADO */}
                   <Button
                     variant="outline" 
                     size="sm"
@@ -343,8 +445,17 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
                   >
-                    <FileText className="mr-1 h-4 w-4" />
-                    {isUploading ? 'Enviando...' : 'Anexar Arquivos'}
+                    {isUploading ? (
+                      <>
+                        <Upload className="mr-1 h-4 w-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="mr-1 h-4 w-4" />
+                        Anexar Arquivos
+                      </>
+                    )}
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -379,14 +490,46 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
               />
             </div>
             
-            {/* Attachment list */}
+            {/* PROGRESSO DE UPLOAD OTIMIZADO */}
+            {uploadProgress.length > 0 && (
+              <div className="p-4 border rounded-md bg-muted/50">
+                <h4 className="text-sm font-medium mb-3">📤 Upload Paralelo em Progresso</h4>
+                <div className="space-y-3">
+                  {uploadProgress.map((upload, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm truncate flex-1">
+                          {upload.status === 'success' && <CheckCircle className="inline w-4 h-4 text-green-500 mr-1" />}
+                          {upload.status === 'error' && <X className="inline w-4 h-4 text-red-500 mr-1" />}
+                          📎 {upload.file.name} ({(upload.file.size / 1024).toFixed(1)} KB)
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {upload.status === 'uploading' && `${Math.round(upload.progress)}%`}
+                          {upload.status === 'success' && '✅ Concluído'}
+                          {upload.status === 'error' && '❌ Erro'}
+                        </span>
+                      </div>
+                      {upload.status === 'uploading' && (
+                        <Progress value={upload.progress} className="h-2" />
+                      )}
+                      {upload.status === 'error' && upload.error && (
+                        <p className="text-xs text-red-500">{upload.error}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Lista de anexos OTIMIZADA */}
             {attachments.length > 0 && (
               <div className="p-4 border rounded-md bg-muted/50">
-                <h4 className="text-sm font-medium mb-2">Anexos ({attachments.length})</h4>
+                <h4 className="text-sm font-medium mb-2">📎 Anexos Carregados ({attachments.length})</h4>
                 <ul className="space-y-2">
                   {attachments.map((attachment, index) => (
                     <li key={index} className="flex justify-between items-center">
                       <span className="text-sm truncate flex-1">
+                        <CheckCircle className="inline w-4 h-4 text-green-500 mr-1" />
                         📎 {attachment.name || 'Arquivo'} ({(attachment.size / 1024).toFixed(1)} KB)
                       </span>
                       <Button 
@@ -394,8 +537,9 @@ export const TemplateForm = ({ template, isEditing, onSave, onCancel, onSendTest
                         size="sm" 
                         onClick={() => handleRemoveAttachment(index)}
                         disabled={isUploading}
+                        className="text-red-500 hover:text-red-700"
                       >
-                        Remover
+                        <X className="w-4 h-4" />
                       </Button>
                     </li>
                   ))}

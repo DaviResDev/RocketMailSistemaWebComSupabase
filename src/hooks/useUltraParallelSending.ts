@@ -52,14 +52,14 @@ export function useUltraParallelSending() {
     avgEmailDuration: 0,
     successCount: 0,
     errorCount: 0,
-    targetThroughput: 200, // 200 emails/s meta
+    targetThroughput: 50, // Reduzido de 200 para 50 emails/s
     performanceLevel: 'PADRÃO',
     chunkProgress: {
       current: 0,
       total: 0,
       chunkNumber: 0
     },
-    connectionsActive: 1000
+    connectionsActive: 50 // Reduzido de 1000 para 50 conexões
   });
 
   const { fetchHistorico } = useHistoricoEnvios();
@@ -75,8 +75,8 @@ export function useUltraParallelSending() {
       return null;
     }
 
-    if (selectedContacts.length > 10000) {
-      toast.error('Limite máximo de 10.000 contatos por envio ultra-paralelo');
+    if (selectedContacts.length > 5000) { // Reduzido de 10.000 para 5.000
+      toast.error('Limite máximo de 5.000 contatos por envio ultra-paralelo');
       return null;
     }
 
@@ -88,9 +88,9 @@ export function useUltraParallelSending() {
     let progressHistory: Array<{time: number, count: number}> = [];
     
     const getPerformanceLevel = (throughput: number): 'CONQUISTADA' | 'EXCELENTE' | 'BOA' | 'PADRÃO' => {
-      if (throughput >= 200) return 'CONQUISTADA'; // 200+ emails/s
-      if (throughput >= 150) return 'EXCELENTE'; // 150+ emails/s
-      if (throughput >= 100) return 'BOA'; // 100+ emails/s
+      if (throughput >= 50) return 'CONQUISTADA'; // Ajustado para 50+ emails/s
+      if (throughput >= 35) return 'EXCELENTE'; // 35+ emails/s
+      if (throughput >= 20) return 'BOA'; // 20+ emails/s
       return 'PADRÃO';
     };
     
@@ -105,20 +105,20 @@ export function useUltraParallelSending() {
       avgEmailDuration: 0,
       successCount: 0,
       errorCount: 0,
-      targetThroughput: 200,
+      targetThroughput: 50, // Meta ajustada
       performanceLevel: 'PADRÃO',
       chunkProgress: {
         current: 0,
-        total: Math.ceil(selectedContacts.length / 200),
+        total: Math.ceil(selectedContacts.length / 50), // Chunks menores
         chunkNumber: 0
       },
-      connectionsActive: 1000
+      connectionsActive: 50 // Conexões reduzidas
     });
 
     try {
-      console.log(`🚀 ULTRA-PARALLEL V5.0 para ${selectedContacts.length} contatos`);
-      console.log(`🎯 META: 200+ emails/segundo com 1000 conexões simultâneas`);
-      console.log(`⚡ Chunks de 200 emails sem delay entre chunks`);
+      console.log(`🚀 ULTRA-PARALLEL V6.0 OTIMIZADO para ${selectedContacts.length} contatos`);
+      console.log(`🎯 META REALISTA: 50 emails/segundo com 50 conexões simultâneas`);
+      console.log(`⚡ Chunks de 50 emails com delays otimizados`);
       
       // Busca configurações SMTP do usuário
       const { data: userSettings } = await supabase
@@ -140,7 +140,7 @@ export function useUltraParallelSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
-      // Configuração SMTP ultra-agressiva
+      // Configuração SMTP otimizada e conservadora
       let porta = userSettings.email_porta || 587;
       let seguranca = userSettings.smtp_seguranca || 'tls';
       
@@ -153,7 +153,7 @@ export function useUltraParallelSending() {
         from_email: userSettings.email_usuario || ''
       };
       
-      // Prepara jobs ultra-paralelos
+      // Prepara jobs ultra-paralelos otimizados
       const emailJobs = selectedContacts.map((contact, index) => ({
         to: contact.email,
         contato_id: contact.id,
@@ -174,25 +174,37 @@ export function useUltraParallelSending() {
         emails: emailJobs,
         smtp_settings: smtpSettings,
         use_smtp: true,
-        ultra_parallel_v5: true,
-        target_throughput: 200,
-        max_concurrent: 1000,
-        chunk_size: 200,
-        delay_between_chunks: 0,
-        connection_timeout: 5000,
-        max_retries: 1
+        ultra_parallel_v6: true, // Nova versão otimizada
+        target_throughput: 50, // Meta realista
+        max_concurrent: 50, // Conexões reduzidas
+        chunk_size: 50, // Chunks menores
+        delay_between_chunks: 2000, // 2s delay entre chunks
+        connection_timeout: 30000, // 30s timeout (aumentado)
+        max_retries: 3, // Mais retries
+        rate_limiting: {
+          emails_per_second: 2, // Rate limit conservador
+          burst_limit: 10,
+          backoff_multiplier: 1.5
+        },
+        smtp_optimizations: {
+          connection_pooling: true,
+          keep_alive: true,
+          connection_reuse: true
+        }
       };
       
-      console.log("🚀 Enviando ultra-paralelo V5.0:", {
+      console.log("🚀 Enviando ultra-paralelo V6.0 OTIMIZADO:", {
         batch_size: emailJobs.length,
-        target_throughput: "200+ emails/s",
-        max_concurrent: 1000,
-        chunk_size: 200,
-        zero_delay: true,
-        estimated_duration: Math.ceil(selectedContacts.length / 200) + "s"
+        target_throughput: "50 emails/s (meta realista)",
+        max_concurrent: 50,
+        chunk_size: 50,
+        delay_between_chunks: "2000ms",
+        connection_timeout: "30s",
+        max_retries: 3,
+        estimated_duration: Math.ceil(selectedContacts.length / 25) + "s" // Estimativa mais conservadora
       });
       
-      // Monitoramento ultra-agressivo de progresso
+      // Monitoramento otimizado de progresso
       const updateProgress = (current: number, total: number, isSuccess?: boolean) => {
         const now = Date.now();
         const elapsed = now - startTime;
@@ -201,7 +213,7 @@ export function useUltraParallelSending() {
         if (isSuccess === false) errorCount++;
         
         progressHistory.push({ time: now, count: current });
-        progressHistory = progressHistory.filter(p => now - p.time <= 5000); // 5s de histórico
+        progressHistory = progressHistory.filter(p => now - p.time <= 10000); // 10s de histórico
         
         let currentThroughput = 0;
         if (progressHistory.length >= 2) {
@@ -223,7 +235,7 @@ export function useUltraParallelSending() {
         const performanceLevel = getPerformanceLevel(currentThroughput);
         
         // Calcula progresso do chunk atual
-        const chunkSize = 200;
+        const chunkSize = 50;
         const currentChunk = Math.floor(current / chunkSize);
         const totalChunks = Math.ceil(total / chunkSize);
         const chunkProgress = {
@@ -243,32 +255,32 @@ export function useUltraParallelSending() {
           avgEmailDuration,
           successCount,
           errorCount,
-          targetThroughput: 200,
+          targetThroughput: 50,
           performanceLevel,
           chunkProgress,
-          connectionsActive: Math.min(1000, total - current)
+          connectionsActive: Math.min(50, total - current)
         });
         
-        // Notificações de conquista ultra-agressivas
-        if (current % 200 === 0 && current > 0) {
+        // Notificações otimizadas
+        if (current % 50 === 0 && current > 0) {
           const successRate = ((successCount / current) * 100).toFixed(1);
-          const performanceEmoji = currentThroughput >= 200 ? '🏆' : 
-                                   currentThroughput >= 150 ? '🚀' : 
-                                   currentThroughput >= 100 ? '⚡' : '💪';
+          const performanceEmoji = currentThroughput >= 50 ? '🏆' : 
+                                   currentThroughput >= 35 ? '🚀' : 
+                                   currentThroughput >= 20 ? '⚡' : '💪';
           
-          toast.success(`${performanceEmoji} ${current}/${total} ULTRA-PROCESSADOS (${successRate}% sucesso) - ${currentThroughput.toFixed(1)} emails/s`, {
-            duration: 2000
+          toast.success(`${performanceEmoji} ${current}/${total} PROCESSADOS (${successRate}% sucesso) - ${currentThroughput.toFixed(1)} emails/s`, {
+            duration: 3000
           });
         }
         
-        console.log(`🚀 ULTRA-PROGRESSO: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s (PICO: ${peakThroughput.toFixed(2)}) - ${performanceLevel}`);
+        console.log(`🚀 PROGRESSO OTIMIZADO: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s (PICO: ${peakThroughput.toFixed(2)}) - ${performanceLevel}`);
       };
       
-      // Notificação de início ultra-agressiva
-      const estimatedTime = Math.ceil(selectedContacts.length / 200);
-      toast.success('🚀 ULTRA-PARALLEL V5.0 INICIADO!', {
-        description: `Processando ${selectedContacts.length} contatos em ~${estimatedTime}s com 1000 conexões simultâneas`,
-        duration: 3000
+      // Notificação de início otimizada
+      const estimatedTime = Math.ceil(selectedContacts.length / 25); // Estimativa mais conservadora
+      toast.success('🚀 ULTRA-PARALLEL V6.0 OTIMIZADO INICIADO!', {
+        description: `Processando ${selectedContacts.length} contatos em ~${estimatedTime}s com configurações otimizadas`,
+        duration: 4000
       });
       
       const response = await supabase.functions.invoke('send-email', {
@@ -276,14 +288,14 @@ export function useUltraParallelSending() {
       });
       
       if (response.error) {
-        console.error("Erro na função ultra-paralela:", response.error);
+        console.error("Erro na função ultra-paralela otimizada:", response.error);
         throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
       }
       
       const responseData = response.data;
       if (!responseData || !responseData.success) {
         console.error("Resposta de falha:", responseData);
-        throw new Error(responseData?.error || "Falha no envio ultra-paralelo V5.0");
+        throw new Error(responseData?.error || "Falha no envio ultra-paralelo V6.0 otimizado");
       }
       
       const { summary, results } = responseData;
@@ -294,26 +306,27 @@ export function useUltraParallelSending() {
       // Atualiza histórico
       await fetchHistorico();
       
-      const targetAchieved = summary.avgThroughput >= 200 || peakThroughput >= 200;
+      const targetAchieved = summary.avgThroughput >= 35 || peakThroughput >= 35; // Meta ajustada
       
-      // Mensagens de conquista ultra-agressivas
+      // Mensagens de sucesso otimizadas
       if (summary.successful > 0) {
         const duration = summary.totalDuration || Math.round((Date.now() - startTime) / 1000);
         const throughput = summary.avgThroughput || (summary.successful / duration);
+        const successRate = ((summary.successful / selectedContacts.length) * 100).toFixed(1);
         
         if (targetAchieved) {
           toast.success(
-            `🏆 META 200+ EMAILS/S CONQUISTADA! ${summary.successful} emails em ${duration}s`,
+            `🏆 META CONQUISTADA! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `🚀 Ultra-Parallel V5.0: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | 1000 conexões!`,
-              duration: 15000 
+              description: `🚀 Ultra-Parallel V6.0: ${throughput.toFixed(2)} emails/s | Taxa: ${successRate}% | Configurações otimizadas!`,
+              duration: 12000 
             }
           );
-        } else if (throughput >= 150) {
+        } else if (throughput >= 20) {
           toast.success(
-            `🚀 EXCELENTE! ${summary.successful} emails em ${duration}s`,
+            `🚀 BOA PERFORMANCE! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `Ultra-Parallel: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Quase lá!`,
+              description: `Ultra-Parallel: ${throughput.toFixed(2)} emails/s | Taxa: ${successRate}% | Sistema estabilizado!`,
               duration: 10000 
             }
           );
@@ -321,8 +334,8 @@ export function useUltraParallelSending() {
           toast.success(
             `⚡ ${summary.successful} emails enviados em ${duration}s`,
             { 
-              description: `Taxa: ${throughput.toFixed(2)} emails/s | Histórico atualizado!`,
-              duration: 6000 
+              description: `Taxa: ${throughput.toFixed(2)} emails/s | Sucesso: ${successRate}% | Histórico atualizado!`,
+              duration: 8000 
             }
           );
         }
@@ -336,7 +349,7 @@ export function useUltraParallelSending() {
           `⚠️ ${summary.failed} emails falharam. Taxa de sucesso: ${summary.successRate}%`,
           {
             description: errorMessages.join('; '),
-            duration: 8000
+            duration: 10000
           }
         );
       }
@@ -355,8 +368,8 @@ export function useUltraParallelSending() {
         ultraParallelV5: true
       };
     } catch (error: any) {
-      console.error('Erro no envio ultra-paralelo:', error);
-      toast.error(`Erro no envio ultra-paralelo V5.0: ${error.message}`);
+      console.error('Erro no envio ultra-paralelo otimizado:', error);
+      toast.error(`Erro no envio ultra-paralelo V6.0: ${error.message}`);
       
       try {
         await fetchHistorico();
