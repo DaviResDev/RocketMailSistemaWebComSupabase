@@ -9,7 +9,7 @@ export interface Attachment {
   path?: string;
 }
 
-// Tipos válidos para envio conforme constraint do banco - ATUALIZADO
+// Tipos válidos para envio conforme constraint do banco - CORRIGIDO
 export type TipoEnvio = 'individual' | 'lote' | 'agendado' | 'lote_ultra_v3' | 'gmail_optimized_v4' | 'ultra_parallel_v5';
 
 export interface Envio {
@@ -95,57 +95,43 @@ export function isValidTipoEnvio(tipo: string): tipo is TipoEnvio {
 }
 
 /**
- * Converte tipos antigos/inválidos para tipos válidos - NORMALIZAÇÃO ATUALIZADA
+ * Converte tipos antigos/inválidos para tipos válidos - CORRIGIDO
  */
 export function normalizeTipoEnvio(tipo: string): TipoEnvio {
-  if (!tipo || typeof tipo !== 'string') {
-    console.warn(`Tipo de envio inválido: "${tipo}". Usando 'individual' como fallback.`);
-    return 'individual';
-  }
-
-  // Normaliza o tipo removendo acentos, convertendo para lowercase e removendo espaços
-  const normalizedTipo = tipo
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/ã/g, 'a')
-    .replace(/Ã/g, 'A');
+  // Remove caracteres especiais e converte para lowercase
+  const normalizedTipo = tipo?.toString().toLowerCase().trim();
   
-  // Se já é um tipo válido, retorna como está
-  if (isValidTipoEnvio(normalizedTipo)) {
-    return normalizedTipo as TipoEnvio;
-  }
-  
-  // Mapeia variações para tipos válidos
   switch (normalizedTipo) {
-    case 'visao':
+    case 'visão':
     case 'imediato':
     case 'single':
     case 'individual':
       return 'individual';
-    
     case 'batch':
     case 'bulk':
     case 'lote':
       return 'lote';
-    
     case 'scheduled':
     case 'agendado':
       return 'agendado';
-    
-    // Verifica padrões com LIKE
+    case 'ultra_parallel_v5':
+    case 'ultra-parallel-v5':
+    case 'ultraparallelv5':
+      return 'ultra_parallel_v5';
+    case 'gmail_optimized_v4':
+    case 'gmail-optimized-v4':
+    case 'gmailoptimizedv4':
+      return 'gmail_optimized_v4';
+    case 'lote_ultra_v3':
+    case 'lote-ultra-v3':
+    case 'loteultrav3':
+      return 'lote_ultra_v3';
     default:
-      if (normalizedTipo.includes('ultra_parallel') || normalizedTipo.includes('ultraparallel')) {
-        return 'ultra_parallel_v5';
+      // Se é um tipo válido, retorna como está
+      if (isValidTipoEnvio(normalizedTipo)) {
+        return normalizedTipo as TipoEnvio;
       }
-      if (normalizedTipo.includes('gmail_optimized') || normalizedTipo.includes('gmailoptimized')) {
-        return 'gmail_optimized_v4';
-      }
-      if (normalizedTipo.includes('lote_ultra') || normalizedTipo.includes('loteultra')) {
-        return 'lote_ultra_v3';
-      }
-      
-      // Fallback para individual
+      // Fallback seguro
       console.warn(`Tipo de envio não reconhecido: "${tipo}". Usando 'individual' como fallback.`);
       return 'individual';
   }
@@ -242,14 +228,4 @@ export function validateVolumeLimit(tipoEnvio: TipoEnvio, volume: number): { val
     limit,
     message: valid ? undefined : `Limite excedido para ${tipoEnvio}: ${volume} > ${limit}`
   };
-}
-
-/**
- * Função helper para garantir que o tipo_envio seja sempre normalizado antes de salvar
- */
-export function prepareEnvioForDatabase(envioData: any): any {
-  if (envioData.tipo_envio) {
-    envioData.tipo_envio = normalizeTipoEnvio(envioData.tipo_envio);
-  }
-  return envioData;
 }

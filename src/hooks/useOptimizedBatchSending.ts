@@ -107,14 +107,14 @@ export function useOptimizedBatchSending() {
       performanceLevel: 'PADRÃO',
       chunkProgress: {
         current: 0,
-        total: Math.ceil(selectedContacts.length / 25), // chunk size atualizado
+        total: Math.ceil(selectedContacts.length / 200),
         chunkNumber: 0
       }
     });
 
     try {
-      console.log(`🚀 ENVIO OTIMIZADO SMTP para ${selectedContacts.length} contatos`);
-      console.log(`🎯 Meta: 12-15 emails/segundo com SMTP real`);
+      console.log(`🚀 ENVIO OTIMIZADO GMAIL para ${selectedContacts.length} contatos`);
+      console.log(`🎯 Meta: 15 emails/segundo com chunks de 200 emails`);
       
       // Busca configurações SMTP do usuário
       const { data: userSettings } = await supabase
@@ -136,7 +136,7 @@ export function useOptimizedBatchSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
-      // Configuração SMTP otimizada
+      // Configuração SMTP otimizada para Gmail
       let porta = userSettings.email_porta || 587;
       let seguranca = userSettings.smtp_seguranca || 'tls';
       
@@ -160,7 +160,7 @@ export function useOptimizedBatchSending() {
         from_email: userSettings.email_usuario || ''
       };
       
-      // Prepara jobs de email usando o NOVO formato unificado
+      // Prepara jobs de email otimizados
       const emailJobs = selectedContacts.map((contact, index) => ({
         to: contact.email,
         contato_id: contact.id,
@@ -176,33 +176,32 @@ export function useOptimizedBatchSending() {
         index: index
       }));
 
-      // Usar o NOVO formato unificado da interface
       const batchRequestData = {
-        batch: true, // Indica novo formato
-        emails: emailJobs, // Array de emails no novo formato
-        smtp_settings: smtpSettings, // Configurações SMTP
+        batch: true,
+        emails: emailJobs,
+        smtp_settings: smtpSettings,
         use_smtp: true,
         gmail_optimized: true,
-        target_throughput: 12, // Target realista para SMTP
-        max_concurrent: 15, // Concorrência reduzida para SMTP
-        chunk_size: 25, // Chunks menores para SMTP
+        target_throughput: 15,
+        max_concurrent: 25,
+        chunk_size: 200,
         rate_limit: {
-          emails_per_second: 12, // Rate limit mais conservador
-          burst_limit: 50 // Burst menor para SMTP
+          emails_per_second: 14,
+          burst_limit: 100
         }
       };
       
-      console.log("📧 Enviando lote SMTP unificado:", {
+      console.log("📧 Enviando lote otimizado:", {
         batch_size: emailJobs.length,
-        target_throughput: "12 emails/s",
-        max_concurrent: 15,
-        chunk_size: 25,
+        target_throughput: "15 emails/s",
+        max_concurrent: 25,
+        chunk_size: 200,
         smtp_host: smtpSettings.host,
-        format: "NOVO UNIFICADO",
-        estimated_duration: Math.ceil(selectedContacts.length / 12) + "s"
+        gmail_optimized: true,
+        estimated_duration: Math.ceil(selectedContacts.length / 15) + "s"
       });
       
-      // Simulação de progresso mais realista para SMTP
+      // Monitoramento de progresso otimizado
       const updateProgress = (current: number, total: number, isSuccess?: boolean) => {
         const now = Date.now();
         const elapsed = now - startTime;
@@ -232,8 +231,8 @@ export function useOptimizedBatchSending() {
         const avgEmailDuration = current > 0 ? elapsed / current : 0;
         const performanceLevel = getPerformanceLevel(currentThroughput);
         
-        // Calcula progresso do chunk (chunk size = 25)
-        const chunkSize = 25;
+        // Calcula progresso do chunk atual
+        const chunkSize = 200;
         const currentChunk = Math.floor(current / chunkSize);
         const totalChunks = Math.ceil(total / chunkSize);
         const chunkProgress = {
@@ -253,64 +252,49 @@ export function useOptimizedBatchSending() {
           avgEmailDuration,
           successCount,
           errorCount,
-          targetThroughput: 12, // Target realista para SMTP
+          targetThroughput: 15,
           performanceLevel,
           chunkProgress
         });
         
-        // Notificações de progresso SMTP-específicas
-        if (current % 25 === 0 && current > 0) { // A cada chunk
+        // Notificações de progresso mais específicas
+        if (current % 100 === 0 && current > 0) {
           const successRate = ((successCount / current) * 100).toFixed(1);
-          const performanceEmoji = currentThroughput >= 10 ? '🚀' : 
-                                   currentThroughput >= 7 ? '⚡' : 
+          const performanceEmoji = currentThroughput >= 12 ? '🚀' : 
+                                   currentThroughput >= 8 ? '⚡' : 
                                    currentThroughput >= 4 ? '💪' : '📈';
           
-          toast.success(`${performanceEmoji} SMTP: ${current}/${total} (${successRate}% sucesso) - ${currentThroughput.toFixed(1)} emails/s`, {
+          toast.success(`${performanceEmoji} ${current}/${total} processados (${successRate}% sucesso) - ${currentThroughput.toFixed(1)} emails/s`, {
             duration: 3000
           });
         }
         
-        console.log(`📊 Progresso SMTP: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s (pico: ${peakThroughput.toFixed(2)}) - Level: ${performanceLevel}`);
+        console.log(`📊 Progresso: ${current}/${total} (${((current/total)*100).toFixed(1)}%) - ${currentThroughput.toFixed(2)} emails/s (pico: ${peakThroughput.toFixed(2)}) - Level: ${performanceLevel}`);
       };
       
-      // Simulação de progresso para visualização
-      const estimatedTime = Math.ceil(selectedContacts.length / 12);
-      toast.success('⚡ SMTP REAL INICIADO!', {
-        description: `Processando ${selectedContacts.length} contatos via SMTP em ~${estimatedTime}s`,
+      // Notificação inicial otimizada
+      const estimatedTime = Math.ceil(selectedContacts.length / 15);
+      toast.success('⚡ ENVIO OTIMIZADO PARA GMAIL INICIADO!', {
+        description: `Processando ${selectedContacts.length} contatos em ~${estimatedTime}s com rate limiting inteligente`,
         duration: 4000
       });
-      
-      // Simular progresso gradual
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev.current < prev.total) {
-            const increment = Math.min(Math.random() * 3 + 1, prev.total - prev.current);
-            const newCurrent = Math.min(prev.current + increment, prev.total);
-            updateProgress(newCurrent, prev.total, Math.random() > 0.05); // 95% success rate
-            return { ...prev, current: newCurrent };
-          }
-          return prev;
-        });
-      }, 1000);
       
       const response = await supabase.functions.invoke('send-email', {
         body: batchRequestData
       });
       
-      clearInterval(progressInterval);
-      
       if (response.error) {
-        console.error("Erro na função SMTP:", response.error);
-        throw new Error(`Erro na função de envio SMTP: ${response.error.message || response.error}`);
+        console.error("Erro na função otimizada:", response.error);
+        throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
       }
       
       const responseData = response.data;
       if (!responseData || !responseData.success) {
-        console.error("Resposta de falha SMTP:", responseData);
-        throw new Error(responseData?.message || "Falha ao enviar emails via SMTP");
+        console.error("Resposta de falha:", responseData);
+        throw new Error(responseData?.error || "Falha ao enviar emails em lote otimizado");
       }
       
-      const { summary } = responseData;
+      const { summary, results } = responseData;
       
       // Atualização final do progresso
       updateProgress(selectedContacts.length, selectedContacts.length);
@@ -318,32 +302,32 @@ export function useOptimizedBatchSending() {
       // Atualiza histórico
       await fetchHistorico();
       
-      const targetAchieved = summary.avgThroughput >= 10 || peakThroughput >= 10; // Target SMTP mais realista
+      const targetAchieved = summary.avgThroughput >= 12 || peakThroughput >= 12; // 80% do target
       
-      // Mensagens de sucesso otimizadas para SMTP
+      // Mensagens de sucesso otimizadas
       if (summary.successful > 0) {
         const duration = summary.totalDuration || Math.round((Date.now() - startTime) / 1000);
         const throughput = summary.avgThroughput || (summary.successful / duration);
         
         if (targetAchieved) {
           toast.success(
-            `🚀 EXCELENTE PERFORMANCE SMTP! ${summary.successful} emails em ${duration}s`,
+            `🚀 EXCELENTE PERFORMANCE! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `⚡ SMTP Real: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | 100% REAL!`,
+              description: `⚡ Gmail otimizado: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
               duration: 10000 
             }
           );
-        } else if (throughput >= 7) {
+        } else if (throughput >= 8) {
           toast.success(
-            `⚡ BOA PERFORMANCE SMTP! ${summary.successful} emails em ${duration}s`,
+            `⚡ BOA PERFORMANCE! ${summary.successful} emails em ${duration}s`,
             { 
-              description: `SMTP: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
+              description: `Gmail: ${throughput.toFixed(2)} emails/s | Pico: ${peakThroughput.toFixed(2)} emails/s | Histórico atualizado!`,
               duration: 8000 
             }
           );
         } else {
           toast.success(
-            `✅ ${summary.successful} emails SMTP enviados em ${duration}s`,
+            `✅ ${summary.successful} emails enviados em ${duration}s`,
             { 
               description: `Taxa: ${throughput.toFixed(2)} emails/s | Histórico atualizado!`,
               duration: 6000 
@@ -353,10 +337,13 @@ export function useOptimizedBatchSending() {
       }
       
       if (summary.failed > 0) {
+        const failedEmails = results.filter((r: any) => !r.success);
+        const errorMessages = [...new Set(failedEmails.slice(0, 3).map((r: any) => r.error))];
+        
         toast.error(
-          `⚠️ ${summary.failed} emails falharam via SMTP. Taxa de sucesso: ${summary.successRate}%`,
+          `⚠️ ${summary.failed} emails falharam. Taxa de sucesso: ${summary.successRate}%`,
           {
-            description: 'Verifique a configuração SMTP e conectividade',
+            description: errorMessages.join('; '),
             duration: 8000
           }
         );
@@ -376,8 +363,8 @@ export function useOptimizedBatchSending() {
         gmailOptimized: true
       };
     } catch (error: any) {
-      console.error('Erro no envio SMTP otimizado:', error);
-      toast.error(`Erro no envio SMTP: ${error.message}`);
+      console.error('Erro no envio otimizado:', error);
+      toast.error(`Erro no envio otimizado: ${error.message}`);
       
       try {
         await fetchHistorico();
