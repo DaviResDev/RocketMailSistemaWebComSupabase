@@ -1,29 +1,9 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
-import { processBatchEmails } from './batch-processor.ts';
+import { processBatchEmailsSMTP } from './smtp-processor.ts';
 import { processUltraParallelV5 } from './ultra-processor-v5.ts';
-import { normalizeTipoEnvio, prepareEnvioForDatabase } from './shared-types.ts';
-
-interface EmailRequestData {
-  templateId: string;
-  contacts: string[];
-  subject?: string;
-  content?: string;
-  tipo_envio?: string;
-}
-
-interface EmailRequest {
-  templateId: string;
-  contactId: string;
-  subject?: string;
-  content?: string;
-  fromName: string;
-  fromEmail: string;
-  toName: string;
-  toEmail: string;
-  tipoEnvio?: string;
-  templateName?: string;
-}
+import { normalizeTipoEnvio, prepareEnvioForDatabase, EmailRequestData, EmailRequest } from './shared-types.ts';
 
 interface SupabaseEnv {
   SUPABASE_URL: string;
@@ -97,160 +77,290 @@ serve(async (req) => {
 
     // Parse request body
     const requestData: EmailRequestData = await req.json();
-    console.log(`📨 Request data: ${JSON.stringify(requestData)}`);
+    console.log(`📨 Request data recebido:`, {
+      hasTemplateId: !!requestData.templateId,
+      hasContacts: !!requestData.contacts,
+      contactsLength: requestData.contacts?.length,
+      hasBatch: !!requestData.batch,
+      hasEmails: !!requestData.emails,
+      emailsLength: requestData.emails?.length,
+      useSmtp: requestData.use_smtp,
+      gmailOptimized: requestData.gmail_optimized
+    });
 
-    if (!requestData.templateId || !requestData.contacts) {
-      return new Response(JSON.stringify({ error: 'Missing templateId or contacts' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Determinar tipo de envio com normalização
+    // Determinar o tipo de processamento baseado na entrada
+    let emailRequests: EmailRequest[] = [];
     let tipoEnvio = 'individual';
-    if (requestData.contacts && requestData.contacts.length > 1) {
-      if (requestData.contacts.length >= 50) {
+    let useNewFormat = false;
+
+    if (requestData.batch && requestData.emails) {
+      // Novo formato (do BatchEmailSender)
+      useNewFormat = true;
+      console.log(`📧 Usando NOVO formato: batch com ${requestData.emails.length} emails`);
+      
+      // Buscar dados do usuário para from_name
+      const { data: userData, error: userErrorData } = await supabase
+        .from('profiles')
+        .select('nome')
+        .eq('id', userId)
+        .single();
+
+      if (userErrorData || !userData) {
+        console.error('Failed to fetch user:', userErrorData);
+        return new Response(JSON.stringify({ error: 'Failed to fetch user' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const fromName = userData.nome;
+      const fromEmail = requestData.smtp_settings?.from_email || 'noreply@example.com';
+
+      // Converter formato novo para EmailRequest[]
+      emailRequests = requestData.emails.map(email => ({
+        templateId: email.template_id,
+        contactId: email.contato_id,
+        fromName: fromName,
+        fromEmail: fromEmail,
+        toName: email.contato_nome,
+        toEmail: email.to,
+        subject: email.subject,
+        content: email.content,
+        tipoEnvio: requestData.gmail_optimized ? 'gmail_optimized_v4' : 'lote',
+        templateName: email.template_nome
+      }));
+
+      tipoEnvio = requestData.gmail_optimized ? 'gmail_optimized_v4' : 'lote';
+      
+    } else if (requestData.templateId && requestData.contacts) {
+      // Formato antigo (compatibilidade)
+      console.log(`📧 Usando formato ANTIGO: templateId com ${requestData.contacts.length} contatos`);
+      
+      // Determinar tipo de envio
+      if (requestData.contacts.length === 1) {
+        tipoEnvio = 'individual';
+      } else if (requestData.contacts.length >= 50) {
         tipoEnvio = requestData.tipo_envio || 'ultra_parallel_v5';
       } else {
         tipoEnvio = requestData.tipo_envio || 'lote';
       }
+
+      // Buscar template e dados do usuário
+      const { data: templateData, error: templateError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', requestData.templateId)
+        .single();
+
+      if (templateError || !templateData) {
+        console.error('Failed to fetch template:', templateError);
+        return new Response(JSON.stringify({ error: 'Failed to fetch template' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: userData, error: userErrorData } = await supabase
+        .from('profiles')
+        .select('nome')
+        .eq('id', userId)
+        .single();
+
+      if (userErrorData || !userData) {
+        console.error('Failed to fetch user:', userErrorData);
+        return new Response(JSON.stringify({ error: 'Failed to fetch user' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const fromName = userData.nome;
+
+      const { data: configData, error: configError } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (configError || !configData) {
+        console.error('Failed to fetch config:', configError);
+        return new Response(JSON.stringify({ error: 'Failed to fetch config' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const fromEmail = configData.smtp_from_name || 'noreply@example.com';
+
+      // Buscar contatos e criar EmailRequest[]
+      for (const contactId of requestData.contacts) {
+        const { data: contactData, error: contactError } = await supabase
+          .from('contatos')
+          .select('*')
+          .eq('id', contactId)
+          .single();
+
+        if (contactError || !contactData) {
+          console.error(`Failed to fetch contact ${contactId}:`, contactError);
+          continue;
+        }
+
+        emailRequests.push({
+          templateId: requestData.templateId,
+          contactId: contactId,
+          subject: requestData.subject,
+          content: requestData.content,
+          fromName: fromName,
+          fromEmail: fromEmail,
+          toName: contactData.nome,
+          toEmail: contactData.email,
+          tipoEnvio: tipoEnvio,
+          templateName: templateData.nome || null
+        });
+      }
     } else {
-      tipoEnvio = requestData.tipo_envio || 'individual';
+      return new Response(JSON.stringify({ error: 'Invalid request format. Expected either templateId+contacts or batch+emails' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // Normalizar o tipo de envio
     const normalizedTipoEnvio = normalizeTipoEnvio(tipoEnvio);
     console.log(`📋 Tipo de envio: ${tipoEnvio} -> normalizado: ${normalizedTipoEnvio}`);
 
-    // Fetch template and contact details
-    const { data: templateData, error: templateError } = await supabase
-      .from('templates')
-      .select('*')
-      .eq('id', requestData.templateId)
-      .single();
+    // Atualizar tipoEnvio nos emailRequests
+    emailRequests.forEach(req => {
+      req.tipoEnvio = normalizedTipoEnvio;
+    });
 
-    if (templateError || !templateData) {
-      console.error('Failed to fetch template:', templateError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch template' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const { data: userData, error: userErrorData } = await supabase
-      .from('profiles')
-      .select('nome')
-      .eq('id', userId)
-      .single();
-
-    if (userErrorData || !userData) {
-      console.error('Failed to fetch user:', userErrorData);
-      return new Response(JSON.stringify({ error: 'Failed to fetch user' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const fromName = userData.nome;
-
-    const { data: configData, error: configError } = await supabase
-      .from('configuracoes')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (configError || !configData) {
-      console.error('Failed to fetch config:', configError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch config' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const fromEmail = configData.smtp_from_name || 'noreply@example.com';
-
-    // Prepare email requests
-    const emailRequests: EmailRequest[] = [];
-
-    for (const contactId of requestData.contacts) {
-      const { data: contactData, error: contactError } = await supabase
-        .from('contatos')
-        .select('*')
-        .eq('id', contactId)
-        .single();
-
-      if (contactError || !contactData) {
-        console.error(`Failed to fetch contact ${contactId}:`, contactError);
-        return new Response(JSON.stringify({ error: `Failed to fetch contact ${contactId}` }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      emailRequests.push({
-        templateId: requestData.templateId,
-        contactId: contactId,
-        subject: requestData.subject,
-        content: requestData.content,
-        fromName: fromName,
-        fromEmail: fromEmail,
-        toName: contactData.nome,
-        toEmail: contactData.email,
-        tipoEnvio: tipoEnvio,
-        templateName: templateData.nome || null
-      });
-    }
+    console.log(`📊 Processando ${emailRequests.length} emails como ${normalizedTipoEnvio}`);
 
     // Para envios únicos
     if (emailRequests.length === 1) {
-      // Single email processing logic
-      const toEmail = emailRequests[0].toEmail;
-      const toName = emailRequests[0].toName;
+      const emailRequest = emailRequests[0];
+      console.log(`📧 Enviando email individual para ${emailRequest.toEmail}`);
 
-      console.log(`📧 Enviando email para ${toEmail} (${toName})`);
+      // Para formato novo, usar SMTP
+      if (useNewFormat && requestData.smtp_settings) {
+        console.log('📧 Usando SMTP para envio individual');
+        
+        // Usar o processador SMTP para consistência
+        const smtpResult = await processBatchEmailsSMTP(
+          [emailRequest],
+          requestData.smtp_settings,
+          supabase,
+          userId,
+          { maxConcurrent: 1, chunkSize: 1 }
+        );
 
-      // Salvar no histórico com tipo normalizado
-      const historicoData = prepareEnvioForDatabase({
-        user_id: userId,
-        template_id: emailRequests[0].templateId,
-        contato_id: emailRequests[0].contactId,
-        remetente_nome: emailRequests[0].fromName,
-        remetente_email: emailRequests[0].fromEmail,
-        destinatario_nome: emailRequests[0].toName,
-        destinatario_email: emailRequests[0].toEmail,
-        status: 'entregue',
-        tipo_envio: normalizedTipoEnvio,
-        template_nome: emailRequests[0].templateName || null,
-        data_envio: new Date().toISOString()
-      });
+        return new Response(
+          JSON.stringify({
+            success: smtpResult.successCount > 0,
+            message: smtpResult.successCount > 0 
+              ? `Email enviado com sucesso para ${emailRequest.toEmail}` 
+              : `Falha ao enviar email para ${emailRequest.toEmail}`,
+            summary: {
+              successful: smtpResult.successCount,
+              failed: smtpResult.errorCount,
+              totalDuration: Math.round(smtpResult.timeElapsed / 1000),
+              avgThroughput: smtpResult.avgThroughput || 0,
+              successRate: smtpResult.successRate || '0'
+            },
+            results: smtpResult.results
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      } else {
+        // Fallback para formato antigo
+        const historicoData = prepareEnvioForDatabase({
+          user_id: userId,
+          template_id: emailRequest.templateId,
+          contato_id: emailRequest.contactId,
+          remetente_nome: emailRequest.fromName,
+          remetente_email: emailRequest.fromEmail,
+          destinatario_nome: emailRequest.toName,
+          destinatario_email: emailRequest.toEmail,
+          status: 'entregue',
+          tipo_envio: normalizedTipoEnvio,
+          template_nome: emailRequest.templateName || null,
+          data_envio: new Date().toISOString()
+        });
 
-      const { error: historicoError } = await supabase
-        .from('envios_historico')
-        .insert([historicoData]);
+        const { error: historicoError } = await supabase
+          .from('envios_historico')
+          .insert([historicoData]);
 
-      if (historicoError) {
-        console.error('Erro ao salvar no histórico:', historicoError);
-      }
-
-      return new Response(
-        JSON.stringify({ message: `Email sent successfully to ${toEmail}` }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
+        if (historicoError) {
+          console.error('Erro ao salvar no histórico:', historicoError);
         }
-      );
-    } else {
-      // Para envios em lote - passar o tipo normalizado
-      emailRequests.forEach(req => {
-        req.tipoEnvio = normalizedTipoEnvio;
-      });
 
-      // Batch email processing logic
+        return new Response(
+          JSON.stringify({ message: `Email sent successfully to ${emailRequest.toEmail}` }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    } else {
+      // Para envios em lote
+      console.log(`📦 Processando lote de ${emailRequests.length} emails`);
+
       let batchResult;
-      if (normalizedTipoEnvio === 'ultra_parallel_v5') {
+
+      if (useNewFormat && requestData.smtp_settings) {
+        // Usar novo processador SMTP
+        console.log('🚀 Usando processador SMTP otimizado');
+        
+        const options = {
+          maxConcurrent: requestData.max_concurrent || 15,
+          chunkSize: requestData.chunk_size || 25,
+          delayBetweenChunks: 2000,
+          targetThroughput: requestData.target_throughput || 12
+        };
+
+        batchResult = await processBatchEmailsSMTP(
+          emailRequests,
+          requestData.smtp_settings,
+          supabase,
+          userId,
+          options
+        );
+
+        return new Response(
+          JSON.stringify({
+            success: batchResult.successCount > 0,
+            message: `Processamento SMTP concluído: ${batchResult.successCount} sucessos, ${batchResult.errorCount} falhas`,
+            summary: {
+              successful: batchResult.successCount,
+              failed: batchResult.errorCount,
+              totalDuration: Math.round(batchResult.timeElapsed / 1000),
+              avgThroughput: batchResult.avgThroughput || 0,
+              successRate: batchResult.successRate || '0',
+              avgEmailDuration: batchResult.timeElapsed / batchResult.totalCount
+            },
+            results: batchResult.results,
+            errorTypes: {}
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+
+      } else if (normalizedTipoEnvio === 'ultra_parallel_v5') {
+        // Usar processador ultra paralelo para compatibilidade
         batchResult = await processUltraParallelV5(emailRequests, supabase, userId);
       } else {
-        batchResult = await processBatchEmails(emailRequests, supabase, userId);
+        // Fallback para processador básico (não implementado ainda, retorna erro)
+        return new Response(JSON.stringify({ error: 'Batch processing without SMTP not implemented' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
       if (!batchResult) {

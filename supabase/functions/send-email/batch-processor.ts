@@ -1,16 +1,6 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
-import { normalizeTipoEnvio } from './shared-types.ts';
 
-interface EmailRequest {
-  templateId: string;
-  contactId: string;
-  fromName: string;
-  fromEmail: string;
-  toName: string;
-  toEmail: string;
-  tipoEnvio?: string;
-  templateName?: string;
-}
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { EmailRequest, EmailResult, normalizeTipoEnvio } from './shared-types.ts';
 
 interface BatchProcessingResult {
   success: boolean;
@@ -26,21 +16,15 @@ interface BatchProcessingResult {
   templateName?: string;
 }
 
-interface DatabaseResult {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
 export async function processBatchEmails(
   emailBatch: EmailRequest[],
-  supabase: SupabaseClient,
+  supabase: any,
   userId: string
 ): Promise<BatchProcessingResult> {
   const startTime = Date.now();
-  console.log(`📤 Iniciando processamento em lote de ${emailBatch.length} emails`);
+  console.log(`📤 Iniciando processamento em lote básico de ${emailBatch.length} emails`);
   
-  const results: BatchProcessingResult[] = [];
+  const results: EmailResult[] = [];
 
   if (!emailBatch || emailBatch.length === 0) {
     console.warn("Nenhum email para processar.");
@@ -65,47 +49,56 @@ export async function processBatchEmails(
           results.push({
             success: false,
             error: "Dados incompletos do email",
-            templateId: email.templateId,
             contactId: email.contactId,
-            fromName: email.fromName,
-            fromEmail: email.fromEmail,
-            toName: email.toName,
+            templateId: email.templateId,
             toEmail: email.toEmail,
-            tipoEnvio: email.tipoEnvio,
-            templateName: email.templateName
+            toName: email.toName,
+            fromEmail: email.fromEmail,
+            fromName: email.fromName,
+            templateName: email.templateName,
+            tipoEnvio: email.tipoEnvio
           });
           continue;
         }
 
-        // Enviar email (simulado)
-        console.log(`Enviando email para ${email.toEmail} (template: ${email.templateId})`);
+        // Simular envio de email
+        console.log(`Processando email para ${email.toEmail} (template: ${email.templateId})`);
+        
+        // Simular delay e alta taxa de sucesso
+        const delay = Math.random() * 500 + 200;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        const shouldFail = Math.random() < 0.02; // 2% de falha
+        
+        if (shouldFail) {
+          throw new Error('Falha simulada de conectividade');
+        }
         
         results.push({
           success: true,
-          message: `Email enviado para ${email.toEmail}`,
-          templateId: email.templateId,
           contactId: email.contactId,
-          fromName: email.fromName,
-          fromEmail: email.fromEmail,
-          toName: email.toName,
+          templateId: email.templateId,
           toEmail: email.toEmail,
-          tipoEnvio: email.tipoEnvio,
-          templateName: email.templateName
+          toName: email.toName,
+          fromEmail: email.fromEmail,
+          fromName: email.fromName,
+          templateName: email.templateName,
+          tipoEnvio: email.tipoEnvio
         });
 
       } catch (error: any) {
         console.error("Erro ao processar email:", error);
         results.push({
           success: false,
-          error: error.message || "Erro desconhecido ao enviar email",
-          templateId: email.templateId,
+          error: error.message || "Erro desconhecido ao processar email",
           contactId: email.contactId,
-          fromName: email.fromName,
-          fromEmail: email.fromEmail,
-          toName: email.toName,
+          templateId: email.templateId,
           toEmail: email.toEmail,
-          tipoEnvio: email.tipoEnvio,
-          templateName: email.templateName
+          toName: email.toName,
+          fromEmail: email.fromEmail,
+          fromName: email.fromName,
+          templateName: email.templateName,
+          tipoEnvio: email.tipoEnvio
         });
       }
     }
@@ -149,7 +142,7 @@ export async function processBatchEmails(
 
     const endTime = Date.now();
     const duration = (endTime - startTime) / 1000;
-    console.log(`📊 Processamento em lote concluído em ${duration} segundos.`);
+    console.log(`📊 Processamento em lote básico concluído em ${duration} segundos.`);
 
     return {
       success: true,
