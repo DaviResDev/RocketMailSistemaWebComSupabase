@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -86,15 +85,9 @@ export function useTemplateOperations() {
     }
 
     try {
-      // Process template file if provided
+      // Use existing template file URL and name from formData
       let templateFileUrl = formData.template_file_url;
       let templateFileName = formData.template_file_name;
-      
-      if (formData.template_file instanceof File) {
-        const templateFile = await uploadTemplateFile(formData.template_file);
-        templateFileUrl = templateFile.url;
-        templateFileName = templateFile.name;
-      }
       
       // Set default value for email
       const templateData = {
@@ -176,15 +169,9 @@ export function useTemplateOperations() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
-      // Process template file if provided
+      // Use existing template file URL and name from formData
       let templateFileUrl = formData.template_file_url;
       let templateFileName = formData.template_file_name;
-      
-      if (formData.template_file instanceof File) {
-        const templateFile = await uploadTemplateFile(formData.template_file);
-        templateFileUrl = templateFile.url;
-        templateFileName = templateFile.name;
-      }
       
       // Always set to 'email' for backwards compatibility
       const templateData = {
