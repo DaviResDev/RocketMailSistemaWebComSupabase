@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -106,15 +107,22 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
 
   if (showPreview) {
     return (
-      <TemplatePreview
-        template={{
-          ...formData,
-          id: template?.id || '',
-          created_at: template?.created_at || '',
-          user_id: template?.user_id || ''
-        }}
-        onClose={() => setShowPreview(false)}
-      />
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-medium">Preview do Template</h2>
+          <Button onClick={() => setShowPreview(false)} variant="outline">
+            Voltar ao Editor
+          </Button>
+        </div>
+        <TemplatePreview
+          template={{
+            ...formData,
+            id: template?.id || '',
+            created_at: template?.created_at || '',
+            user_id: template?.user_id || ''
+          }}
+        />
+      </div>
     );
   }
 
@@ -187,7 +195,6 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
             />
           </div>
 
-          {/* Novo: Seletor de Tamanho de Fonte */}
           <FontSizeSelector
             value={formData.font_size_px || '16px'}
             onChange={(value) => setFormData({ ...formData, font_size_px: value })}
@@ -209,8 +216,8 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
           </div>
 
           <ImageUploader
-            imageUrl={formData.image_url}
-            onImageChange={(url) => setFormData({ ...formData, image_url: url })}
+            initialImageUrl={formData.image_url}
+            onImageUploaded={(url) => setFormData({ ...formData, image_url: url })}
           />
 
           <TemplateFileUpload
@@ -219,6 +226,14 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
               ...formData,
               attachments: newAttachments
             })}
+            onFileUploaded={(fileUrl, fileName) => {
+              // Handle single file upload for template_file fields
+              setFormData({
+                ...formData,
+                template_file_url: fileUrl,
+                template_file_name: fileName
+              });
+            }}
           />
 
           <div className="space-y-2">
