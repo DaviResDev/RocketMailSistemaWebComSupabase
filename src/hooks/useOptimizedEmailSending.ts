@@ -136,6 +136,13 @@ export function useOptimizedEmailSending() {
       
       toast.info(`⚡ Sistema otimizado para ${providerName} - Rate limiting inteligente ativado`);
       
+      // Properly handle attachments - ensure it's an array
+      const attachments = Array.isArray(templateData.attachments) 
+        ? templateData.attachments 
+        : templateData.attachments 
+          ? [templateData.attachments] 
+          : [];
+      
       // Adiciona todos os emails na fila inteligente
       const emailPromises = selectedContacts.map(async (contact, index) => {
         const emailId = await emailQueue.addEmail({
@@ -144,7 +151,7 @@ export function useOptimizedEmailSending() {
           content: customContent || templateData.conteudo,
           contato_id: contact.id,
           template_id: templateId,
-          attachments: templateData.attachments,
+          attachments: attachments,
           smtpSettings: optimizedSmtpSettings,
           metadata: {
             contato_nome: contact.nome,
