@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { TemplateForm } from '@/components/templates/TemplateForm';
 import { TemplateCard } from '@/components/templates/TemplateCard';
@@ -18,7 +17,7 @@ import { Input } from "@/components/ui/input";
 
 const Templates = () => {
   const { templates, loading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate, sendTestEmail, duplicateTemplate } = useTemplates();
-  const { alerts, showSuccess, showError, removeAlert } = useVisualAlerts();
+  const { alerts, showSuccess, showError, showInfo, removeAlert } = useVisualAlerts();
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
