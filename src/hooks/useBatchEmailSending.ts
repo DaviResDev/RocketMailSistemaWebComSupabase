@@ -32,15 +32,13 @@ export function useBatchEmailSending() {
     setProgress({ current: 0, total: selectedContacts.length });
 
     try {
-      console.log(`🚀 Iniciando envio em lote otimizado para ${selectedContacts.length} contatos`);
+      console.log(`🚀 Iniciando envio ULTRA RÁPIDO para ${selectedContacts.length} contatos`);
       
-      // CORREÇÃO: Obter usuário autenticado
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('Usuário não autenticado');
       }
       
-      // CORREÇÃO: Buscar configurações SMTP do usuário logado
       const { data: userSettings, error: settingsError } = await supabase
         .from('configuracoes')
         .select('*')
@@ -55,7 +53,6 @@ export function useBatchEmailSending() {
         throw new Error('SMTP deve estar configurado e ativado para envio em lote. Configure o SMTP nas configurações.');
       }
       
-      // Buscar dados do template
       const { data: templateData, error: templateError } = await supabase
         .from('templates')
         .select('*')
@@ -65,7 +62,6 @@ export function useBatchEmailSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
-      // CORREÇÃO: Configurações SMTP com mapeamento correto
       const smtpSettings = {
         host: userSettings.smtp_host,
         port: userSettings.email_porta || 587,
@@ -73,24 +69,23 @@ export function useBatchEmailSending() {
         password: userSettings.smtp_pass,
         from_name: userSettings.smtp_from_name || 'RocketMail',
         from_email: userSettings.email_usuario || '',
-        username: userSettings.email_usuario || '' // CORREÇÃO: campo adicional
+        username: userSettings.email_usuario || ''
       };
       
-      // Detectar provedor e aplicar otimizações específicas
+      // CONFIGURAÇÃO ULTRA OTIMIZADA - VELOCIDADE MÁXIMA
       const isGmail = smtpSettings.host.includes('gmail');
       const isOutlook = smtpSettings.host.includes('outlook') || smtpSettings.host.includes('live');
       
-      // Configuração de otimização baseada no provedor
       const optimization_config = {
-        max_concurrent: isGmail ? 2 : isOutlook ? 3 : 5,
-        delay_between_emails: isGmail ? 3000 : isOutlook ? 2000 : 1500,
-        rate_limit_per_minute: isGmail ? 15 : isOutlook ? 20 : 25,
-        burst_limit: isGmail ? 5 : isOutlook ? 8 : 10,
+        max_concurrent: isGmail ? 8 : isOutlook ? 10 : 15, // AUMENTADO DRASTICAMENTE
+        delay_between_emails: isGmail ? 100 : isOutlook ? 50 : 25, // REDUZIDO AO MÍNIMO
+        rate_limit_per_minute: isGmail ? 60 : isOutlook ? 80 : 120, // AUMENTADO MUITO
+        burst_limit: isGmail ? 15 : isOutlook ? 20 : 30, // AUMENTADO
         provider_optimizations: true,
-        intelligent_queuing: true
+        intelligent_queuing: true,
+        ultra_fast_mode: true // NOVO: Modo ultra rápido
       };
       
-      // CORREÇÃO: Preparar emails com dados completos incluindo user_id
       const emailJobs = selectedContacts.map(contact => ({
         to: contact.email,
         contato_id: contact.id,
@@ -100,41 +95,40 @@ export function useBatchEmailSending() {
         content: customContent || templateData.conteudo,
         contact: {
           ...contact,
-          user_id: user.id // CORREÇÃO: garantir user_id no contact
+          user_id: user.id
         },
-        user_id: user.id, // CORREÇÃO: user_id no nível do email
+        user_id: user.id,
         image_url: templateData.image_url,
         signature_image: userSettings?.signature_image || templateData.signature_image,
         attachments: Array.isArray(templateData.attachments) ? templateData.attachments : [],
         smtp_settings: smtpSettings
       }));
 
-      // Configurar monitoramento de progresso
+      // Progresso atualizado em tempo real mais rápido
       const progressInterval = setInterval(() => {
         setProgress(prev => {
-          const newCurrent = Math.min(prev.current + Math.ceil(emailJobs.length / 20), prev.total);
+          const newCurrent = Math.min(prev.current + Math.ceil(emailJobs.length / 10), prev.total);
           return { ...prev, current: newCurrent };
         });
-      }, 1000);
+      }, 200); // Atualização muito mais rápida
       
-      console.log("📧 Enviando lote otimizado:", {
+      console.log("🔥 MODO ULTRA RÁPIDO ATIVADO:", {
         batch_size: emailJobs.length,
         provider: isGmail ? 'Gmail' : isOutlook ? 'Outlook' : 'Outro',
         max_concurrent: optimization_config.max_concurrent,
         delay_ms: optimization_config.delay_between_emails,
-        smtp_host: smtpSettings.host,
-        user_id: user.id
+        ultra_fast: true
       });
       
-      // CORREÇÃO: Fazer requisição para a Edge Function com retry
+      // Envio com múltiplas tentativas em paralelo
       let response;
       let attempt = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 2; // Reduzido para ser mais rápido
       
       while (attempt < maxAttempts) {
         try {
           attempt++;
-          console.log(`🔄 Tentativa ${attempt}/${maxAttempts} de envio`);
+          console.log(`⚡ Tentativa ${attempt}/${maxAttempts} - VELOCIDADE MÁXIMA`);
           
           response = await supabase.functions.invoke('send-email', {
             body: {
@@ -142,15 +136,16 @@ export function useBatchEmailSending() {
               emails: emailJobs,
               smtp_settings: smtpSettings,
               optimization_config: optimization_config,
-              use_smtp: true
+              use_smtp: true,
+              ultra_fast_mode: true
             }
           });
           
           if (!response.error) break;
           
           if (attempt < maxAttempts) {
-            console.log(`⏳ Aguardando antes da próxima tentativa...`);
-            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+            console.log(`⏳ Retry rápido em ${500 * attempt}ms...`);
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Retry muito mais rápido
           }
         } catch (error) {
           console.error(`Tentativa ${attempt} falhou:`, error);
@@ -173,21 +168,36 @@ export function useBatchEmailSending() {
       
       const { summary } = responseData;
       
-      // Atualizar progresso final
       setProgress({ current: selectedContacts.length, total: selectedContacts.length });
       
-      // Notificações detalhadas
+      // ALERTAS MAIS CHAMATIVOS E RÁPIDOS (SEM TEMPO)
       if (summary.successful > 0) {
-        toast.success(`🎯 ${summary.successful} emails enviados com sucesso!`, {
-          description: `⚡ Taxa de sucesso: ${summary.successRate} | Duração: ${summary.totalDuration}s`,
-          duration: 8000
+        toast.success(`🎯🔥 SUCESSO TOTAL! ${summary.successful} emails enviados`, {
+          description: `⚡💥 Taxa de sucesso: ${summary.successRate} | Sistema Ultra Rápido Ativado!`,
+          duration: 6000,
+          style: {
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            border: '2px solid #047857',
+            boxShadow: '0 10px 25px rgba(16, 185, 129, 0.3)'
+          }
         });
       }
       
       if (summary.failed > 0) {
         toast.error(`⚠️ ${summary.failed} emails falharam`, {
           description: `Taxa de sucesso: ${summary.successRate}`,
-          duration: 10000
+          duration: 8000,
+          style: {
+            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            border: '2px solid #b91c1c',
+            boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)'
+          }
         });
       }
 
@@ -201,7 +211,14 @@ export function useBatchEmailSending() {
       };
     } catch (error: any) {
       console.error('❌ Erro no envio em lote:', error);
-      toast.error(`Erro no envio: ${error.message}`);
+      toast.error(`Erro no envio: ${error.message}`, {
+        style: {
+          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '16px'
+        }
+      });
       return false;
     } finally {
       setIsProcessing(false);

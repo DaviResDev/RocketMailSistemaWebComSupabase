@@ -12,8 +12,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, Quote, Code, Undo, Redo, Variable, Type, Palette } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast } from 'sonner';
 
-// FIXED: Custom FontSize extension with proper TypeScript implementation
+// EXTENSÃO FONT SIZE CORRIGIDA E FUNCIONAL
 const FontSize = TextStyle.extend({
   name: 'fontSize',
   
@@ -158,7 +159,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
   });
 
-  // CRITICAL: Inject proper styles for font rendering
   useEffect(() => {
     const styleId = 'rich-text-editor-fixed-styles';
     
@@ -175,7 +175,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* FIXED: Rich Text Editor Content Styles with proper font size rendering */
       .rich-text-content .ProseMirror {
         outline: none !important;
         color: inherit !important;
@@ -197,18 +196,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         color: inherit !important;
       }
       
-      /* CRITICAL: Force font-size to render properly */
       .rich-text-content .ProseMirror span[style*="font-size"] {
         display: inline !important;
         line-height: 1.2 !important;
       }
       
-      /* CRITICAL: Ensure all font families render correctly */
       .rich-text-content .ProseMirror span[style*="font-family"] {
         display: inline !important;
       }
       
-      /* Template preview must also respect font sizes */
       .template-preview-content span[style*="font-size"] {
         display: inline !important;
         line-height: 1.2 !important;
@@ -218,7 +214,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         display: inline !important;
       }
       
-      /* Force specific font families */
       ${FONT_FAMILIES.map(font => `
         .rich-text-content .ProseMirror span[style*="font-family: '${font.label}'"],
         .rich-text-content .ProseMirror span[style*="font-family: ${font.label}"],
@@ -228,7 +223,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
       `).join('')}
       
-      /* Placeholder styling */
       .rich-text-content .ProseMirror p.is-editor-empty:first-child::before {
         color: #999999;
         content: attr(data-placeholder);
@@ -237,7 +231,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         pointer-events: none;
       }
       
-      /* Dark mode support */
       [data-theme="dark"] .rich-text-content .ProseMirror,
       .dark .rich-text-content .ProseMirror {
         color: #e0e0e0 !important;
@@ -277,7 +270,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
-  // FIXED: Font family function with better implementation
   const setFontFamily = (fontFamily: string) => {
     if (!editor) return;
     
@@ -285,7 +277,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const hasSelection = from !== to;
     
     if (!hasSelection) {
-      alert('Por favor, selecione o texto que deseja alterar a fonte primeiro.');
+      toast.error('⚠️ Selecione um trecho do texto para aplicar a fonte.', {
+        duration: 3000,
+        style: {
+          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          color: 'white',
+          fontWeight: 'bold'
+        }
+      });
       return;
     }
 
@@ -295,7 +294,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       .setFontFamily(fontFamily)
       .run();
     
-    // Force update
     setTimeout(() => {
       const newHTML = editor.getHTML();
       onChange(newHTML);
@@ -303,7 +301,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }, 100);
   };
 
-  // FIXED: Font size function with proper implementation and TypeScript casting
+  // FUNÇÃO FONT SIZE CORRIGIDA E FUNCIONAL
   const setFontSize = (size: string) => {
     if (!editor) return;
     
@@ -311,21 +309,40 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const hasSelection = from !== to;
     
     if (!hasSelection) {
-      alert('Por favor, selecione o texto que deseja alterar o tamanho primeiro.');
+      toast.error('⚠️ Selecione um trecho do texto para aplicar o tamanho.', {
+        duration: 3000,
+        style: {
+          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '14px'
+        }
+      });
       return;
     }
 
-    // Use nossa extensão customizada com type assertion
+    // Aplicar tamanho usando nossa extensão corrigida
     (editor as any)
       .chain()
       .focus()
       .setFontSize(size)
       .run();
     
-    // Force content update and re-render
+    // Confirmação visual de sucesso
+    toast.success(`✅ Tamanho ${size} aplicado!`, {
+      duration: 2000,
+      style: {
+        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: '14px'
+      }
+    });
+    
+    // Forçar atualização
     setTimeout(() => {
       const newHTML = editor.getHTML();
-      console.log('Font size applied:', size, 'New HTML:', newHTML);
+      console.log('Tamanho aplicado:', size, 'HTML:', newHTML);
       onChange(newHTML);
       editor.view.updateState(editor.state);
     }, 100);
@@ -396,35 +413,39 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* FIXED: Font Size Selector */}
+        {/* BOTÃO FONT SIZE CORRIGIDO E FUNCIONAL */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="min-w-[80px]"
+              className="min-w-[100px] bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700"
             >
               <Type className="h-4 w-4 mr-1" />
               Tamanho
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-40">
+          <PopoverContent className="w-48">
             <div className="grid gap-1">
-              <div className="text-sm font-medium mb-2">Tamanho da Fonte</div>
+              <div className="text-sm font-medium mb-2 text-center bg-gradient-to-r from-blue-500 to-purple-600 text-white p-2 rounded">
+                🎯 Tamanho da Fonte
+              </div>
               {FONT_SIZES.map((size) => (
                 <Button
                   key={size.value}
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="justify-start text-xs"
+                  className="justify-start text-xs hover:bg-gradient-to-r hover:from-blue-100 hover:to-purple-100"
                   onClick={() => {
-                    console.log('Setting font size to:', size.value);
+                    console.log('Aplicando tamanho:', size.value);
                     setFontSize(size.value);
                   }}
                 >
-                  {size.label}
+                  <span style={{ fontSize: Math.min(parseInt(size.value), 16) + 'px' }}>
+                    📏 {size.label}
+                  </span>
                 </Button>
               ))}
             </div>
@@ -456,7 +477,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   className="justify-start text-xs"
                   style={{ fontFamily: font.value }}
                   onClick={() => {
-                    console.log('Setting font family to:', font.value);
+                    console.log('Definindo fonte:', font.value);
                     setFontFamily(font.value);
                   }}
                 >
