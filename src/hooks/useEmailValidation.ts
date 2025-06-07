@@ -68,6 +68,7 @@ export function useEmailValidation() {
       
       // Estatísticas
       const stats = getValidationStats(results);
+      const invalidCount = stats.total - stats.valid;
       
       setValidationProgress({
         current: contacts.length,
@@ -83,7 +84,6 @@ export function useEmailValidation() {
           duration: 5000
         });
       } else {
-        const invalidCount = stats.total - stats.valid;
         toast.warning(`⚠️ ${invalidCount} emails inválidos removidos da fila`, {
           description: `${stats.valid} emails válidos aprovados para envio`,
           duration: 6000
