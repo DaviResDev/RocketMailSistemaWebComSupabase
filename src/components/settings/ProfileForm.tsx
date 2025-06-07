@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,7 +78,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
         }
       }
 
-      // Update only the profile-specific fields in the database
+      // FIXED: Only update profile-specific fields, preserving existing settings
       const { error } = await supabase
         .from('configuracoes')
         .update({
@@ -88,6 +87,7 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
           smtp_nome: updatedFormData.smtp_nome || null,
           email_usuario: updatedFormData.email_usuario || null,
           signature_image: updatedFormData.signature_image || null,
+          // Explicitly preserve existing SMTP settings by not including them in the update
         })
         .eq('user_id', user.id);
 

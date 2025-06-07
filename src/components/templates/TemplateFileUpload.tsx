@@ -1,18 +1,12 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, File, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, File, X, CheckCircle2, AlertCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
-
-interface TemplateFileUploadProps {
-  onFileUploaded: (fileUrl: string, fileName: string) => void;
-  attachments?: any[]; // Add the attachments property
-  onChange?: (newAttachments: any[]) => void; // Add the onChange property
-}
 
 interface UploadedFile {
   name: string;
@@ -21,9 +15,14 @@ interface UploadedFile {
   type: string;
 }
 
+interface TemplateFileUploadProps {
+  onFileUploaded: (fileUrl: string, fileName: string) => void;
+  attachments?: UploadedFile[];
+  onChange?: (newAttachments: UploadedFile[]) => void;
+}
+
 export function TemplateFileUpload({ onFileUploaded, attachments = [], onChange }: TemplateFileUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
@@ -40,22 +39,8 @@ export function TemplateFileUpload({ onFileUploaded, attachments = [], onChange 
   const supportedExtensions = '.html, .txt, .docx, .json, .md, .zip, .pdf, .jpg, .jpeg, .png, .svg, .webp';
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check if file type is supported
-    if (!supportedFileTypes.includes(file.type)) {
-      setError(`Tipo de arquivo não suportado. Por favor, envie um dos seguintes formatos: ${supportedExtensions}`);
-      toast.error(`Tipo de arquivo não suportado: ${file.type}`);
-      return;
-    }
-
-    // Check file size (limit to 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Arquivo muito grande. Tamanho máximo: 10MB");
-      toast.error("Arquivo muito grande. Tamanho máximo: 10MB");
-      return;
-    }
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setIsUploading(true);
     setError(null);
@@ -65,57 +50,88 @@ export function TemplateFileUpload({ onFileUploaded, attachments = [], onChange 
         throw new Error("Você precisa estar logado para enviar arquivos");
       }
 
-      // Create unique filename with original extension
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
+      const uploadedFiles: UploadedFile[] = [];
 
-      // Upload file to Supabase storage
-      const { error: uploadError } = await supabase.storage
-        .from('template_files')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      // Upload multiple files
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
 
-      if (uploadError) throw uploadError;
+        // Check if file type is supported
+        if (!supportedFileTypes.includes(file.type)) {
+          toast.error(`Tipo de arquivo não suportado: ${file.name}`);
+          continue;
+        }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('template_files')
-        .getPublicUrl(filePath);
+        // Check file size (limit to 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`Arquivo muito grande: ${file.name}. Tamanho máximo: 10MB`);
+          continue;
+        }
 
-      const uploadedFileInfo = {
-        name: file.name,
-        url: publicUrl,
-        size: file.size,
-        type: file.type
-      };
+        // Create unique filename with original extension
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${uuidv4()}.${fileExt}`;
+        const filePath = `${user.id}/${fileName}`;
 
-      setUploadedFile(uploadedFileInfo);
-      onFileUploaded(publicUrl, file.name);
-      
-      // Update attachments if onChange handler is provided
-      if (onChange) {
-        const newAttachments = [...attachments, uploadedFileInfo];
-        onChange(newAttachments);
+        // Upload file to Supabase storage
+        const { error: uploadError } = await supabase.storage
+          .from('template_files')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error(`Erro ao enviar ${file.name}:`, uploadError);
+          toast.error(`Erro ao enviar ${file.name}: ${uploadError.message}`);
+          continue;
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('template_files')
+          .getPublicUrl(filePath);
+
+        const uploadedFileInfo: UploadedFile = {
+          name: file.name,
+          url: publicUrl,
+          size: file.size,
+          type: file.type
+        };
+
+        uploadedFiles.push(uploadedFileInfo);
+        
+        // Call onFileUploaded for each file (for backward compatibility)
+        onFileUploaded(publicUrl, file.name);
       }
-      
-      toast.success(`Arquivo ${file.name} enviado com sucesso!`);
+
+      if (uploadedFiles.length > 0) {
+        // Update attachments if onChange handler is provided
+        if (onChange) {
+          const newAttachments = [...attachments, ...uploadedFiles];
+          onChange(newAttachments);
+        }
+        
+        toast.success(`${uploadedFiles.length} arquivo(s) enviado(s) com sucesso!`);
+      }
+
+      // Reset file input
+      e.target.value = '';
     } catch (error: any) {
-      console.error('Erro ao enviar arquivo:', error);
-      setError(error.message || 'Erro ao fazer upload do arquivo');
-      toast.error(`Erro ao enviar arquivo: ${error.message}`);
+      console.error('Erro ao enviar arquivos:', error);
+      setError(error.message || 'Erro ao fazer upload dos arquivos');
+      toast.error(`Erro ao enviar arquivos: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
   };
 
-  const removeFile = () => {
-    setUploadedFile(null);
-    setError(null);
-    // We don't actually delete the file from storage here - that will be handled
-    // if the user discards the template or it gets replaced
+  const removeFile = (index: number) => {
+    if (onChange) {
+      const newAttachments = attachments.filter((_, i) => i !== index);
+      onChange(newAttachments);
+      toast.success('Arquivo removido');
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -127,60 +143,67 @@ export function TemplateFileUpload({ onFileUploaded, attachments = [], onChange 
   return (
     <div className="space-y-3">
       <div>
-        <label htmlFor="template-file" className="block text-sm font-medium mb-1">
-          Adicionar arquivo de template
+        <label htmlFor="template-files" className="block text-sm font-medium mb-1">
+          Adicionar arquivos anexos
         </label>
         <p className="text-xs text-muted-foreground mb-2">
           Formatos aceitos: {supportedExtensions}
         </p>
       </div>
 
-      {!uploadedFile ? (
-        <div className="flex items-center">
-          <Button
-            type="button"
-            variant="outline"
-            className="relative cursor-pointer"
-            disabled={isUploading}
-          >
-            <input
-              id="template-file"
-              type="file"
-              onChange={handleFileChange}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-              accept=".html,.txt,.docx,.json,.md,.zip,.pdf,.jpg,.jpeg,.png,.svg,.webp"
-            />
-            {isUploading ? (
-              <>Enviando...</>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" /> Escolher arquivo
-              </>
-            )}
-          </Button>
+      <div className="flex items-center">
+        <Button
+          type="button"
+          variant="outline"
+          className="relative cursor-pointer"
+          disabled={isUploading}
+        >
+          <input
+            id="template-files"
+            type="file"
+            onChange={handleFileChange}
+            className="absolute inset-0 opacity-0 cursor-pointer"
+            accept=".html,.txt,.docx,.json,.md,.zip,.pdf,.jpg,.jpeg,.png,.svg,.webp"
+            multiple
+          />
+          {isUploading ? (
+            <>Enviando...</>
+          ) : (
+            <>
+              <Plus className="mr-2 h-4 w-4" /> Adicionar arquivos
+            </>
+          )}
+        </Button>
+      </div>
+
+      {attachments.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Arquivos anexados:</p>
+          {attachments.map((file, index) => (
+            <Card key={index}>
+              <CardContent className="p-3 flex justify-between items-center">
+                <div className="flex items-center">
+                  <File className="h-5 w-5 mr-2 text-blue-500" />
+                  <div className="text-sm">
+                    <p className="font-medium">{file.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatFileSize(file.size)}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeFile(index)}
+                  className="h-8 w-8"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-      ) : (
-        <Card>
-          <CardContent className="p-3 flex justify-between items-center">
-            <div className="flex items-center">
-              <File className="h-5 w-5 mr-2 text-blue-500" />
-              <div className="text-sm">
-                <p className="font-medium">{uploadedFile.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatFileSize(uploadedFile.size)}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={removeFile}
-              className="h-8 w-8"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
       )}
 
       {error && (
@@ -190,10 +213,10 @@ export function TemplateFileUpload({ onFileUploaded, attachments = [], onChange 
         </div>
       )}
 
-      {uploadedFile && (
+      {attachments.length > 0 && (
         <div className="text-sm text-green-600 flex items-center mt-1">
           <CheckCircle2 className="h-4 w-4 mr-1" />
-          Arquivo adicionado com sucesso
+          {attachments.length} arquivo(s) anexado(s)
         </div>
       )}
     </div>

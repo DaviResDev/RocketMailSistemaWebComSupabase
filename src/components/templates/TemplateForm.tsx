@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Save, ArrowLeft, Send, Eye } from 'lucide-react';
 import { RichTextEditor } from '@/components/templates/RichTextEditor';
-import { ImageUploader } from '@/components/templates/ImageUploader';
 import { TemplateFileUpload } from '@/components/templates/TemplateFileUpload';
 import { TemplatePreview } from '@/components/templates/TemplatePreview';
 import { FontSizeSelector } from '@/components/templates/FontSizeSelector';
@@ -28,7 +27,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
     descricao: '',
     template_file_url: null,
     template_file_name: null,
-    template_file: null,
+    // FIXED: Removed template_file property
     image_url: null,
     font_size_px: '16px'
   });
@@ -50,7 +49,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
         descricao: template.descricao || '',
         template_file_url: template.template_file_url || null,
         template_file_name: template.template_file_name || null,
-        template_file: null,
+        // FIXED: Removed template_file property
         image_url: template.image_url || null,
         font_size_px: template.font_size_px || '16px'
       });
@@ -210,10 +209,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
                 </div>
               </div>
 
-              <ImageUploader
-                initialImageUrl={formData.image_url}
-                onImageUploaded={(url) => setFormData({ ...formData, image_url: url })}
-              />
+              {/* FIXED: Removed ImageUploader component completely */}
 
               <TemplateFileUpload
                 attachments={formData.attachments || []}

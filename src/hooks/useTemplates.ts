@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -57,7 +56,9 @@ export function useTemplates() {
       const templateData = {
         ...formData,
         canal: 'email', // Always set to email since it's the only option now
-        user_id: user.id
+        user_id: user.id,
+        // FIXED: Remove template_file reference, keep only template_file_url and template_file_name
+        template_file: undefined // Remove this property completely
       };
       
       // Update default welcome template content - NEW CONTENT
@@ -109,7 +110,9 @@ Equipe RocketMail`;
       // Always set to 'email' for backwards compatibility
       const templateData = {
         ...formData, 
-        canal: 'email'
+        canal: 'email',
+        // FIXED: Remove template_file reference, keep only template_file_url and template_file_name
+        template_file: undefined // Remove this property completely
       };
       
       // Update default welcome template content - NEW CONTENT

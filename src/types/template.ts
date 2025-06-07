@@ -28,7 +28,7 @@ export interface TemplateFormData {
   descricao?: string;
   template_file_url?: string | null; 
   template_file_name?: string | null;
-  template_file?: File | null;
+  // FIXED: Removed template_file property completely
   image_url?: string | null;
   font_size_px?: string;
 }
