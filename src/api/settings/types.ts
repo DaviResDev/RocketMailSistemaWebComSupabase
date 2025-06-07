@@ -1,7 +1,8 @@
 
+
 // Define the types directly rather than re-exporting
 export type Settings = {
-  id: string; // Make id required instead of optional
+  id?: string; // Make id optional to match actual usage
   email_smtp: string | null;
   email_porta: number | null;
   email_usuario: string | null;

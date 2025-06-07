@@ -53,7 +53,7 @@ export interface EnvioFormData {
   contato_id: string;
   data_envio?: string;
   attachments?: any;
-  status: string;
+  status?: string; // Make status optional since it's not always provided when calling sendEmail
   to?: string;
   contato_nome?: string;
   content?: string;

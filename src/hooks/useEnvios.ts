@@ -227,7 +227,7 @@ export function useEnvios() {
             const envioRecord = {
               contato_id: formData.contato_id,
               template_id: formData.template_id,
-              status: 'enviado',
+              status: formData.status || 'enviado', // Use provided status or default to 'enviado'
               user_id: user.user.id,
               data_envio: new Date().toISOString()
             };
@@ -518,7 +518,8 @@ export function useEnvios() {
         template_id: envio.template_id,
         attachments: parsedAttachments,
         signature_image: userSettings?.signature_image || templateData.signature_image,
-        subject: templateData.descricao || templateData.nome
+        subject: templateData.descricao || templateData.nome,
+        status: 'reenviado' // Add default status for resend
       });
       
       toast.dismiss(loadingToastId);

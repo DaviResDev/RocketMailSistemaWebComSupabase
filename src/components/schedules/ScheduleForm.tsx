@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -291,7 +292,7 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
         return;
       }
       
-      // Single send using sendEmail hook
+      // Single send using sendEmail hook - now include default status
       const selectedContact = contacts.find(c => c.id === contactsWithValidEmails[0]);
       
       if (!selectedContact || !selectedContact.email) {
@@ -303,7 +304,8 @@ export function ScheduleForm({ onCancel, initialData, isEditing = false, onSucce
       
       const result = await sendEmail({
         contato_id: contactsWithValidEmails[0],
-        template_id: formData.template_id
+        template_id: formData.template_id,
+        status: 'enviado' // Add default status
       });
       
       if (result) {
