@@ -228,7 +228,7 @@ export type Database = {
           mensagem_erro?: string | null
           remetente_email: string
           remetente_nome: string
-          status: string
+          status?: string
           template_id?: string | null
           template_nome?: string | null
           tipo_envio: string

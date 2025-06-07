@@ -190,7 +190,7 @@ export function useBatchEmailSending() {
         console.warn("Emails com falha:", failedEmails);
       }
       
-      // Registrar envios bem-sucedidos no histórico
+      // Registrar envios bem-sucedidos no histórico com status corretos
       try {
         const { data: user } = await supabase.auth.getUser();
         if (user.user) {
@@ -202,15 +202,28 @@ export function useBatchEmailSending() {
             return {
               contato_id: contact?.id,
               template_id: templateId,
-              status: 'enviado',
+              status: 'enviado', // Status válido
+              tipo_envio: 'imediato', // Tipo válido
+              remetente_nome: userSettings.smtp_from_name || 'Sistema',
+              remetente_email: userSettings.email_usuario || '',
+              destinatario_nome: contact?.nome || 'Destinatário',
+              destinatario_email: email,
+              template_nome: templateData.nome,
               user_id: user.user.id,
               data_envio: new Date().toISOString()
             };
           }).filter(record => record.contato_id);
           
           if (envioRecords.length > 0) {
-            await supabase.from('envios').insert(envioRecords);
-            console.log(`✅ ${envioRecords.length} registros salvos no histórico`);
+            const { error: historicoError } = await supabase
+              .from('envios_historico')
+              .insert(envioRecords);
+              
+            if (historicoError) {
+              console.error("Erro ao salvar no histórico:", historicoError);
+            } else {
+              console.log(`✅ ${envioRecords.length} registros salvos no histórico`);
+            }
           }
         }
       } catch (err) {

@@ -13,7 +13,7 @@ export interface HistoricoEnvio {
   remetente_email: string;
   destinatario_nome: string;
   destinatario_email: string;
-  status: 'entregue' | 'falhou';
+  status: 'pendente' | 'enviado' | 'erro' | 'cancelado' | 'agendado';
   template_nome: string | null;
   tipo_envio: 'imediato' | 'agendado';
   mensagem_erro: string | null;
@@ -28,7 +28,7 @@ export interface CreateHistoricoEnvio {
   remetente_email: string;
   destinatario_nome: string;
   destinatario_email: string;
-  status: 'entregue' | 'falhou';
+  status: 'pendente' | 'enviado' | 'erro' | 'cancelado' | 'agendado';
   template_nome?: string;
   tipo_envio: 'imediato' | 'agendado';
   mensagem_erro?: string;
@@ -67,10 +67,14 @@ export function useHistoricoEnvios() {
     if (!user) return;
 
     try {
+      // Garantir que o status seja válido
+      const validStatus = data.status || 'enviado';
+      
       const { error } = await supabase
         .from('envios_historico')
         .insert([{
           ...data,
+          status: validStatus,
           user_id: user.id
         }]);
 
@@ -90,6 +94,7 @@ export function useHistoricoEnvios() {
     try {
       const recordsWithUserId = records.map(record => ({
         ...record,
+        status: record.status || 'enviado', // Garantir status válido
         user_id: user.id
       }));
 
