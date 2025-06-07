@@ -36,3 +36,22 @@ export interface EnvioStatus {
   error?: string;
   timestamp: string;
 }
+
+export interface Envio {
+  id: string;
+  user_id: string;
+  template_id?: string;
+  contato_id: string;
+  data_envio: string;
+  attachments?: any;
+  status: string;
+  erro?: string;
+}
+
+export interface EnvioFormData {
+  template_id?: string;
+  contato_id: string;
+  data_envio?: string;
+  attachments?: any;
+  status: string;
+}

@@ -28,11 +28,32 @@ export interface UserSettings {
   email_porta?: number | null;
   smtp_seguranca?: string | null;
   use_smtp?: boolean;
+  smtp_nome?: string | null;
+  email_usuario?: string | null;
+  email_senha?: string | null;
+}
+
+export interface SettingsFormData {
+  email_smtp: string;
+  email_porta: number | null;
+  email_usuario: string;
+  email_senha: string;
+  area_negocio: string | null;
+  foto_perfil: string | null;
+  smtp_seguranca: string;
+  smtp_nome: string | null;
+  two_factor_enabled: boolean;
+  use_smtp: boolean;
+  signature_image: string | null;
+  smtp_host: string | null;
+  smtp_pass: string | null;
+  smtp_from_name: string | null;
 }
 
 export function useSettings() {
   const [settings, setSettings] = useState<UserSettings>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   const fetchSettings = async () => {
@@ -40,6 +61,7 @@ export function useSettings() {
 
     try {
       setLoading(true);
+      setError(null);
       const { data, error } = await supabase
         .from('configuracoes')
         .select('*')
@@ -54,6 +76,7 @@ export function useSettings() {
       setSettings(data || {});
     } catch (error: any) {
       console.error('❌ Error loading settings:', error);
+      setError(error.message);
       toast.error('Erro ao carregar configurações');
     } finally {
       setLoading(false);
@@ -107,21 +130,17 @@ export function useSettings() {
     }
   };
 
-  const testSMTPConnection = async (smtpData: SMTPSettings) => {
+  const testSmtpConnection = async (smtpData: SMTPSettings) => {
     try {
       console.log('🔍 Testing SMTP connection...');
       
       const { data, error } = await supabase.functions.invoke('test-smtp', {
         body: {
-          smtp_settings: {
-            host: smtpData.smtp_host,
-            port: smtpData.email_porta,
-            username: smtpData.email_smtp,
-            password: smtpData.smtp_pass,
-            from_email: smtpData.email_smtp,
-            from_name: smtpData.smtp_from_name,
-            security: smtpData.smtp_seguranca
-          }
+          smtp_host: smtpData.smtp_host,
+          email_porta: smtpData.email_porta,
+          email_usuario: smtpData.email_smtp,
+          smtp_pass: smtpData.smtp_pass,
+          smtp_seguranca: smtpData.smtp_seguranca
         }
       });
 
@@ -130,16 +149,16 @@ export function useSettings() {
       if (data?.success) {
         console.log('✅ SMTP test successful');
         toast.success('Conexão SMTP testada com sucesso!');
-        return true;
+        return { success: true, message: 'Conexão SMTP testada com sucesso!' };
       } else {
         console.log('❌ SMTP test failed:', data?.error);
         toast.error('Falha no teste SMTP: ' + (data?.error || 'Erro desconhecido'));
-        return false;
+        return { success: false, message: data?.error || 'Erro desconhecido' };
       }
     } catch (error: any) {
       console.error('❌ SMTP test error:', error);
       toast.error('Erro ao testar SMTP: ' + error.message);
-      return false;
+      return { success: false, message: error.message };
     }
   };
 
@@ -150,8 +169,9 @@ export function useSettings() {
   return {
     settings,
     loading,
+    error,
     fetchSettings,
     saveSettings,
-    testSMTPConnection
+    testSmtpConnection
   };
 }

@@ -71,7 +71,15 @@ export function SettingsForm({ onSave }: SettingsFormProps) {
   const handleTestConnection = async () => {
     setTestingConnection(true);
     try {
-      const result = await testSmtpConnection(formData);
+      const result = await testSmtpConnection({
+        smtp_host: formData.smtp_host || '',
+        smtp_from_name: formData.smtp_from_name || '',
+        email_smtp: formData.email_usuario || '',
+        smtp_pass: formData.smtp_pass || '',
+        email_porta: formData.email_porta || 587,
+        smtp_seguranca: formData.smtp_seguranca as 'tls' | 'ssl' | 'none',
+        use_smtp: true
+      });
       if (result.success) {
         toast.success('Conexão SMTP testada com sucesso!');
       } else {
