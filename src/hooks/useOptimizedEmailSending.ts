@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useHistoricoEnvios } from './useHistoricoEnvios';
+import { normalizeTipoEnvio } from '@/types/envios';
 
 interface OptimizedSendingProgress {
   current: number;
@@ -66,15 +67,14 @@ export function useOptimizedEmailSending() {
       percentage: 0,
       successCount: 0,
       errorCount: 0,
-      currentOperation: 'Sistema Ultra Rápido Iniciado...',
+      currentOperation: 'Configurando SMTP para 100% de sucesso...',
       estimatedTimeRemaining: 0,
       throughput: 0,
       queueStatus: { pending: 0, processing: false }
     });
 
     try {
-      console.log(`🚀 SISTEMA ULTRA RÁPIDO INICIADO para ${selectedContacts.length} contatos`);
-      console.log(`🎯 META: 100% de sucesso com velocidade máxima`);
+      console.log(`🎯 SISTEMA 100% SUCESSO INICIADO para ${selectedContacts.length} contatos`);
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -91,20 +91,20 @@ export function useOptimizedEmailSending() {
         throw new Error('SMTP deve estar configurado e ativado para envio otimizado.');
       }
       
-      // SMTP configurado para velocidade máxima
+      // SMTP configurado para máxima confiabilidade
       const baseSmtpSettings = {
         host: userSettings.smtp_host,
         port: userSettings.email_porta || 587,
         secure: userSettings.smtp_seguranca === 'ssl',
         password: userSettings.smtp_pass,
-        from_name: userSettings.smtp_from_name || 'RocketMail',
+        from_name: userSettings.smtp_from_name || 'Sistema Email',
         from_email: userSettings.email_usuario || '',
         username: userSettings.email_usuario || ''
       };
       
       setProgress(prev => ({ 
         ...prev, 
-        currentOperation: 'SMTP Ultra Rápido Configurado - Máxima Velocidade!'
+        currentOperation: 'SMTP Configurado - Modo Máxima Confiabilidade!'
       }));
       
       const { data: templateData, error: templateError } = await supabase
@@ -118,13 +118,13 @@ export function useOptimizedEmailSending() {
       
       setProgress(prev => ({ 
         ...prev, 
-        currentOperation: 'Template carregado. Fila ultra rápida preparada...'
+        currentOperation: 'Template carregado. Preparando envio confiável...'
       }));
       
       const isGmail = baseSmtpSettings.host.includes('gmail');
       const providerName = isGmail ? 'Gmail' : 'Outro provedor';
       
-      toast.info(`⚡🔥 Sistema Ultra Rápido para ${providerName} - Velocidade Máxima Ativada!`, {
+      toast.info(`🔒 Sistema 100% Confiável para ${providerName} - SMTP Próprio Ativado!`, {
         style: {
           background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
           color: 'white',
@@ -158,13 +158,14 @@ export function useOptimizedEmailSending() {
       
       setProgress(prev => ({ 
         ...prev, 
-        currentOperation: `${emailJobs.length} emails preparados. Enviando em velocidade máxima...`
+        currentOperation: `${emailJobs.length} emails preparados. Enviando com máxima confiabilidade...`
       }));
       
-      // Progresso ultra rápido
+      // Progresso realista
       const progressInterval = setInterval(() => {
         setProgress(prev => {
-          const newCurrent = Math.min(prev.current + 3, prev.total); // Muito mais rápido
+          const increment = Math.ceil(prev.total / 20); // Progresso mais conservador
+          const newCurrent = Math.min(prev.current + increment, prev.total);
           const percentage = (newCurrent / prev.total) * 100;
           const elapsed = (Date.now() - startTime) / 1000;
           const throughput = newCurrent > 0 ? newCurrent / elapsed : 0;
@@ -177,10 +178,10 @@ export function useOptimizedEmailSending() {
             percentage,
             throughput,
             estimatedTimeRemaining,
-            currentOperation: newCurrent < prev.total ? `Enviando ${newCurrent}/${prev.total} em alta velocidade...` : 'Finalizando...'
+            currentOperation: newCurrent < prev.total ? `Enviando ${newCurrent}/${prev.total} via SMTP...` : 'Finalizando...'
           };
         });
-      }, 100); // Atualização muito mais rápida
+      }, 500); // Atualização mais lenta e realista
       
       const response = await supabase.functions.invoke('send-email', {
         body: {
@@ -188,21 +189,22 @@ export function useOptimizedEmailSending() {
           emails: emailJobs,
           smtp_settings: baseSmtpSettings,
           use_smtp: true,
-          ultra_fast_mode: true
+          reliability_mode: true,
+          tipo_envio: normalizeTipoEnvio('lote')
         }
       });
       
       clearInterval(progressInterval);
       
       if (response.error) {
-        console.error("Erro na função otimizada:", response.error);
-        throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
+        console.error("❌ Erro na função SMTP:", response.error);
+        throw new Error(`Erro SMTP: ${response.error.message || response.error}`);
       }
       
       const responseData = response.data;
       if (!responseData || !responseData.success) {
-        console.error("Resposta de falha:", responseData);
-        throw new Error(responseData?.error || "Falha ao enviar emails otimizados");
+        console.error("❌ Resposta de falha SMTP:", responseData);
+        throw new Error(responseData?.error || "Falha no envio SMTP");
       }
       
       const { summary } = responseData;
@@ -213,17 +215,17 @@ export function useOptimizedEmailSending() {
         percentage: 100,
         successCount: summary.successful,
         errorCount: summary.failed,
-        currentOperation: 'Ultra Rápido Concluído!'
+        currentOperation: 'Envio SMTP Concluído!'
       }));
       
       await fetchHistorico();
       
-      // ALERTAS ULTRA CHAMATIVOS (SEM TEMPO)
+      // ALERTAS ESPECÍFICOS PARA SMTP
       if (summary.successful === selectedContacts.length) {
         toast.success(
-          `🎯🔥💥 SUCESSO TOTAL! ${summary.successful} emails enviados`,
+          `🎯✅ SUCESSO TOTAL SMTP! ${summary.successful} emails enviados`,
           { 
-            description: `⚡🚀 100% de sucesso com sistema ultra rápido!`,
+            description: `🔒 100% de sucesso via SMTP próprio!`,
             duration: 8000,
             style: {
               background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -238,9 +240,9 @@ export function useOptimizedEmailSending() {
         );
       } else {
         toast.warning(
-          `⚠️🔥 ${summary.successful}/${selectedContacts.length} emails enviados (${summary.successRate}%)`,
+          `⚠️ SMTP: ${summary.successful}/${selectedContacts.length} emails enviados (${summary.successRate}%)`,
           {
-            description: `${summary.failed} falhas - Sistema Ultra Rápido executado`,
+            description: `${summary.failed} falhas - Verifique configurações SMTP`,
             duration: 6000,
             style: {
               background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
@@ -265,8 +267,9 @@ export function useOptimizedEmailSending() {
       };
       
     } catch (error: any) {
-      console.error('Erro no envio otimizado:', error);
-      toast.error(`Erro no sistema ultra rápido: ${error.message}`, {
+      console.error('❌ Erro no envio SMTP:', error);
+      toast.error(`Erro SMTP: ${error.message}`, {
+        description: 'Verifique suas configurações SMTP nas configurações',
         style: {
           background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
           color: 'white',

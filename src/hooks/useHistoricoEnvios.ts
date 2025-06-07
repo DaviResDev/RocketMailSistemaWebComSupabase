@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { normalizeTipoEnvio } from '@/types/envios';
 
 export interface HistoricoEnvio {
   id: string;
@@ -15,7 +16,7 @@ export interface HistoricoEnvio {
   destinatario_email: string;
   status: 'pendente' | 'enviado' | 'erro' | 'cancelado' | 'agendado';
   template_nome: string | null;
-  tipo_envio: 'imediato' | 'agendado';
+  tipo_envio: string;
   mensagem_erro: string | null;
   data_envio: string;
   created_at: string;
@@ -30,7 +31,7 @@ export interface CreateHistoricoEnvio {
   destinatario_email: string;
   status: 'pendente' | 'enviado' | 'erro' | 'cancelado' | 'agendado';
   template_nome?: string;
-  tipo_envio: 'imediato' | 'agendado';
+  tipo_envio: string;
   mensagem_erro?: string;
 }
 
@@ -70,14 +71,12 @@ export function useHistoricoEnvios() {
     }
 
     try {
-      // CORREÇÃO: Validação rigorosa de campos obrigatórios
+      // Validação e normalização rigorosa
       const validStatus = ['pendente', 'enviado', 'erro', 'cancelado', 'agendado'].includes(data.status) 
         ? data.status 
         : 'enviado';
       
-      const validTipoEnvio = ['imediato', 'agendado'].includes(data.tipo_envio)
-        ? data.tipo_envio
-        : 'imediato';
+      const normalizedTipoEnvio = normalizeTipoEnvio(data.tipo_envio || 'individual');
       
       // Verificar campos obrigatórios
       if (!data.remetente_nome || !data.remetente_email || !data.destinatario_nome || !data.destinatario_email) {
@@ -90,13 +89,13 @@ export function useHistoricoEnvios() {
         .insert([{
           ...data,
           status: validStatus,
-          tipo_envio: validTipoEnvio,
+          tipo_envio: normalizedTipoEnvio,
           user_id: user.id
         }]);
 
       if (error) throw error;
       
-      console.log(`✅ Registro criado no histórico: ${data.destinatario_email} - ${validStatus}`);
+      console.log(`✅ Registro criado no histórico: ${data.destinatario_email} - ${validStatus} - ${normalizedTipoEnvio}`);
       await fetchHistorico();
     } catch (error: any) {
       console.error('Erro ao criar registro no histórico:', error);
@@ -110,7 +109,7 @@ export function useHistoricoEnvios() {
     }
 
     try {
-      // CORREÇÃO: Validação rigorosa para cada record
+      // Validação e normalização rigorosa para cada record
       const recordsWithUserId = records
         .filter(record => {
           // Filtrar records com campos obrigatórios
@@ -122,14 +121,12 @@ export function useHistoricoEnvios() {
             ? record.status 
             : 'enviado';
           
-          const validTipoEnvio = ['imediato', 'agendado'].includes(record.tipo_envio)
-            ? record.tipo_envio
-            : 'imediato';
+          const normalizedTipoEnvio = normalizeTipoEnvio(record.tipo_envio || 'individual');
           
           return {
             ...record,
             status: validStatus,
-            tipo_envio: validTipoEnvio,
+            tipo_envio: normalizedTipoEnvio,
             user_id: user.id
           };
         });

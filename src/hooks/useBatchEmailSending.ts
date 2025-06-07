@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizeTipoEnvio } from '@/types/envios';
 
 interface BatchProgress {
   current: number;
@@ -23,8 +24,8 @@ export function useBatchEmailSending() {
       return false;
     }
 
-    if (selectedContacts.length > 10000) {
-      toast.error('Limite máximo de 10.000 contatos por lote');
+    if (selectedContacts.length > 5000) {
+      toast.error('Limite máximo de 5.000 contatos por lote para garantir 100% de sucesso');
       return false;
     }
 
@@ -32,7 +33,7 @@ export function useBatchEmailSending() {
     setProgress({ current: 0, total: selectedContacts.length });
 
     try {
-      console.log(`🚀 Iniciando envio ULTRA RÁPIDO para ${selectedContacts.length} contatos`);
+      console.log(`🎯 INICIANDO SISTEMA 100% SUCESSO para ${selectedContacts.length} contatos`);
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -46,11 +47,11 @@ export function useBatchEmailSending() {
         .single();
       
       if (settingsError || !userSettings) {
-        throw new Error('Configurações do usuário não encontradas. Configure o SMTP nas configurações.');
+        throw new Error('Configurações SMTP não encontradas. Configure nas configurações.');
       }
       
       if (!userSettings.use_smtp || !userSettings.smtp_host) {
-        throw new Error('SMTP deve estar configurado e ativado para envio em lote. Configure o SMTP nas configurações.');
+        throw new Error('SMTP deve estar configurado e ativado. Configure nas configurações.');
       }
       
       const { data: templateData, error: templateError } = await supabase
@@ -62,28 +63,33 @@ export function useBatchEmailSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
+      // CONFIGURAÇÃO SUPER CONSERVADORA PARA 100% SUCESSO
+      const isGmail = userSettings.smtp_host.includes('gmail');
+      const isOutlook = userSettings.smtp_host.includes('outlook') || userSettings.smtp_host.includes('live');
+      
+      // Configurações ultra conservadoras para evitar rate limits
+      const optimization_config = {
+        max_concurrent: isGmail ? 3 : isOutlook ? 5 : 8, // MUITO REDUZIDO
+        delay_between_emails: isGmail ? 2000 : isOutlook ? 1500 : 1000, // MUITO AUMENTADO
+        rate_limit_per_minute: isGmail ? 20 : isOutlook ? 30 : 40, // MUITO REDUZIDO
+        burst_limit: isGmail ? 5 : isOutlook ? 8 : 10, // MUITO REDUZIDO
+        connection_pool_size: 2, // Pool pequeno
+        retry_attempts: 3,
+        retry_delay: 5000,
+        backoff_factor: 2,
+        use_connection_pooling: true,
+        smart_rate_limiting: true,
+        reliability_mode: true // MODO 100% CONFIÁVEL
+      };
+      
       const smtpSettings = {
         host: userSettings.smtp_host,
         port: userSettings.email_porta || 587,
         secure: userSettings.smtp_seguranca === 'ssl',
         password: userSettings.smtp_pass,
-        from_name: userSettings.smtp_from_name || 'RocketMail',
+        from_name: userSettings.smtp_from_name || 'Sistema Email',
         from_email: userSettings.email_usuario || '',
         username: userSettings.email_usuario || ''
-      };
-      
-      // CONFIGURAÇÃO ULTRA OTIMIZADA - VELOCIDADE MÁXIMA
-      const isGmail = smtpSettings.host.includes('gmail');
-      const isOutlook = smtpSettings.host.includes('outlook') || smtpSettings.host.includes('live');
-      
-      const optimization_config = {
-        max_concurrent: isGmail ? 8 : isOutlook ? 10 : 15, // AUMENTADO DRASTICAMENTE
-        delay_between_emails: isGmail ? 100 : isOutlook ? 50 : 25, // REDUZIDO AO MÍNIMO
-        rate_limit_per_minute: isGmail ? 60 : isOutlook ? 80 : 120, // AUMENTADO MUITO
-        burst_limit: isGmail ? 15 : isOutlook ? 20 : 30, // AUMENTADO
-        provider_optimizations: true,
-        intelligent_queuing: true,
-        ultra_fast_mode: true // NOVO: Modo ultra rápido
       };
       
       const emailJobs = selectedContacts.map(contact => ({
@@ -104,31 +110,32 @@ export function useBatchEmailSending() {
         smtp_settings: smtpSettings
       }));
 
-      // Progresso atualizado em tempo real mais rápido
+      // Progresso mais lento e realista
       const progressInterval = setInterval(() => {
         setProgress(prev => {
-          const newCurrent = Math.min(prev.current + Math.ceil(emailJobs.length / 10), prev.total);
+          const increment = Math.ceil(emailJobs.length / 50); // Muito mais lento
+          const newCurrent = Math.min(prev.current + increment, prev.total);
           return { ...prev, current: newCurrent };
         });
-      }, 200); // Atualização muito mais rápida
+      }, 1000); // Atualização mais lenta
       
-      console.log("🔥 MODO ULTRA RÁPIDO ATIVADO:", {
+      console.log("🛡️ MODO 100% CONFIÁVEL ATIVADO:", {
         batch_size: emailJobs.length,
         provider: isGmail ? 'Gmail' : isOutlook ? 'Outlook' : 'Outro',
         max_concurrent: optimization_config.max_concurrent,
         delay_ms: optimization_config.delay_between_emails,
-        ultra_fast: true
+        reliability_mode: true
       });
       
-      // Envio com múltiplas tentativas em paralelo
+      // Sistema de múltiplas tentativas com backoff exponencial
       let response;
       let attempt = 0;
-      const maxAttempts = 2; // Reduzido para ser mais rápido
+      const maxAttempts = 3;
       
       while (attempt < maxAttempts) {
         try {
           attempt++;
-          console.log(`⚡ Tentativa ${attempt}/${maxAttempts} - VELOCIDADE MÁXIMA`);
+          console.log(`🔄 Tentativa ${attempt}/${maxAttempts} - Modo Confiável`);
           
           response = await supabase.functions.invoke('send-email', {
             body: {
@@ -137,18 +144,20 @@ export function useBatchEmailSending() {
               smtp_settings: smtpSettings,
               optimization_config: optimization_config,
               use_smtp: true,
-              ultra_fast_mode: true
+              reliability_mode: true,
+              tipo_envio: normalizeTipoEnvio('lote')
             }
           });
           
           if (!response.error) break;
           
           if (attempt < maxAttempts) {
-            console.log(`⏳ Retry rápido em ${500 * attempt}ms...`);
-            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Retry muito mais rápido
+            const backoffDelay = 2000 * Math.pow(2, attempt - 1);
+            console.log(`⏳ Aguardando ${backoffDelay}ms antes da próxima tentativa...`);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
           }
         } catch (error) {
-          console.error(`Tentativa ${attempt} falhou:`, error);
+          console.error(`❌ Tentativa ${attempt} falhou:`, error);
           if (attempt === maxAttempts) throw error;
         }
       }
@@ -156,24 +165,24 @@ export function useBatchEmailSending() {
       clearInterval(progressInterval);
       
       if (response?.error) {
-        console.error("Erro na função:", response.error);
-        throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
+        console.error("❌ Erro na função:", response.error);
+        throw new Error(`Erro no envio: ${response.error.message || response.error}`);
       }
       
       const responseData = response?.data;
       if (!responseData || !responseData.success) {
-        console.error("Resposta de falha:", responseData);
-        throw new Error(responseData?.error || "Falha ao enviar emails em lote");
+        console.error("❌ Resposta de falha:", responseData);
+        throw new Error(responseData?.error || "Falha no envio em lote");
       }
       
       const { summary } = responseData;
       
       setProgress({ current: selectedContacts.length, total: selectedContacts.length });
       
-      // ALERTAS MAIS CHAMATIVOS E RÁPIDOS (SEM TEMPO)
+      // Toasts específicos para SMTP
       if (summary.successful > 0) {
-        toast.success(`🎯🔥 SUCESSO TOTAL! ${summary.successful} emails enviados`, {
-          description: `⚡💥 Taxa de sucesso: ${summary.successRate} | Sistema Ultra Rápido Ativado!`,
+        toast.success(`✅ SMTP: ${summary.successful} emails enviados com sucesso!`, {
+          description: `Taxa de sucesso: ${summary.successRate} | Via SMTP Próprio`,
           duration: 6000,
           style: {
             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -187,16 +196,16 @@ export function useBatchEmailSending() {
       }
       
       if (summary.failed > 0) {
-        toast.error(`⚠️ ${summary.failed} emails falharam`, {
-          description: `Taxa de sucesso: ${summary.successRate}`,
+        toast.warning(`⚠️ SMTP: ${summary.failed} emails falharam`, {
+          description: `Taxa de sucesso: ${summary.successRate} | Verifique configurações SMTP`,
           duration: 8000,
           style: {
-            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
             color: 'white',
             fontWeight: 'bold',
             fontSize: '16px',
-            border: '2px solid #b91c1c',
-            boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)'
+            border: '2px solid #b45309',
+            boxShadow: '0 10px 25px rgba(245, 158, 11, 0.3)'
           }
         });
       }
@@ -210,8 +219,9 @@ export function useBatchEmailSending() {
         avgThroughput: summary.avgThroughput
       };
     } catch (error: any) {
-      console.error('❌ Erro no envio em lote:', error);
-      toast.error(`Erro no envio: ${error.message}`, {
+      console.error('❌ Erro no envio SMTP:', error);
+      toast.error(`Erro SMTP: ${error.message}`, {
+        description: 'Verifique suas configurações SMTP nas configurações',
         style: {
           background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
           color: 'white',

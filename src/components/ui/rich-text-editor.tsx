@@ -1,558 +1,219 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  Bold,
-  Italic,
-  Underline,
-  AlignLeft,
-  AlignCenter,
+
+import React from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import TextAlign from '@tiptap/extension-text-align';
+import Underline from '@tiptap/extension-underline';
+import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
+import { 
+  Bold, 
+  Italic, 
+  Underline as UnderlineIcon, 
+  AlignLeft, 
+  AlignCenter, 
   AlignRight,
-  AlignJustify,
   List,
   ListOrdered,
-  Image as ImageIcon,
+  Quote,
+  Undo,
+  Redo,
   Link as LinkIcon,
-  Unlink,
-  Type,
+  Image as ImageIcon
 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from './button';
+import { Separator } from './separator';
 
 interface RichTextEditorProps {
-  value?: string;
+  content: string;
   onChange: (content: string) => void;
   placeholder?: string;
-  minHeight?: string;
-  className?: string;
-  onImageUpload?: (file: File) => Promise<string>;
 }
 
-export function RichTextEditor({
-  value,
+export const RichTextEditor: React.FC<RichTextEditorProps> = ({
+  content,
   onChange,
-  placeholder = 'Digite seu texto aqui...',
-  minHeight = '200px',
-  className = '',
-  onImageUpload
-}: RichTextEditorProps) {
-  const [editorContent, setEditorContent] = useState(value || '');
-  const [isEmpty, setIsEmpty] = useState(!value || value === '');
-  const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
-  const [linkUrl, setLinkUrl] = useState('');
-  const [linkText, setLinkText] = useState('');
-  const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
-  const [customFontSize, setCustomFontSize] = useState('16');
+  placeholder = "Digite seu conteúdo aqui..."
+}) => {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      Underline,
+      Image,
+      Link.configure({
+        openOnClick: false,
+      }),
+    ],
+    content,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
+  });
 
-  // Format commands that can be applied to selected text
-  const formatText = (action: string) => {
-    const editor = editorRef.current;
-    if (!editor) return;
+  if (!editor) {
+    return null;
+  }
 
-    switch (action) {
-      case 'bold':
-        document.execCommand('bold', false);
-        break;
-      case 'italic':
-        document.execCommand('italic', false);
-        break;
-      case 'underline':
-        document.execCommand('underline', false);
-        break;
-      case 'heading':
-        document.execCommand('formatBlock', false, 'h3');
-        break;
-      case 'align-left':
-        document.execCommand('justifyLeft', false);
-        break;
-      case 'align-center':
-        document.execCommand('justifyCenter', false);
-        break;
-      case 'align-right':
-        document.execCommand('justifyRight', false);
-        break;
-      case 'align-justify':
-        document.execCommand('justifyFull', false);
-        break;
-      case 'list-unordered':
-        document.execCommand('insertUnorderedList', false);
-        break;
-      case 'list-ordered':
-        document.execCommand('insertOrderedList', false);
-        break;
-      case 'image':
-        if (onImageUpload) {
-          triggerImageUpload();
-        } else {
-          const imageUrl = prompt('Digite a URL da imagem:');
-          if (imageUrl) {
-            document.execCommand('insertImage', false, imageUrl);
-          }
-        }
-        break;
-      case 'link':
-        const selection = window.getSelection();
-        if (selection && selection.toString()) {
-          setLinkText(selection.toString());
-          setLinkUrl('https://');
-          setLinkPopoverOpen(true);
-        } else {
-          setLinkText('');
-          setLinkUrl('https://');
-          setLinkPopoverOpen(true);
-        }
-        break;
-      case 'unlink':
-        document.execCommand('unlink', false);
-        break;
-      case 'font-size':
-        setFontSizePopoverOpen(true);
-        break;
-    }
-
-    // After applying format, update state
-    if (editor) {
-      setEditorContent(editor.innerHTML);
-      checkIfEmpty(editor.innerHTML);
-      onChange(editor.innerHTML);
+  const addImage = () => {
+    const url = window.prompt('URL da imagem:');
+    if (url) {
+      editor.chain().focus().setImage({ src: url }).run();
     }
   };
 
-  // Apply font size to selected text
-  const applyFontSize = (size: string) => {
-    const selection = window.getSelection();
-    if (selection && selection.toString()) {
-      // Use CSS styling instead of deprecated fontSize command
-      document.execCommand('styleWithCSS', false, 'true');
-      document.execCommand('insertHTML', false, `<span style="font-size: ${size}px;">${selection.toString()}</span>`);
-      
-      // Clear selection
-      selection.removeAllRanges();
-    } else if (customFontSize) {
-      // If no selection, apply to future text
-      document.execCommand('styleWithCSS', false, 'true');
-      document.execCommand('fontSize', false, '7'); // This will be overridden by CSS
-      const editor = editorRef.current;
-      if (editor) {
-        const spans = editor.querySelectorAll('font[size="7"]');
-        spans.forEach(span => {
-          // FIXED: Properly cast Element to HTMLElement to access style property
-          if (span instanceof HTMLElement) {
-            span.style.fontSize = `${customFontSize}px`;
-            span.removeAttribute('size');
-          }
-        });
-      }
-    }
-    
-    setFontSizePopoverOpen(false);
-    
-    // Update state
-    if (editorRef.current) {
-      setEditorContent(editorRef.current.innerHTML);
-      checkIfEmpty(editorRef.current.innerHTML);
-      onChange(editorRef.current.innerHTML);
-    }
-  };
+  const addLink = () => {
+    const previousUrl = editor.getAttributes('link').href;
+    const url = window.prompt('URL do link:', previousUrl);
 
-  // Predefined font sizes
-  const fontSizes = ['10', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48'];
-
-  // Insert link using the URL from popover
-  const insertLink = () => {
-    if (!linkUrl.trim()) return;
-    
-    const editor = editorRef.current;
-    if (!editor) return;
-    
-    const selection = window.getSelection();
-    if (selection) {
-      // If no text is selected but link text is provided, insert new link
-      if ((!selection.toString() || selection.toString() === '') && linkText) {
-        document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkText}</a>`);
-      } 
-      // If text is selected, wrap it in link
-      else if (selection.toString()) {
-        document.execCommand('createLink', false, linkUrl);
-        const links = editor.querySelectorAll('a');
-        links.forEach(link => {
-          link.setAttribute('target', '_blank');
-        });
-      }
-      // No selection and no link text, just insert the URL as a link
-      else {
-        document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkUrl}</a>`);
-      }
-    }
-    
-    setLinkPopoverOpen(false);
-    setLinkUrl('');
-    setLinkText('');
-    
-    // Update state
-    setEditorContent(editor.innerHTML);
-    checkIfEmpty(editor.innerHTML);
-    onChange(editor.innerHTML);
-  };
-
-  // Handle image upload - UPDATED to accept all image types
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!onImageUpload || !e.target.files || e.target.files.length === 0) return;
-
-    const file = e.target.files[0];
-    
-    // Verificar se o arquivo é uma imagem
-    if (!file.type.startsWith('image/')) {
-      console.error('Arquivo selecionado não é uma imagem');
+    if (url === null) {
       return;
     }
-    
-    try {
-      const url = await onImageUpload(file);
-      if (url) {
-        document.execCommand('insertImage', false, url);
-        
-        // Update state
-        if (editorRef.current) {
-          setEditorContent(editorRef.current.innerHTML);
-          setIsEmpty(false);
-          onChange(editorRef.current.innerHTML);
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao enviar imagem:', error);
-    } finally {
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
     }
+
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
-
-  // Hidden file input for image upload
-  const triggerImageUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  // Focus editor when it's empty and receives focus
-  const handleEditorFocus = () => {
-    if (editorRef.current && editorRef.current.innerHTML === '') {
-      editorRef.current.innerHTML = '<p><br></p>';
-      setIsEmpty(false);
-    }
-  };
-
-  // Check if the editor content is empty
-  const checkIfEmpty = (content: string) => {
-    const isContentEmpty = !content || 
-                          content === '' || 
-                          content === '<p></p>' || 
-                          content === '<p><br></p>' || 
-                          content === '<br>';
-    setIsEmpty(isContentEmpty);
-  };
-
-  // Handle changes in the editor content
-  const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
-    const content = e.currentTarget.innerHTML;
-    setEditorContent(content);
-    checkIfEmpty(content);
-    onChange(content);
-  };
-
-  // Handle paste to strip formatting
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const text = e.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, text);
-  };
-
-  // Synchronize with external value change
-  useEffect(() => {
-    if (value !== undefined && value !== editorContent) {
-      setEditorContent(value);
-      checkIfEmpty(value);
-    }
-  }, [value]);
-
-  // Initial check for empty content
-  useEffect(() => {
-    checkIfEmpty(editorContent);
-  }, []);
 
   return (
-    <div className={`border rounded-md bg-background ${className}`}>
-      <div className="bg-muted/40 p-1 border-b flex flex-wrap items-center gap-1">
+    <div className="border border-input rounded-md">
+      <div className="border-b border-input p-2 flex flex-wrap gap-1">
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('bold')}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          className={editor.isActive('bold') ? 'bg-muted' : ''}
         >
           <Bold className="h-4 w-4" />
         </Button>
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('italic')}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          className={editor.isActive('italic') ? 'bg-muted' : ''}
         >
           <Italic className="h-4 w-4" />
         </Button>
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('underline')}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          className={editor.isActive('underline') ? 'bg-muted' : ''}
         >
-          <Underline className="h-4 w-4" />
+          <UnderlineIcon className="h-4 w-4" />
         </Button>
         
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('heading')}
-        >
-          <span className="font-bold text-sm">H3</span>
-        </Button>
-        
-        <Popover open={fontSizePopoverOpen} onOpenChange={setFontSizePopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => formatText('font-size')}
-            >
-              <Type className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          
-          <PopoverContent className="w-80 p-4" align="start">
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="font-size-select">Tamanho da Fonte</Label>
-                <Select value={customFontSize} onValueChange={setCustomFontSize}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tamanho" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fontSizes.map(size => (
-                      <SelectItem key={size} value={size}>
-                        {size}px
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="custom-font-size">Tamanho Personalizado (px)</Label>
-                  <Input
-                    id="custom-font-size"
-                    type="number"
-                    value={customFontSize}
-                    onChange={(e) => setCustomFontSize(e.target.value)}
-                    placeholder="16"
-                    min="8"
-                    max="100"
-                  />
-                </div>
-              </div>
-              
-              <div className="flex justify-between">
-                <Button type="button" variant="outline" onClick={() => setFontSizePopoverOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="button" onClick={() => applyFontSize(customFontSize)}>
-                  Aplicar Tamanho
-                </Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-        
-        <span className="w-px h-6 bg-border mx-1" />
+        <Separator orientation="vertical" className="h-8" />
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('align-left')}
+          size="sm"
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          className={editor.isActive({ textAlign: 'left' }) ? 'bg-muted' : ''}
         >
           <AlignLeft className="h-4 w-4" />
         </Button>
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('align-center')}
+          size="sm"
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          className={editor.isActive({ textAlign: 'center' }) ? 'bg-muted' : ''}
         >
           <AlignCenter className="h-4 w-4" />
         </Button>
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('align-right')}
+          size="sm"
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          className={editor.isActive({ textAlign: 'right' }) ? 'bg-muted' : ''}
         >
           <AlignRight className="h-4 w-4" />
         </Button>
         
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('align-justify')}
-        >
-          <AlignJustify className="h-4 w-4" />
-        </Button>
-        
-        <span className="w-px h-6 bg-border mx-1" />
+        <Separator orientation="vertical" className="h-8" />
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('list-unordered')}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          className={editor.isActive('bulletList') ? 'bg-muted' : ''}
         >
           <List className="h-4 w-4" />
         </Button>
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('list-ordered')}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          className={editor.isActive('orderedList') ? 'bg-muted' : ''}
         >
           <ListOrdered className="h-4 w-4" />
         </Button>
         
-        <span className="w-px h-6 bg-border mx-1" />
-        
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('image')}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          className={editor.isActive('blockquote') ? 'bg-muted' : ''}
         >
-          <ImageIcon className="h-4 w-4" />
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            onChange={handleImageUpload}
-            accept="image/*"
-          />
+          <Quote className="h-4 w-4" />
         </Button>
         
-        <Popover open={linkPopoverOpen} onOpenChange={setLinkPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => formatText('link')}
-            >
-              <LinkIcon className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          
-          <PopoverContent className="w-80 p-4" align="start">
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="link-text">Texto do Link</Label>
-                  <Input
-                    id="link-text"
-                    value={linkText}
-                    onChange={(e) => setLinkText(e.target.value)}
-                    placeholder="Texto a ser exibido"
-                  />
-                </div>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="link-url">URL do Link</Label>
-                  <Input
-                    id="link-url"
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    placeholder="https://exemplo.com"
-                  />
-                </div>
-              </div>
-              
-              <div className="flex justify-between">
-                <Button type="button" variant="outline" onClick={() => setLinkPopoverOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="button" onClick={insertLink}>
-                  Inserir Link
-                </Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <Separator orientation="vertical" className="h-8" />
         
         <Button
-          type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => formatText('unlink')}
+          size="sm"
+          onClick={addLink}
+          className={editor.isActive('link') ? 'bg-muted' : ''}
         >
-          <Unlink className="h-4 w-4" />
+          <LinkIcon className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={addImage}
+        >
+          <ImageIcon className="h-4 w-4" />
+        </Button>
+        
+        <Separator orientation="vertical" className="h-8" />
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor.chain().focus().undo().run()}
+          disabled={!editor.can().chain().focus().undo().run()}
+        >
+          <Undo className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor.chain().focus().redo().run()}
+          disabled={!editor.can().chain().focus().redo().run()}
+        >
+          <Redo className="h-4 w-4" />
         </Button>
       </div>
       
-      <div className="relative">
-        <div
-          ref={editorRef}
-          className="p-4 focus:outline-none"
-          contentEditable="true"
-          dangerouslySetInnerHTML={{ __html: editorContent }}
-          onInput={handleEditorChange}
-          onFocus={handleEditorFocus}
-          onPaste={handlePaste}
-          style={{ 
-            minHeight, 
-            direction: 'ltr',
-            textAlign: 'left'
-          }}
-          dir="ltr"
-          data-placeholder={placeholder}
-        />
-        {isEmpty && (
-          <div 
-            className="absolute top-0 left-0 p-4 pointer-events-none text-muted-foreground"
-            style={{ minHeight }}
-          >
-            {placeholder}
-          </div>
-        )}
-      </div>
+      <EditorContent 
+        editor={editor} 
+        className="prose prose-sm max-w-none p-4 min-h-[200px] focus:outline-none"
+      />
     </div>
   );
-}
+};
+
+export default RichTextEditor;
