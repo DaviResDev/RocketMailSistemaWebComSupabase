@@ -1,24 +1,25 @@
 
-// email-sender.js - Email sending functionality has been removed
+// email-sender.js - REMOVIDO: Funcionalidade Resend completamente removida
 
 /**
- * Email sending functionality has been completely removed from the system
- * This file is kept for reference but all functions now return errors
+ * Funcionalidade Resend foi completamente removida do sistema
+ * Todos os envios agora usam obrigatoriamente o SMTP configurado pelo usuário
+ * Este arquivo é mantido apenas para referência histórica
  */
 
 async function sendEmailViaSMTP(config, payload) {
-  console.log("Email sending functionality has been removed");
-  throw new Error("Funcionalidade de envio SMTP foi removida do sistema");
+  console.log("⚠️ Função depreciada: Use o processador SMTP otimizado");
+  throw new Error("Use o processador SMTP otimizado em optimized-processor.ts");
 }
 
 async function sendEmailViaResend(resendApiKey, fromName, replyTo, payload) {
-  console.log("Email sending functionality has been removed");
-  throw new Error("Funcionalidade de envio Resend foi removida do sistema");
+  console.log("🚫 Resend foi REMOVIDO: Use apenas SMTP do usuário");
+  throw new Error("Resend foi removido. Use apenas SMTP configurado pelo usuário");
 }
 
 async function sendEmail(payload, useSmtp, smtpConfig, resendApiKey, fromName) {
-  console.log("Email sending functionality has been removed");
-  throw new Error("Funcionalidade de envio de email foi removida do sistema");
+  console.log("🚫 Função depreciada: Use processOptimizedBatch ou processSingleSend");
+  throw new Error("Use processOptimizedBatch ou processSingleSend do optimized-processor.ts");
 }
 
 // Export functions as ES modules

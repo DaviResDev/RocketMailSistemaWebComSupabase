@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { processOptimizedBatch } from './optimized-processor.ts';
+import { processOptimizedBatch, processSingleSend } from './optimized-processor.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,21 +16,32 @@ serve(async (req) => {
 
   try {
     const requestData = await req.json();
-    console.log("📨 Recebida requisição de envio:", {
+    console.log("📨 Recebida requisição de envio SMTP:", {
       batch: !!requestData.batch,
       emails_count: requestData.emails?.length || 0,
-      optimized: !!requestData.optimization_config,
-      provider: requestData.smtp_settings?.host || 'não configurado'
+      smtp_configured: !!requestData.smtp_settings?.host,
+      host: requestData.smtp_settings?.host || 'não configurado'
     });
 
-    // Verifica se é um envio em lote com configuração de otimização
-    if (requestData.batch && requestData.optimization_config && requestData.emails) {
-      console.log("🚀 Processando lote otimizado com sistema anti-421");
+    // Verificar se SMTP está configurado
+    if (!requestData.smtp_settings || !requestData.smtp_settings.host) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "SMTP deve estar configurado. Configure nas configurações do sistema." 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verifica se é um envio em lote
+    if (requestData.batch && requestData.emails && requestData.emails.length > 1) {
+      console.log(`🚀 Processando lote SMTP otimizado: ${requestData.emails.length} emails`);
       
       const result = await processOptimizedBatch({
         emails: requestData.emails,
         smtp_settings: requestData.smtp_settings,
-        optimization_config: requestData.optimization_config
+        optimization_config: requestData.optimization_config || {}
       });
       
       return new Response(
@@ -42,78 +53,51 @@ serve(async (req) => {
       );
     }
 
-    // Fallback para envios sem configuração de otimização (compatibilidade)
-    if (requestData.batch && requestData.emails) {
-      console.log("📧 Processando lote padrão sem otimização");
-      
-      // Aplicar configuração padrão de otimização
-      const defaultOptimizationConfig = {
-        max_concurrent: 2,
-        delay_between_emails: 3000,
-        rate_limit_per_minute: 15,
-        burst_limit: 5,
-        provider_optimizations: true,
-        intelligent_queuing: true
-      };
-      
-      const result = await processOptimizedBatch({
-        emails: requestData.emails,
-        smtp_settings: requestData.smtp_settings,
-        optimization_config: defaultOptimizationConfig
-      });
-      
-      return new Response(
-        JSON.stringify(result),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-
-    // Envio individual
-    console.log("📧 Processando envio individual");
+    // Envio individual via SMTP
+    console.log("📧 Processando envio individual via SMTP");
     
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    let emailData;
+    if (requestData.emails && requestData.emails.length === 1) {
+      emailData = requestData.emails[0];
+    } else {
+      // Formato de envio individual direto
+      emailData = {
+        to: requestData.to,
+        subject: requestData.subject,
+        content: requestData.content,
+        contato_id: requestData.contato_id,
+        template_id: requestData.template_id
+      };
+    }
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-
-    const { to, subject, content, contato_id, template_id } = requestData;
-
-    if (!to || !subject || !content) {
+    if (!emailData.to || !emailData.subject || !emailData.content) {
       return new Response(
-        JSON.stringify({ success: false, message: 'Parâmetros obrigatórios: to, subject, content' }),
+        JSON.stringify({ 
+          success: false, 
+          message: 'Parâmetros obrigatórios: to, subject, content' 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Para envio individual, simular sucesso (implementar SMTP real se necessário)
-    console.log(`📧 Enviado individual para ${to} com sucesso (simulado)`);
+    // Processar envio individual via SMTP
+    const result = await processSingleSend(emailData, requestData.smtp_settings);
     
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: "Email individual enviado com sucesso"
-      }),
+      JSON.stringify(result),
       { 
-        status: 200, 
+        status: result.success ? 200 : 500, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
     
   } catch (error: any) {
-    console.error("❌ Erro no processamento de envio:", error);
+    console.error("❌ Erro no processamento SMTP:", error);
     
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error.message || "Erro interno no servidor",
+        error: error.message || "Erro interno no servidor SMTP",
         timestamp: new Date().toISOString()
       }),
       { 
