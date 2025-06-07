@@ -316,10 +316,22 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
                       <SignaturePreview 
                         settings={{
                           ...settings,
-                          smtp_nome: formData.smtp_nome || settings.smtp_nome,
-                          email_usuario: formData.email_usuario || settings.email_usuario,
-                          area_negocio: formData.area_negocio || settings.area_negocio,
-                          signature_image: formData.signature_image || settings.signature_image
+                          smtp_nome: formData.smtp_nome || settings.smtp_nome || null,
+                          email_usuario: formData.email_usuario || settings.email_usuario || null,
+                          area_negocio: formData.area_negocio || settings.area_negocio || null,
+                          signature_image: formData.signature_image || settings.signature_image || null,
+                          // Ensure all required Settings properties are included
+                          email_smtp: settings.email_smtp || null,
+                          email_porta: settings.email_porta || null,
+                          email_senha: settings.email_senha || null,
+                          foto_perfil: formData.foto_perfil || settings.foto_perfil || null,
+                          smtp_seguranca: settings.smtp_seguranca || null,
+                          whatsapp_token: settings.whatsapp_token || null,
+                          two_factor_enabled: settings.two_factor_enabled || false,
+                          use_smtp: settings.use_smtp || false,
+                          smtp_host: settings.smtp_host || null,
+                          smtp_pass: settings.smtp_pass || null,
+                          smtp_from_name: settings.smtp_from_name || null
                         }} 
                       />
                     )}
