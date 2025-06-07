@@ -4,7 +4,6 @@ import { SettingsForm } from '@/components/settings/SettingsForm';
 import { SecuritySettingsForm } from '@/components/settings/SecuritySettingsForm';
 import { AccountDeletionForm } from '@/components/settings/AccountDeletionForm';
 import { SmtpStatusIndicator } from '@/components/settings/SmtpStatusIndicator';
-import { SmtpConfiguracaoForm } from '@/components/settings/SmtpConfiguracaoForm';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -81,7 +80,6 @@ export default function Configuracoes() {
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Perfil</TabsTrigger>
           <TabsTrigger value="smtp">SMTP</TabsTrigger>
-          <TabsTrigger value="smtp-advanced">SMTP Avançado</TabsTrigger>
           <TabsTrigger value="security">Segurança</TabsTrigger>
           <TabsTrigger value="account">Conta</TabsTrigger>
         </TabsList>
@@ -100,10 +98,6 @@ export default function Configuracoes() {
               toast.success('Configurações SMTP atualizadas com sucesso!');
             }}
           />
-        </TabsContent>
-
-        <TabsContent value="smtp-advanced">
-          <SmtpConfiguracaoForm />
         </TabsContent>
         
         <TabsContent value="security">

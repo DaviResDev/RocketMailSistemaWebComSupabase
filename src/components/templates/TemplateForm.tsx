@@ -5,14 +5,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Save, ArrowLeft, Send, Eye } from 'lucide-react';
 import { RichTextEditor } from '@/components/templates/RichTextEditor';
 import { ImageUploader } from '@/components/templates/ImageUploader';
 import { TemplateFileUpload } from '@/components/templates/TemplateFileUpload';
 import { TemplatePreview } from '@/components/templates/TemplatePreview';
 import { FontSizeSelector } from '@/components/templates/FontSizeSelector';
+import { VariableInserter } from '@/components/templates/VariableInserter';
 import { Template, TemplateFormData } from '@/types/template';
 import { TemplateFormProps } from './TemplateFormProps';
 import { toast } from 'sonner';
@@ -31,7 +30,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
     template_file_name: null,
     template_file: null,
     image_url: null,
-    font_size_px: '16px' // Valor padrão
+    font_size_px: '16px'
   });
 
   const [showPreview, setShowPreview] = useState(false);
@@ -53,7 +52,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
         template_file_name: template.template_file_name || null,
         template_file: null,
         image_url: template.image_url || null,
-        font_size_px: template.font_size_px || '16px' // Incluir o tamanho da fonte
+        font_size_px: template.font_size_px || '16px'
       });
     }
   }, [template, isEditing]);
@@ -105,6 +104,13 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
     }
   };
 
+  const handleInsertVariable = (variable: string) => {
+    setFormData({ 
+      ...formData, 
+      conteudo: formData.conteudo + ' ' + variable 
+    });
+  };
+
   if (showPreview) {
     return (
       <div className="space-y-4">
@@ -127,161 +133,152 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
-      <form onSubmit={handleSubmit}>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>{isEditing ? 'Editar Template' : 'Criar Novo Template'}</CardTitle>
-              <CardDescription>
-                {isEditing ? 'Edite as informações do seu template' : 'Preencha as informações para criar um novo template'}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => setShowPreview(true)}>
-                <Eye className="mr-2 h-4 w-4" />
-                Visualizar
-              </Button>
-              {isEditing && template && (
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={handleSendTest}
-                  disabled={isSendingTest}
-                >
-                  <Send className="mr-2 h-4 w-4" />
-                  {isSendingTest ? 'Enviando...' : 'Teste'}
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="nome">Nome do Template *</Label>
-              <Input
-                id="nome"
-                placeholder="Ex: Email de Boas-vindas"
-                value={formData.nome}
-                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="canal">Canal</Label>
-              <Select value={formData.canal} onValueChange={(value) => setFormData({ ...formData, canal: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o canal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição</Label>
-            <Input
-              id="descricao"
-              placeholder="Breve descrição do template (opcional)"
-              value={formData.descricao || ''}
-              onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-            />
-          </div>
-
-          <FontSizeSelector
-            value={formData.font_size_px || '16px'}
-            onChange={(value) => setFormData({ ...formData, font_size_px: value })}
-          />
-
-          <div className="space-y-2">
-            <Label htmlFor="conteudo">Conteúdo do Template *</Label>
-            <div className="space-y-2">
-              <RichTextEditor
-                value={formData.conteudo}
-                onChange={(value) => setFormData({ ...formData, conteudo: value })}
-                placeholder="Digite o conteúdo do seu template aqui..."
-                fontSize={formData.font_size_px}
-              />
-              <div className="text-xs text-muted-foreground">
-                Use {'{nome}'} para personalizar com o nome do contato
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Formulário Principal */}
+      <div className="lg:col-span-2">
+        <Card className="w-full">
+          <form onSubmit={handleSubmit}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>{isEditing ? 'Editar Template' : 'Criar Novo Template'}</CardTitle>
+                  <CardDescription>
+                    {isEditing ? 'Edite as informações do seu template' : 'Preencha as informações para criar um novo template'}
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => setShowPreview(true)}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Visualizar
+                  </Button>
+                  {isEditing && template && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleSendTest}
+                      disabled={isSendingTest}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      {isSendingTest ? 'Enviando...' : 'Teste'}
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
+            </CardHeader>
 
-          <ImageUploader
-            initialImageUrl={formData.image_url}
-            onImageUploaded={(url) => setFormData({ ...formData, image_url: url })}
-          />
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="nome">Nome do Template *</Label>
+                <Input
+                  id="nome"
+                  placeholder="Ex: Email de Boas-vindas"
+                  value={formData.nome}
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                  required
+                />
+              </div>
 
-          <TemplateFileUpload
-            attachments={formData.attachments || []}
-            onChange={(newAttachments) => setFormData({
-              ...formData,
-              attachments: newAttachments
-            })}
-            onFileUploaded={(fileUrl, fileName) => {
-              // Handle single file upload for template_file fields
-              setFormData({
-                ...formData,
-                template_file_url: fileUrl,
-                template_file_name: fileName
-              });
-            }}
-          />
+              <div className="space-y-2">
+                <Label htmlFor="descricao">Descrição</Label>
+                <Input
+                  id="descricao"
+                  placeholder="Breve descrição do template (opcional)"
+                  value={formData.descricao || ''}
+                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="assinatura">Assinatura</Label>
-            <Textarea
-              id="assinatura"
-              placeholder="Sua assinatura (opcional)"
-              value={formData.assinatura || ''}
-              onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}
-              rows={3}
-            />
-          </div>
+              <FontSizeSelector
+                value={formData.font_size_px || '16px'}
+                onChange={(value) => setFormData({ ...formData, font_size_px: value })}
+              />
 
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ativo">
-                  <div className="flex items-center">
-                    <Badge className="bg-green-100 text-green-800 mr-2">Ativo</Badge>
-                    Template disponível para uso
+              <VariableInserter onInsertVariable={handleInsertVariable} />
+
+              <div className="space-y-2">
+                <Label htmlFor="conteudo">Conteúdo do Template *</Label>
+                <div className="space-y-2">
+                  <RichTextEditor
+                    value={formData.conteudo}
+                    onChange={(value) => setFormData({ ...formData, conteudo: value })}
+                    placeholder="Digite o conteúdo do seu template aqui..."
+                    fontSize={formData.font_size_px}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Use as variáveis acima para personalizar o conteúdo
                   </div>
-                </SelectItem>
-                <SelectItem value="inativo">
-                  <div className="flex items-center">
-                    <Badge className="bg-gray-100 text-gray-800 mr-2">Inativo</Badge>
-                    Template arquivado
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
+                </div>
+              </div>
 
-        <CardFooter className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Voltar
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            <Save className="mr-2 h-4 w-4" />
-            {isSubmitting ? 'Salvando...' : isEditing ? 'Atualizar Template' : 'Criar Template'}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+              <ImageUploader
+                initialImageUrl={formData.image_url}
+                onImageUploaded={(url) => setFormData({ ...formData, image_url: url })}
+              />
+
+              <TemplateFileUpload
+                attachments={formData.attachments || []}
+                onChange={(newAttachments) => setFormData({
+                  ...formData,
+                  attachments: newAttachments
+                })}
+                onFileUploaded={(fileUrl, fileName) => {
+                  setFormData({
+                    ...formData,
+                    template_file_url: fileUrl,
+                    template_file_name: fileName
+                  });
+                }}
+              />
+
+              <div className="space-y-2">
+                <Label htmlFor="assinatura">Assinatura</Label>
+                <Textarea
+                  id="assinatura"
+                  placeholder="Sua assinatura (opcional)"
+                  value={formData.assinatura || ''}
+                  onChange={(e) => setFormData({ ...formData, assinatura: e.target.value })}
+                  rows={3}
+                />
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex justify-between">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                <Save className="mr-2 h-4 w-4" />
+                {isSubmitting ? 'Salvando...' : isEditing ? 'Atualizar Template' : 'Criar Template'}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+
+      {/* Preview Lateral */}
+      <div className="lg:col-span-1">
+        <div className="sticky top-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Preview ao Vivo</CardTitle>
+              <CardDescription>
+                Visualização em tempo real do seu template
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TemplatePreview
+                template={{
+                  ...formData,
+                  id: template?.id || '',
+                  created_at: template?.created_at || '',
+                  user_id: template?.user_id || ''
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
   );
 }

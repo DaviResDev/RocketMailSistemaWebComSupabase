@@ -122,8 +122,19 @@ export default function HistoricoEnvios() {
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Histórico de Envios</h1>
-        <p className="text-foreground">Acompanhe todos os emails enviados pela plataforma</p>
+        <div className="flex items-center gap-3 mb-2">
+          <Mail className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Histórico de Envios</h1>
+            <p className="text-foreground">Acompanhe todos os emails enviados pela plataforma em tempo real</p>
+          </div>
+        </div>
+        
+        {/* Indicador de tempo real */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <span>Atualizações em tempo real ativadas</span>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -252,13 +263,22 @@ export default function HistoricoEnvios() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-foreground">Histórico de Envios ({filteredHistorico.length} registros)</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-foreground">
+              Histórico de Envios ({filteredHistorico.length} registros)
+            </CardTitle>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span>Tempo real</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {filteredHistorico.length === 0 ? (
             <div className="text-center py-8">
               <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-foreground">Nenhum envio encontrado</p>
+              <p className="text-sm text-muted-foreground">Os novos envios aparecerão aqui automaticamente</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
