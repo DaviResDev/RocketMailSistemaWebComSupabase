@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useHistoricoEnvios } from './useHistoricoEnvios';
+import { useEmailValidation } from './useEmailValidation';
 import { normalizeTipoEnvio } from '@/types/envios';
 
 interface OptimizedSendingProgress {
@@ -42,6 +43,7 @@ export function useOptimizedEmailSending() {
   });
 
   const { fetchHistorico } = useHistoricoEnvios();
+  const { validateContacts } = useEmailValidation();
 
   const sendOptimizedEmails = useCallback(async (
     selectedContacts: any[],
@@ -67,7 +69,7 @@ export function useOptimizedEmailSending() {
       percentage: 0,
       successCount: 0,
       errorCount: 0,
-      currentOperation: 'Configurando SMTP para 100% de sucesso...',
+      currentOperation: 'Validando emails automaticamente...',
       estimatedTimeRemaining: 0,
       throughput: 0,
       queueStatus: { pending: 0, processing: false }
@@ -75,6 +77,21 @@ export function useOptimizedEmailSending() {
 
     try {
       console.log(`🎯 SISTEMA 100% SUCESSO INICIADO para ${selectedContacts.length} contatos`);
+      
+      // ETAPA 1: VALIDAÇÃO AUTOMÁTICA
+      const { validContacts, invalidContacts } = await validateContacts(selectedContacts);
+      
+      if (invalidContacts.length > 0) {
+        toast.warning(`🚫 ${invalidContacts.length} emails inválidos removidos`, {
+          description: `Apenas ${validContacts.length} emails válidos serão enviados`,
+          duration: 6000
+        });
+      }
+      
+      if (validContacts.length === 0) {
+        toast.error('❌ Nenhum email válido encontrado para envio');
+        return null;
+      }
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -124,7 +141,7 @@ export function useOptimizedEmailSending() {
       const isGmail = baseSmtpSettings.host.includes('gmail');
       const providerName = isGmail ? 'Gmail' : 'Outro provedor';
       
-      toast.info(`🔒 Sistema 100% Confiável para ${providerName} - SMTP Próprio Ativado!`, {
+      toast.info(`🔒 Sistema 100% Confiável para ${providerName} - SMTP Próprio + Validação Ativado!`, {
         style: {
           background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
           color: 'white',
@@ -138,7 +155,8 @@ export function useOptimizedEmailSending() {
           ? [templateData.attachments] 
           : [];
       
-      const emailJobs = selectedContacts.map(contact => ({
+      // Usar apenas contatos válidos
+      const emailJobs = validContacts.map(contact => ({
         to: contact.email,
         contato_id: contact.id,
         template_id: templateId,
@@ -158,7 +176,7 @@ export function useOptimizedEmailSending() {
       
       setProgress(prev => ({ 
         ...prev, 
-        currentOperation: `${emailJobs.length} emails preparados. Enviando com máxima confiabilidade...`
+        currentOperation: `${emailJobs.length} emails válidos preparados. Enviando com máxima confiabilidade...`
       }));
       
       // Progresso realista
@@ -190,6 +208,7 @@ export function useOptimizedEmailSending() {
           smtp_settings: baseSmtpSettings,
           use_smtp: true,
           reliability_mode: true,
+          validated_emails: true, // Flag importante
           tipo_envio: normalizeTipoEnvio('lote')
         }
       });
@@ -211,21 +230,21 @@ export function useOptimizedEmailSending() {
       
       setProgress(prev => ({
         ...prev,
-        current: selectedContacts.length,
+        current: validContacts.length,
         percentage: 100,
         successCount: summary.successful,
         errorCount: summary.failed,
-        currentOperation: 'Envio SMTP Concluído!'
+        currentOperation: 'Envio SMTP + Validação Concluído!'
       }));
       
       await fetchHistorico();
       
-      // ALERTAS ESPECÍFICOS PARA SMTP
-      if (summary.successful === selectedContacts.length) {
+      // ALERTAS ESPECÍFICOS PARA SMTP + VALIDAÇÃO
+      if (summary.successful === validContacts.length) {
         toast.success(
-          `🎯✅ SUCESSO TOTAL SMTP! ${summary.successful} emails enviados`,
+          `🎯✅ SUCESSO TOTAL SMTP + VALIDAÇÃO! ${summary.successful} emails enviados`,
           { 
-            description: `🔒 100% de sucesso via SMTP próprio!`,
+            description: `🔒 100% de sucesso via SMTP próprio + validação automática!`,
             duration: 8000,
             style: {
               background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -240,7 +259,7 @@ export function useOptimizedEmailSending() {
         );
       } else {
         toast.warning(
-          `⚠️ SMTP: ${summary.successful}/${selectedContacts.length} emails enviados (${summary.successRate}%)`,
+          `⚠️ SMTP: ${summary.successful}/${validContacts.length} emails enviados (${summary.successRate}%)`,
           {
             description: `${summary.failed} falhas - Verifique configurações SMTP`,
             duration: 6000,
@@ -288,7 +307,7 @@ export function useOptimizedEmailSending() {
     } finally {
       setIsProcessing(false);
     }
-  }, [fetchHistorico]);
+  }, [fetchHistorico, validateContacts]);
 
   return {
     isProcessing,

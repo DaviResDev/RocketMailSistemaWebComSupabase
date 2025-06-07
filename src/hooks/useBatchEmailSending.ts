@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizeTipoEnvio } from '@/types/envios';
+import { useEmailValidation } from './useEmailValidation';
 
 interface BatchProgress {
   current: number;
@@ -12,6 +13,7 @@ interface BatchProgress {
 export function useBatchEmailSending() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<BatchProgress>({ current: 0, total: 0 });
+  const { validateContacts } = useEmailValidation();
 
   const sendEmailsInBatch = async (
     selectedContacts: any[],
@@ -34,6 +36,31 @@ export function useBatchEmailSending() {
 
     try {
       console.log(`🎯 INICIANDO SISTEMA 100% SUCESSO para ${selectedContacts.length} contatos`);
+      
+      // ETAPA 1: VALIDAÇÃO AUTOMÁTICA DE EMAILS
+      toast.info('🔍 VALIDANDO EMAILS AUTOMATICAMENTE...', {
+        description: 'Verificando sintaxe, domínios e emails descartáveis',
+        duration: 4000
+      });
+      
+      const { validContacts, invalidContacts, stats } = await validateContacts(selectedContacts);
+      
+      if (invalidContacts.length > 0) {
+        toast.warning(`🚫 ${invalidContacts.length} emails inválidos removidos da fila`, {
+          description: `Apenas ${validContacts.length} emails válidos serão enviados`,
+          duration: 6000
+        });
+        
+        console.log(`❌ Emails removidos:`, invalidContacts.map(c => c.email));
+      }
+      
+      if (validContacts.length === 0) {
+        toast.error('❌ Nenhum email válido encontrado para envio');
+        return false;
+      }
+      
+      // Atualizar progresso com contatos válidos
+      setProgress({ current: 0, total: validContacts.length });
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -92,7 +119,7 @@ export function useBatchEmailSending() {
         username: userSettings.email_usuario || ''
       };
       
-      const emailJobs = selectedContacts.map(contact => ({
+      const emailJobs = validContacts.map(contact => ({
         to: contact.email,
         contato_id: contact.id,
         template_id: templateId,
@@ -124,7 +151,8 @@ export function useBatchEmailSending() {
         provider: isGmail ? 'Gmail' : isOutlook ? 'Outlook' : 'Outro',
         max_concurrent: optimization_config.max_concurrent,
         delay_ms: optimization_config.delay_between_emails,
-        reliability_mode: true
+        reliability_mode: true,
+        validated_emails: true
       });
       
       // Sistema de múltiplas tentativas com backoff exponencial
@@ -145,6 +173,7 @@ export function useBatchEmailSending() {
               optimization_config: optimization_config,
               use_smtp: true,
               reliability_mode: true,
+              validated_emails: true, // Flag importante
               tipo_envio: normalizeTipoEnvio('lote')
             }
           });
@@ -177,12 +206,12 @@ export function useBatchEmailSending() {
       
       const { summary } = responseData;
       
-      setProgress({ current: selectedContacts.length, total: selectedContacts.length });
+      setProgress({ current: validContacts.length, total: validContacts.length });
       
-      // Toasts específicos para SMTP
+      // Toasts específicos para SMTP com validação
       if (summary.successful > 0) {
-        toast.success(`✅ SMTP: ${summary.successful} emails enviados com sucesso!`, {
-          description: `Taxa de sucesso: ${summary.successRate} | Via SMTP Próprio`,
+        toast.success(`✅ SMTP + VALIDAÇÃO: ${summary.successful} emails enviados com sucesso!`, {
+          description: `Taxa de sucesso: ${summary.successRate} | Via SMTP + Validação Automática`,
           duration: 6000,
           style: {
             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -216,7 +245,9 @@ export function useBatchEmailSending() {
         errorCount: summary.failed,
         successRate: summary.successRate,
         totalDuration: summary.totalDuration,
-        avgThroughput: summary.avgThroughput
+        avgThroughput: summary.avgThroughput,
+        validatedEmails: true,
+        invalidEmailsRemoved: invalidContacts.length
       };
     } catch (error: any) {
       console.error('❌ Erro no envio SMTP:', error);
