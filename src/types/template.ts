@@ -14,6 +14,7 @@ export interface Template {
   template_file_url?: string | null;  
   template_file_name?: string | null;
   image_url?: string | null;
+  font_size_px?: string;
 }
 
 export interface TemplateFormData {
@@ -29,4 +30,5 @@ export interface TemplateFormData {
   template_file_name?: string | null;
   template_file?: File | null;
   image_url?: string | null;
+  font_size_px?: string;
 }

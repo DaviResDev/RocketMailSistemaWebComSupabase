@@ -209,19 +209,15 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
           </div>
 
           <ImageUploader
-            value={formData.image_url}
-            onChange={(url) => setFormData({ ...formData, image_url: url })}
+            imageUrl={formData.image_url}
+            onImageChange={(url) => setFormData({ ...formData, image_url: url })}
           />
 
           <TemplateFileUpload
-            value={formData.template_file}
-            existingFileUrl={formData.template_file_url}
-            existingFileName={formData.template_file_name}
-            onChange={(file, url, name) => setFormData({
+            attachments={formData.attachments || []}
+            onChange={(newAttachments) => setFormData({
               ...formData,
-              template_file: file,
-              template_file_url: url,
-              template_file_name: name
+              attachments: newAttachments
             })}
           />
 

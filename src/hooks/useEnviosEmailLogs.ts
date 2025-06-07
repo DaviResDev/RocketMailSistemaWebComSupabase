@@ -55,7 +55,15 @@ export function useEnviosEmailLogs() {
         .limit(limite);
 
       if (error) throw error;
-      setLogs(data || []);
+      
+      // Transform data to ensure proper types
+      const formattedLogs: EnvioEmailLog[] = data?.map(log => ({
+        ...log,
+        status: log.status as 'sucesso' | 'falha' | 'pendente',
+        tipo_operacao: log.tipo_operacao as 'individual' | 'lote' | 'agendado'
+      })) || [];
+      
+      setLogs(formattedLogs);
     } catch (error: any) {
       console.error('Erro ao carregar logs de envio:', error);
       toast.error('Erro ao carregar histórico de envios');
