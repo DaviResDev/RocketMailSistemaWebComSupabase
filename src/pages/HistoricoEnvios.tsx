@@ -36,18 +36,49 @@ export default function HistoricoEnvios() {
   });
 
   const getStatusBadge = (status: string) => {
-    if (status === 'entregue') {
+    if (status === 'enviado') {
       return (
         <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
           <CheckCircle className="w-3 h-3 mr-1" />
-          Entregue
+          Enviado
+        </Badge>
+      );
+    }
+    if (status === 'erro') {
+      return (
+        <Badge variant="destructive">
+          <XCircle className="w-3 h-3 mr-1" />
+          Erro
+        </Badge>
+      );
+    }
+    if (status === 'pendente') {
+      return (
+        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+          <Clock className="w-3 h-3 mr-1" />
+          Pendente
+        </Badge>
+      );
+    }
+    if (status === 'agendado') {
+      return (
+        <Badge variant="outline" className="bg-blue-100 text-blue-800">
+          <Calendar className="w-3 h-3 mr-1" />
+          Agendado
+        </Badge>
+      );
+    }
+    if (status === 'cancelado') {
+      return (
+        <Badge variant="destructive">
+          <XCircle className="w-3 h-3 mr-1" />
+          Cancelado
         </Badge>
       );
     }
     return (
-      <Badge variant="destructive">
-        <XCircle className="w-3 h-3 mr-1" />
-        Falhou
+      <Badge variant="secondary">
+        {status}
       </Badge>
     );
   };
@@ -71,10 +102,13 @@ export default function HistoricoEnvios() {
 
   const stats = {
     total: historico.length,
-    entregues: historico.filter(h => h.status === 'entregue').length,
-    falhas: historico.filter(h => h.status === 'falhou').length,
+    enviados: historico.filter(h => h.status === 'enviado').length,
+    erros: historico.filter(h => h.status === 'erro').length,
+    pendentes: historico.filter(h => h.status === 'pendente').length,
+    agendados: historico.filter(h => h.status === 'agendado').length,
+    cancelados: historico.filter(h => h.status === 'cancelado').length,
     imediatos: historico.filter(h => h.tipo_envio === 'imediato').length,
-    agendados: historico.filter(h => h.tipo_envio === 'agendado').length,
+    agendados_tipo: historico.filter(h => h.tipo_envio === 'agendado').length,
   };
 
   if (loading) {
@@ -96,7 +130,7 @@ export default function HistoricoEnvios() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center">
@@ -114,8 +148,8 @@ export default function HistoricoEnvios() {
             <div className="flex items-center">
               <CheckCircle className="h-8 w-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-foreground">Entregues</p>
-                <p className="text-2xl font-bold text-green-600">{stats.entregues}</p>
+                <p className="text-sm font-medium text-foreground">Enviados</p>
+                <p className="text-2xl font-bold text-green-600">{stats.enviados}</p>
               </div>
             </div>
           </CardContent>
@@ -126,8 +160,20 @@ export default function HistoricoEnvios() {
             <div className="flex items-center">
               <XCircle className="h-8 w-8 text-red-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-foreground">Falhas</p>
-                <p className="text-2xl font-bold text-red-600">{stats.falhas}</p>
+                <p className="text-sm font-medium text-foreground">Erros</p>
+                <p className="text-2xl font-bold text-red-600">{stats.erros}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center">
+              <Clock className="h-8 w-8 text-yellow-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-foreground">Pendentes</p>
+                <p className="text-2xl font-bold text-yellow-600">{stats.pendentes}</p>
               </div>
             </div>
           </CardContent>
@@ -148,10 +194,10 @@ export default function HistoricoEnvios() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center">
-              <Clock className="h-8 w-8 text-purple-600" />
+              <Calendar className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-foreground">Agendados</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.agendados}</p>
+                <p className="text-2xl font-bold text-purple-600">{stats.agendados_tipo}</p>
               </div>
             </div>
           </CardContent>
@@ -184,8 +230,11 @@ export default function HistoricoEnvios() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="entregue">Entregue</SelectItem>
-                <SelectItem value="falhou">Falhou</SelectItem>
+                <SelectItem value="enviado">Enviado</SelectItem>
+                <SelectItem value="erro">Erro</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="agendado">Agendado</SelectItem>
+                <SelectItem value="cancelado">Cancelado</SelectItem>
               </SelectContent>
             </Select>
 
