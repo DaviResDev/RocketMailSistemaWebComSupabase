@@ -201,6 +201,92 @@ export type Database = {
           },
         ]
       }
+      envios_email: {
+        Row: {
+          agendamento_id: string | null
+          assunto: string | null
+          contato_id: string | null
+          created_at: string
+          data_hora_envio: string
+          destinatario_email: string
+          destinatario_nome: string | null
+          duracao_envio_ms: number | null
+          id: string
+          mensagem_erro: string | null
+          resposta_servidor: Json | null
+          smtp_utilizado_id: string | null
+          status: string
+          template_id: string | null
+          tipo_operacao: string
+          user_id: string
+        }
+        Insert: {
+          agendamento_id?: string | null
+          assunto?: string | null
+          contato_id?: string | null
+          created_at?: string
+          data_hora_envio?: string
+          destinatario_email: string
+          destinatario_nome?: string | null
+          duracao_envio_ms?: number | null
+          id?: string
+          mensagem_erro?: string | null
+          resposta_servidor?: Json | null
+          smtp_utilizado_id?: string | null
+          status: string
+          template_id?: string | null
+          tipo_operacao: string
+          user_id: string
+        }
+        Update: {
+          agendamento_id?: string | null
+          assunto?: string | null
+          contato_id?: string | null
+          created_at?: string
+          data_hora_envio?: string
+          destinatario_email?: string
+          destinatario_nome?: string | null
+          duracao_envio_ms?: number | null
+          id?: string
+          mensagem_erro?: string | null
+          resposta_servidor?: Json | null
+          smtp_utilizado_id?: string | null
+          status?: string
+          template_id?: string | null
+          tipo_operacao?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envios_email_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "envios_email_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "envios_email_smtp_utilizado_id_fkey"
+            columns: ["smtp_utilizado_id"]
+            isOneToOne: false
+            referencedRelation: "smtp_configuracoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "envios_email_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       envios_historico: {
         Row: {
           contato_id: string | null
@@ -270,6 +356,48 @@ export type Database = {
         }
         Relationships: []
       }
+      smtp_configuracoes: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          email_origem: string
+          host: string
+          id: string
+          nome_configuracao: string
+          porta: number
+          senha_criptografada: string
+          tipo_envio: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          email_origem: string
+          host: string
+          id?: string
+          nome_configuracao?: string
+          porta?: number
+          senha_criptografada: string
+          tipo_envio?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          email_origem?: string
+          host?: string
+          id?: string
+          nome_configuracao?: string
+          porta?: number
+          senha_criptografada?: string
+          tipo_envio?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       templates: {
         Row: {
           assinatura: string | null
@@ -278,6 +406,7 @@ export type Database = {
           conteudo: string
           created_at: string
           descricao: string | null
+          font_size_px: string | null
           id: string
           image_url: string | null
           nome: string
@@ -294,6 +423,7 @@ export type Database = {
           conteudo: string
           created_at?: string
           descricao?: string | null
+          font_size_px?: string | null
           id?: string
           image_url?: string | null
           nome: string
@@ -310,6 +440,7 @@ export type Database = {
           conteudo?: string
           created_at?: string
           descricao?: string | null
+          font_size_px?: string | null
           id?: string
           image_url?: string | null
           nome?: string
@@ -350,7 +481,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      encrypt_smtp_password: {
+        Args: { plain_password: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

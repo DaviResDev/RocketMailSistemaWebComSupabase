@@ -4,6 +4,7 @@ import { SettingsForm } from '@/components/settings/SettingsForm';
 import { SecuritySettingsForm } from '@/components/settings/SecuritySettingsForm';
 import { AccountDeletionForm } from '@/components/settings/AccountDeletionForm';
 import { SmtpStatusIndicator } from '@/components/settings/SmtpStatusIndicator';
+import { SmtpConfiguracaoForm } from '@/components/settings/SmtpConfiguracaoForm';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,6 +81,7 @@ export default function Configuracoes() {
       <Tabs defaultValue="profile">
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Perfil</TabsTrigger>
+          <TabsTrigger value="smtp">SMTP Avançado</TabsTrigger>
           <TabsTrigger value="security">Segurança</TabsTrigger>
           <TabsTrigger value="account">Conta</TabsTrigger>
         </TabsList>
@@ -97,6 +99,10 @@ export default function Configuracoes() {
               }}
             />
           </div>
+        </TabsContent>
+
+        <TabsContent value="smtp">
+          <SmtpConfiguracaoForm />
         </TabsContent>
         
         <TabsContent value="security">
