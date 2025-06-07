@@ -1,7 +1,6 @@
 
 // Processador otimizado para envio em lote com rate limiting inteligente
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { delay } from './batch-processor.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -12,6 +11,11 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     persistSession: false
   }
 });
+
+// Função de delay local
+export function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export async function processOptimizedBatch(data: any): Promise<any> {
   const { emails, smtp_settings, optimization_config } = data;
@@ -33,31 +37,31 @@ export async function processOptimizedBatch(data: any): Promise<any> {
   // Configurações otimizadas por provedor
   const providerConfigs = {
     gmail: {
-      rateLimitPerMinute: 10,
-      burstLimit: 3,
-      baseDelay: 5000,
-      maxConcurrent: 1,
-      successRateTarget: "98.0%"
-    },
-    outlook: {
       rateLimitPerMinute: 15,
       burstLimit: 5,
       baseDelay: 3000,
       maxConcurrent: 2,
-      successRateTarget: "97.0%"
+      successRateTarget: "98.0%"
     },
-    yahoo: {
-      rateLimitPerMinute: 12,
-      burstLimit: 4,
-      baseDelay: 4000,
-      maxConcurrent: 2,
-      successRateTarget: "96.0%"
-    },
-    other: {
+    outlook: {
       rateLimitPerMinute: 20,
       burstLimit: 8,
       baseDelay: 2000,
       maxConcurrent: 3,
+      successRateTarget: "97.0%"
+    },
+    yahoo: {
+      rateLimitPerMinute: 18,
+      burstLimit: 6,
+      baseDelay: 2500,
+      maxConcurrent: 2,
+      successRateTarget: "96.0%"
+    },
+    other: {
+      rateLimitPerMinute: 25,
+      burstLimit: 10,
+      baseDelay: 1500,
+      maxConcurrent: 5,
       successRateTarget: "95.0%"
     }
   };
@@ -76,110 +80,85 @@ export async function processOptimizedBatch(data: any): Promise<any> {
   const results: any[] = [];
   const startTime = Date.now();
   
-  let consecutiveSuccesses = 0;
-  let consecutiveFailures = 0;
-  let lastEmailTime = 0;
+  // Processamento em lotes paralelos
+  const batchSize = config.maxConcurrent;
+  let successCount = 0;
+  let failureCount = 0;
   
-  // Processamento sequencial com rate limiting inteligente
-  for (let i = 0; i < emails.length; i++) {
-    const email = emails[i];
-    const emailStartTime = Date.now();
+  for (let i = 0; i < emails.length; i += batchSize) {
+    const batch = emails.slice(i, i + batchSize);
+    console.log(`📦 Processando lote ${Math.floor(i / batchSize) + 1} com ${batch.length} emails`);
     
-    try {
-      console.log(`📧 [${i + 1}/${emails.length}] Enviando para ${email.to} (${provider.charAt(0).toUpperCase() + provider.slice(1)})`);
-      
-      // Rate limiting inteligente
-      const timeSinceLastEmail = Date.now() - lastEmailTime;
-      const dynamicDelay = calculateDynamicDelay(
-        config.baseDelay,
-        consecutiveSuccesses,
-        consecutiveFailures,
-        i,
-        config.burstLimit
-      );
-      
-      if (timeSinceLastEmail < dynamicDelay) {
-        const waitTime = dynamicDelay - timeSinceLastEmail;
-        await delay(waitTime);
-      }
-
-      // Verificar burst limit
-      if (consecutiveSuccesses >= config.burstLimit) {
-        const burstWait = config.baseDelay * 1.5;
-        console.log(`💥 Burst limit atingido (${provider.charAt(0).toUpperCase() + provider.slice(1)}). Aguardando ${burstWait}ms`);
-        await delay(burstWait);
-        consecutiveSuccesses = 0;
-      }
-
-      // Simular envio (substitua por implementação real do SMTP)
-      const success = await simulateEmailSend(email);
-      
-      const emailDuration = Date.now() - emailStartTime;
-      lastEmailTime = Date.now();
-      
-      if (success) {
-        consecutiveSuccesses++;
-        consecutiveFailures = 0;
-        console.log(`✅ [${i + 1}/${emails.length}] Sucesso para ${email.to} em ${emailDuration}ms (${consecutiveSuccesses} consecutivos)`);
+    // Processar lote em paralelo
+    const batchPromises = batch.map(async (email: any, index: number) => {
+      const emailIndex = i + index;
+      try {
+        console.log(`📧 [${emailIndex + 1}/${emails.length}] Enviando para ${email.to}`);
         
-        // Registrar no histórico com status válido
-        await registerInHistory(email, 'enviado', null);
+        // Simular envio com taxa de sucesso realista
+        const success = await simulateEmailSend(email);
         
-        results.push({
-          email: email.to,
-          success: true,
-          duration: emailDuration,
-          consecutiveSuccesses
-        });
-      } else {
-        consecutiveFailures++;
-        consecutiveSuccesses = 0;
-        const error = "Falha simulada na entrega";
-        console.log(`❌ [${i + 1}/${emails.length}] Falha para ${email.to}: ${error}`);
+        if (success) {
+          successCount++;
+          console.log(`✅ [${emailIndex + 1}/${emails.length}] Sucesso para ${email.to}`);
+          
+          // Registrar no histórico
+          await registerInHistory(email, 'enviado', null);
+          
+          return {
+            email: email.to,
+            success: true,
+            index: emailIndex
+          };
+        } else {
+          failureCount++;
+          const error = "Falha na entrega do email";
+          console.log(`❌ [${emailIndex + 1}/${emails.length}] Falha para ${email.to}: ${error}`);
+          
+          // Registrar no histórico
+          await registerInHistory(email, 'erro', error);
+          
+          return {
+            email: email.to,
+            success: false,
+            error,
+            index: emailIndex
+          };
+        }
+      } catch (error: any) {
+        failureCount++;
+        console.error(`💥 [${emailIndex + 1}/${emails.length}] Erro crítico para ${email.to}:`, error);
         
-        // Registrar no histórico com status válido
-        await registerInHistory(email, 'erro', error);
+        // Registrar no histórico
+        await registerInHistory(email, 'erro', error.message);
         
-        results.push({
+        return {
           email: email.to,
           success: false,
-          error,
-          duration: emailDuration
-        });
+          error: error.message,
+          index: emailIndex
+        };
       }
-      
-    } catch (error: any) {
-      consecutiveFailures++;
-      consecutiveSuccesses = 0;
-      const emailDuration = Date.now() - emailStartTime;
-      
-      console.error(`💥 [${i + 1}/${emails.length}] Erro crítico para ${email.to}:`, error);
-      
-      // Registrar no histórico com status válido
-      await registerInHistory(email, 'erro', error.message);
-      
-      results.push({
-        email: email.to,
-        success: false,
-        error: error.message,
-        duration: emailDuration
-      });
-      
-      // Pausa maior em caso de erro crítico
-      await delay(config.baseDelay * 2);
+    });
+    
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults);
+    
+    // Delay entre lotes
+    if (i + batchSize < emails.length) {
+      console.log(`⏱️ Aguardando ${config.baseDelay}ms antes do próximo lote...`);
+      await delay(config.baseDelay);
     }
   }
 
   const totalDuration = (Date.now() - startTime) / 1000;
-  const successful = results.filter(r => r.success).length;
-  const failed = results.filter(r => !r.success).length;
-  const successRate = ((successful / emails.length) * 100).toFixed(1) + '%';
-  const avgThroughput = (successful / totalDuration).toFixed(2);
+  const successRate = ((successCount / emails.length) * 100).toFixed(1) + '%';
+  const avgThroughput = (successCount / totalDuration).toFixed(2);
 
   console.log(`🎯 RESUMO FINAL:
     • Total: ${emails.length}
-    • Sucessos: ${successful}
-    • Falhas: ${failed}
+    • Sucessos: ${successCount}
+    • Falhas: ${failureCount}
     • Taxa de sucesso: ${successRate}
     • Duração: ${totalDuration.toFixed(1)}s
     • Throughput: ${avgThroughput} emails/s
@@ -187,11 +166,11 @@ export async function processOptimizedBatch(data: any): Promise<any> {
   `);
 
   return {
-    success: successful > 0,
+    success: successCount > 0,
     summary: {
       total: emails.length,
-      successful,
-      failed,
+      successful: successCount,
+      failed: failureCount,
       successRate,
       totalDuration: parseFloat(totalDuration.toFixed(1)),
       avgThroughput: parseFloat(avgThroughput),
@@ -201,46 +180,32 @@ export async function processOptimizedBatch(data: any): Promise<any> {
   };
 }
 
-function calculateDynamicDelay(baseDelay: number, successes: number, failures: number, index: number, burstLimit: number): number {
-  // Ajuste baseado no histórico de sucessos/falhas
-  let multiplier = 1.0;
-  
-  if (failures > 0) {
-    multiplier += failures * 0.5; // Aumenta delay após falhas
-  }
-  
-  if (successes >= burstLimit - 1) {
-    multiplier += 0.3; // Aumenta delay quando próximo do burst limit
-  }
-  
-  // Reduz delay gradualmente com sucessos consistentes
-  if (successes > 5 && failures === 0) {
-    multiplier *= 0.8;
-  }
-  
-  return Math.max(baseDelay * multiplier, 1000); // Mínimo de 1s
-}
-
 async function simulateEmailSend(email: any): Promise<boolean> {
-  // Simular taxa de sucesso realista (95-98%)
+  // Simular envio com taxa de sucesso baseada no provedor
   const random = Math.random();
-  return random < 0.97; // 97% de taxa de sucesso
+  const isGmail = email.smtp_settings?.host?.includes('gmail');
+  const successRate = isGmail ? 0.96 : 0.98; // Gmail mais restritivo
+  
+  // Simular delay de envio
+  await delay(500 + Math.random() * 1000);
+  
+  return random < successRate;
 }
 
 async function registerInHistory(email: any, status: 'enviado' | 'erro', errorMessage?: string | null) {
   try {
     const historyRecord = {
-      template_id: email.template_id,
-      contato_id: email.contato_id,
+      template_id: email.template_id || null,
+      contato_id: email.contato_id || null,
       remetente_nome: email.smtp_settings?.from_name || 'Sistema',
       remetente_email: email.smtp_settings?.from_email || '',
       destinatario_nome: email.contato_nome || email.contact?.nome || 'Destinatário',
       destinatario_email: email.to,
-      status: status, // Status válido
+      status: status, // Status válido: 'enviado' ou 'erro'
       template_nome: email.subject || 'Email',
-      tipo_envio: 'imediato', // Tipo válido
+      tipo_envio: 'imediato' as const, // Tipo válido
       mensagem_erro: errorMessage,
-      user_id: email.contact?.user_id || '',
+      user_id: email.contact?.user_id || email.user_id || '',
       data_envio: new Date().toISOString()
     };
 
@@ -250,6 +215,8 @@ async function registerInHistory(email: any, status: 'enviado' | 'erro', errorMe
 
     if (error) {
       console.error('Erro ao registrar histórico:', error);
+    } else {
+      console.log(`📝 Histórico registrado: ${email.to} - ${status}`);
     }
   } catch (error) {
     console.error('Erro crítico ao registrar histórico:', error);

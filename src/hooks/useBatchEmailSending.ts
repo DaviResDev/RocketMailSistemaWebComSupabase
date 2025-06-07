@@ -34,17 +34,27 @@ export function useBatchEmailSending() {
     try {
       console.log(`🚀 Iniciando envio em lote otimizado para ${selectedContacts.length} contatos`);
       
-      // Get user SMTP settings
-      const { data: userSettings } = await supabase
+      // Obter configurações SMTP do usuário logado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+      
+      const { data: userSettings, error: settingsError } = await supabase
         .from('configuracoes')
-        .select('signature_image, email_usuario, use_smtp, smtp_host, smtp_pass, smtp_from_name, email_porta, smtp_seguranca')
+        .select('*')
+        .eq('user_id', user.id)
         .single();
       
-      if (!userSettings?.use_smtp || !userSettings?.smtp_host) {
+      if (settingsError || !userSettings) {
+        throw new Error('Configurações do usuário não encontradas. Configure o SMTP nas configurações.');
+      }
+      
+      if (!userSettings.use_smtp || !userSettings.smtp_host) {
         throw new Error('SMTP deve estar configurado e ativado para envio em lote. Configure o SMTP nas configurações.');
       }
       
-      // Get template data
+      // Buscar dados do template
       const { data: templateData, error: templateError } = await supabase
         .from('templates')
         .select('*')
@@ -54,24 +64,11 @@ export function useBatchEmailSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
-      // Otimizar configuração de porta/segurança
-      let porta = userSettings.email_porta || 587;
-      let seguranca = userSettings.smtp_seguranca || 'tls';
-      
-      // Auto-corrigir configurações SSL/TLS com base na porta
-      if (porta === 465 && seguranca !== 'ssl') {
-        console.log("⚠️ Porta 465 detectada com segurança TLS. Ajustando para SSL.");
-        seguranca = 'ssl';
-      } else if ((porta === 587 || porta === 25) && seguranca !== 'tls') {
-        console.log("⚠️ Porta 587/25 detectada com segurança SSL. Ajustando para TLS.");
-        seguranca = 'tls';
-      }
-      
       // Configurações SMTP otimizadas
       const smtpSettings = {
         host: userSettings.smtp_host,
-        port: porta,
-        secure: seguranca === 'ssl',
+        port: userSettings.email_porta || 587,
+        secure: userSettings.smtp_seguranca === 'ssl',
         password: userSettings.smtp_pass,
         from_name: userSettings.smtp_from_name || 'RocketMail',
         from_email: userSettings.email_usuario || ''
@@ -83,21 +80,14 @@ export function useBatchEmailSending() {
       
       // Configuração de otimização baseada no provedor
       const optimization_config = {
-        max_concurrent: isGmail ? 1 : isOutlook ? 2 : 3,
-        delay_between_emails: isGmail ? 5000 : isOutlook ? 3000 : 2000,
-        rate_limit_per_minute: isGmail ? 10 : isOutlook ? 15 : 20,
-        burst_limit: isGmail ? 3 : isOutlook ? 5 : 8,
+        max_concurrent: isGmail ? 2 : isOutlook ? 3 : 5,
+        delay_between_emails: isGmail ? 3000 : isOutlook ? 2000 : 1500,
+        rate_limit_per_minute: isGmail ? 15 : isOutlook ? 20 : 25,
+        burst_limit: isGmail ? 5 : isOutlook ? 8 : 10,
         provider_optimizations: true,
         intelligent_queuing: true
       };
       
-      // Properly handle attachments
-      const attachments = Array.isArray(templateData.attachments) 
-        ? templateData.attachments 
-        : templateData.attachments 
-          ? [templateData.attachments] 
-          : [];
-
       // Preparar emails com dados completos
       const emailJobs = selectedContacts.map(contact => ({
         to: contact.email,
@@ -106,128 +96,96 @@ export function useBatchEmailSending() {
         contato_nome: contact.nome,
         subject: customSubject || templateData.descricao || templateData.nome,
         content: customContent || templateData.conteudo,
-        contact: contact,
+        contact: {
+          ...contact,
+          user_id: user.id
+        },
+        user_id: user.id,
         image_url: templateData.image_url,
         signature_image: userSettings?.signature_image || templateData.signature_image,
-        attachments: attachments,
+        attachments: Array.isArray(templateData.attachments) ? templateData.attachments : [],
         smtp_settings: smtpSettings
       }));
 
-      // Requisição otimizada com configuração completa
-      const batchRequestData = {
-        batch: true,
-        emails: emailJobs,
-        smtp_settings: smtpSettings,
-        optimization_config: optimization_config,
-        use_smtp: true
-      };
+      // Configurar monitoramento de progresso
+      const progressInterval = setInterval(() => {
+        setProgress(prev => {
+          const newCurrent = Math.min(prev.current + Math.ceil(emailJobs.length / 20), prev.total);
+          return { ...prev, current: newCurrent };
+        });
+      }, 1000);
       
       console.log("📧 Enviando lote otimizado:", {
         batch_size: emailJobs.length,
         provider: isGmail ? 'Gmail' : isOutlook ? 'Outlook' : 'Outro',
-        rate_limit: optimization_config.rate_limit_per_minute,
+        max_concurrent: optimization_config.max_concurrent,
         delay_ms: optimization_config.delay_between_emails,
-        smtp_host: smtpSettings.host,
-        optimization_enabled: true
+        smtp_host: smtpSettings.host
       });
       
-      // Simular progresso durante o processamento
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev.current < prev.total) {
-            const newCurrent = Math.min(prev.current + 1, prev.total);
-            return { ...prev, current: newCurrent };
+      // Fazer requisição para a Edge Function com retry
+      let response;
+      let attempt = 0;
+      const maxAttempts = 3;
+      
+      while (attempt < maxAttempts) {
+        try {
+          attempt++;
+          console.log(`🔄 Tentativa ${attempt}/${maxAttempts} de envio`);
+          
+          response = await supabase.functions.invoke('send-email', {
+            body: {
+              batch: true,
+              emails: emailJobs,
+              smtp_settings: smtpSettings,
+              optimization_config: optimization_config,
+              use_smtp: true
+            }
+          });
+          
+          if (!response.error) break;
+          
+          if (attempt < maxAttempts) {
+            console.log(`⏳ Aguardando antes da próxima tentativa...`);
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
           }
-          return prev;
-        });
-      }, optimization_config.delay_between_emails);
-      
-      const response = await supabase.functions.invoke('send-email', {
-        body: batchRequestData
-      });
+        } catch (error) {
+          console.error(`Tentativa ${attempt} falhou:`, error);
+          if (attempt === maxAttempts) throw error;
+        }
+      }
       
       clearInterval(progressInterval);
       
-      if (response.error) {
-        console.error("Erro na função otimizada:", response.error);
+      if (response?.error) {
+        console.error("Erro na função:", response.error);
         throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
       }
       
-      const responseData = response.data;
+      const responseData = response?.data;
       if (!responseData || !responseData.success) {
         console.error("Resposta de falha:", responseData);
-        throw new Error(responseData?.error || "Falha ao enviar emails em lote otimizado");
+        throw new Error(responseData?.error || "Falha ao enviar emails em lote");
       }
       
-      const { summary, results } = responseData;
+      const { summary } = responseData;
       
       // Atualizar progresso final
       setProgress({ current: selectedContacts.length, total: selectedContacts.length });
       
-      // Notificações de sucesso com detalhes
+      // Notificações detalhadas
       if (summary.successful > 0) {
-        const duration = summary.totalDuration || 0;
-        const throughput = duration > 0 ? (summary.successful / duration).toFixed(2) : '0';
-        
         toast.success(`🎯 ${summary.successful} emails enviados com sucesso!`, {
-          description: `⚡ Sistema otimizado: ${throughput} emails/s | Duração: ${duration}s | Histórico atualizado`,
+          description: `⚡ Taxa de sucesso: ${summary.successRate} | Duração: ${summary.totalDuration}s`,
           duration: 8000
         });
       }
       
       if (summary.failed > 0) {
-        const failedEmails = results.filter((r: any) => !r.success);
-        const errorMessages = [...new Set(failedEmails.slice(0, 3).map((r: any) => r.error))];
-        
-        toast.error(
-          `⚠️ ${summary.failed} emails falharam. Taxa de sucesso: ${summary.successRate}%`,
-          {
-            description: errorMessages.join('; '),
-            duration: 10000
-          }
-        );
-        
-        console.warn("Emails com falha:", failedEmails);
-      }
-      
-      // Registrar envios bem-sucedidos no histórico com status corretos
-      try {
-        const { data: user } = await supabase.auth.getUser();
-        if (user.user) {
-          const successfulResults = results.filter((r: any) => r.success);
-          const envioRecords = successfulResults.map((result: any) => {
-            const email = result.email;
-            const contact = selectedContacts.find(c => c.email === email);
-            
-            return {
-              contato_id: contact?.id,
-              template_id: templateId,
-              status: 'enviado', // Status válido
-              tipo_envio: 'imediato', // Tipo válido
-              remetente_nome: userSettings.smtp_from_name || 'Sistema',
-              remetente_email: userSettings.email_usuario || '',
-              destinatario_nome: contact?.nome || 'Destinatário',
-              destinatario_email: email,
-              template_nome: templateData.nome,
-              user_id: user.user.id,
-              data_envio: new Date().toISOString()
-            };
-          }).filter(record => record.contato_id);
-          
-          if (envioRecords.length > 0) {
-            const { error: historicoError } = await supabase
-              .from('envios_historico')
-              .insert(envioRecords);
-              
-            if (historicoError) {
-              console.error("Erro ao salvar no histórico:", historicoError);
-            } else {
-              console.log(`✅ ${envioRecords.length} registros salvos no histórico`);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Erro ao salvar no histórico:", err);
+        toast.error(`⚠️ ${summary.failed} emails falharam`, {
+          description: `Taxa de sucesso: ${summary.successRate}`,
+          duration: 10000
+        });
       }
 
       return {
@@ -239,7 +197,7 @@ export function useBatchEmailSending() {
         avgThroughput: summary.avgThroughput
       };
     } catch (error: any) {
-      console.error('❌ Erro no envio em lote otimizado:', error);
+      console.error('❌ Erro no envio em lote:', error);
       toast.error(`Erro no envio: ${error.message}`);
       return false;
     } finally {

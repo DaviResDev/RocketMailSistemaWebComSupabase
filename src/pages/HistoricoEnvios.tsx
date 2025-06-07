@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -36,51 +35,49 @@ export default function HistoricoEnvios() {
   });
 
   const getStatusBadge = (status: string) => {
-    if (status === 'enviado') {
-      return (
-        <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-          <CheckCircle className="w-3 h-3 mr-1" />
-          Enviado
-        </Badge>
-      );
+    switch (status) {
+      case 'enviado':
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Enviado
+          </Badge>
+        );
+      case 'erro':
+        return (
+          <Badge variant="destructive">
+            <XCircle className="w-3 h-3 mr-1" />
+            Erro
+          </Badge>
+        );
+      case 'pendente':
+        return (
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+            <Clock className="w-3 h-3 mr-1" />
+            Pendente
+          </Badge>
+        );
+      case 'agendado':
+        return (
+          <Badge variant="outline" className="bg-blue-100 text-blue-800">
+            <Calendar className="w-3 h-3 mr-1" />
+            Agendado
+          </Badge>
+        );
+      case 'cancelado':
+        return (
+          <Badge variant="destructive" className="bg-red-100 text-red-800">
+            <XCircle className="w-3 h-3 mr-1" />
+            Cancelado
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="secondary">
+            {status}
+          </Badge>
+        );
     }
-    if (status === 'erro') {
-      return (
-        <Badge variant="destructive">
-          <XCircle className="w-3 h-3 mr-1" />
-          Erro
-        </Badge>
-      );
-    }
-    if (status === 'pendente') {
-      return (
-        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-          <Clock className="w-3 h-3 mr-1" />
-          Pendente
-        </Badge>
-      );
-    }
-    if (status === 'agendado') {
-      return (
-        <Badge variant="outline" className="bg-blue-100 text-blue-800">
-          <Calendar className="w-3 h-3 mr-1" />
-          Agendado
-        </Badge>
-      );
-    }
-    if (status === 'cancelado') {
-      return (
-        <Badge variant="destructive">
-          <XCircle className="w-3 h-3 mr-1" />
-          Cancelado
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="secondary">
-        {status}
-      </Badge>
-    );
   };
 
   const getTipoBadge = (tipo: string) => {

@@ -52,8 +52,8 @@ export function useHistoricoEnvios() {
 
       if (error) throw error;
       
-      // Type assertion to ensure compatibility with our interface
       const typedData = (data || []) as HistoricoEnvio[];
+      console.log(`📊 Histórico carregado: ${typedData.length} registros`);
       setHistorico(typedData);
     } catch (error: any) {
       console.error('Erro ao carregar histórico:', error);
@@ -67,24 +67,31 @@ export function useHistoricoEnvios() {
     if (!user) return;
 
     try {
-      // Garantir que o status seja válido
-      const validStatus = data.status || 'enviado';
+      // Garantir status válido
+      const validStatus = data.status && ['pendente', 'enviado', 'erro', 'cancelado', 'agendado'].includes(data.status) 
+        ? data.status 
+        : 'enviado';
+      
+      // Garantir tipo_envio válido
+      const validTipoEnvio = data.tipo_envio && ['imediato', 'agendado'].includes(data.tipo_envio)
+        ? data.tipo_envio
+        : 'imediato';
       
       const { error } = await supabase
         .from('envios_historico')
         .insert([{
           ...data,
           status: validStatus,
+          tipo_envio: validTipoEnvio,
           user_id: user.id
         }]);
 
       if (error) throw error;
       
-      // Refresh the list
+      console.log(`✅ Registro criado no histórico: ${data.destinatario_email} - ${validStatus}`);
       await fetchHistorico();
     } catch (error: any) {
       console.error('Erro ao criar registro no histórico:', error);
-      // Don't show error toast here as this might be called in batch operations
     }
   }, [user, fetchHistorico]);
 
@@ -92,11 +99,24 @@ export function useHistoricoEnvios() {
     if (!user || records.length === 0) return;
 
     try {
-      const recordsWithUserId = records.map(record => ({
-        ...record,
-        status: record.status || 'enviado', // Garantir status válido
-        user_id: user.id
-      }));
+      const recordsWithUserId = records.map(record => {
+        // Garantir status válido
+        const validStatus = record.status && ['pendente', 'enviado', 'erro', 'cancelado', 'agendado'].includes(record.status) 
+          ? record.status 
+          : 'enviado';
+        
+        // Garantir tipo_envio válido
+        const validTipoEnvio = record.tipo_envio && ['imediato', 'agendado'].includes(record.tipo_envio)
+          ? record.tipo_envio
+          : 'imediato';
+        
+        return {
+          ...record,
+          status: validStatus,
+          tipo_envio: validTipoEnvio,
+          user_id: user.id
+        };
+      });
 
       const { error } = await supabase
         .from('envios_historico')
@@ -104,11 +124,10 @@ export function useHistoricoEnvios() {
 
       if (error) throw error;
       
-      // Refresh the list
+      console.log(`📝 ${recordsWithUserId.length} registros em lote salvos no histórico`);
       await fetchHistorico();
     } catch (error: any) {
       console.error('Erro ao criar registros em lote no histórico:', error);
-      // Don't show error toast here as this might be called in batch operations
     }
   }, [user, fetchHistorico]);
 
