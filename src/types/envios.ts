@@ -54,4 +54,10 @@ export interface EnvioFormData {
   data_envio?: string;
   attachments?: any;
   status: string;
+  to?: string;
+  contato_nome?: string;
+  content?: string;
+  signature_image?: string;
+  subject?: string;
+  agendamento_id?: string;
 }
