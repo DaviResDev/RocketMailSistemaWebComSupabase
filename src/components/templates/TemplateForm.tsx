@@ -27,7 +27,6 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
     descricao: '',
     template_file_url: null,
     template_file_name: null,
-    // FIXED: Removed template_file property
     image_url: null,
     font_size_px: '16px'
   });
@@ -37,8 +36,9 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
   const [isSendingTest, setIsSendingTest] = useState(false);
 
   useEffect(() => {
+    console.log('TemplateForm: Loading template data', { template, isEditing });
     if (template && isEditing) {
-      setFormData({
+      const templateData = {
         nome: template.nome || '',
         conteudo: template.conteudo || '',
         canal: template.canal || 'email',
@@ -49,10 +49,11 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
         descricao: template.descricao || '',
         template_file_url: template.template_file_url || null,
         template_file_name: template.template_file_name || null,
-        // FIXED: Removed template_file property
         image_url: template.image_url || null,
         font_size_px: template.font_size_px || '16px'
-      });
+      };
+      console.log('TemplateForm: Setting form data', templateData);
+      setFormData(templateData);
     }
   }, [template, isEditing]);
 
@@ -68,6 +69,8 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
       toast.error('Conteúdo do template é obrigatório');
       return;
     }
+
+    console.log('TemplateForm: Submitting form data', formData);
 
     setIsSubmitting(true);
     try {
@@ -209,8 +212,6 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
                 </div>
               </div>
 
-              {/* FIXED: Removed ImageUploader component completely */}
-
               <TemplateFileUpload
                 attachments={formData.attachments || []}
                 onChange={(newAttachments) => setFormData({
@@ -218,6 +219,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
                   attachments: newAttachments
                 })}
                 onFileUploaded={(fileUrl, fileName) => {
+                  console.log('TemplateForm: File uploaded', { fileUrl, fileName });
                   setFormData({
                     ...formData,
                     template_file_url: fileUrl,

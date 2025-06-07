@@ -120,6 +120,8 @@ export function useTemplateOperations() {
     }
 
     try {
+      console.log('useTemplateOperations: Creating template with data', formData);
+      
       // Process attachments
       const processedAttachments = await processAttachments(formData.attachments);
       
@@ -134,12 +136,13 @@ export function useTemplateOperations() {
         attachments: processedAttachments
       };
       
-      console.log('Criando template com dados:', {
+      console.log('useTemplateOperations: Final template data', {
         ...templateData,
         attachments: processedAttachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
-        image_url: templateData.image_url ? 'presente' : 'ausente'
+        image_url: templateData.image_url ? 'presente' : 'ausente',
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -159,6 +162,8 @@ export function useTemplateOperations() {
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
+      console.log('useTemplateOperations: Updating template with data', formData);
+      
       // Process attachments
       const processedAttachments = await processAttachments(formData.attachments);
       
@@ -172,12 +177,13 @@ export function useTemplateOperations() {
         attachments: processedAttachments
       };
       
-      console.log('Atualizando template com dados:', {
+      console.log('useTemplateOperations: Final update data', {
         ...templateData,
         attachments: processedAttachments ? 'presente' : 'ausente',
         signature_image: templateData.signature_image ? 'presente' : 'ausente',
         descricao: templateData.descricao || 'não definida',
-        image_url: templateData.image_url ? 'presente' : 'ausente'
+        image_url: templateData.image_url ? 'presente' : 'ausente',
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -218,15 +224,18 @@ export function useTemplateOperations() {
         attachments: template.attachments || JSON.stringify([]),
         status: template.status || 'ativo',
         user_id: user?.id,
-        image_url: template.image_url || null // Include image URL when duplicating
+        image_url: template.image_url || null, // Include image URL when duplicating
+        template_file_url: template.template_file_url || null,
+        template_file_name: template.template_file_name || null
       };
       
-      console.log('Duplicando template:', {
+      console.log('useTemplateOperations: Duplicating template:', {
         nome: newTemplate.nome,
         status: newTemplate.status,
         attachments: newTemplate.attachments ? 'presente' : 'ausente',
         descricao: newTemplate.descricao || 'não definida',
-        image_url: newTemplate.image_url ? 'presente' : 'ausente'
+        image_url: newTemplate.image_url ? 'presente' : 'ausente',
+        template_file_url: newTemplate.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error: insertError } = await supabase

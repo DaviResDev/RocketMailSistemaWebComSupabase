@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,18 +79,55 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
         }
       }
 
-      // FIXED: Only update profile-specific fields, preserving existing settings
+      // Get current settings to preserve SMTP configuration
+      const { data: currentSettings, error: fetchError } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      console.log('Current settings before update:', currentSettings);
+      console.log('Profile data to update:', updatedFormData);
+
+      // Only update profile-specific fields, preserving ALL existing SMTP settings
+      const updateData = {
+        area_negocio: updatedFormData.area_negocio || null,
+        foto_perfil: updatedFormData.foto_perfil || null,
+        smtp_nome: updatedFormData.smtp_nome || null,
+        email_usuario: updatedFormData.email_usuario || null,
+        signature_image: updatedFormData.signature_image || null,
+        // Explicitly preserve existing SMTP settings
+        ...(currentSettings && {
+          smtp_host: currentSettings.smtp_host,
+          smtp_pass: currentSettings.smtp_pass,
+          email_porta: currentSettings.email_porta,
+          smtp_seguranca: currentSettings.smtp_seguranca,
+          smtp_from_name: currentSettings.smtp_from_name,
+          use_smtp: currentSettings.use_smtp,
+          email_smtp: currentSettings.email_smtp,
+          email_senha: currentSettings.email_senha,
+          two_factor_enabled: currentSettings.two_factor_enabled,
+          whatsapp_token: currentSettings.whatsapp_token
+        })
+      };
+
+      console.log('Final update data with preserved SMTP settings:', updateData);
+
       const { error } = await supabase
         .from('configuracoes')
-        .update({
-          area_negocio: updatedFormData.area_negocio || null,
-          foto_perfil: updatedFormData.foto_perfil || null,
-          smtp_nome: updatedFormData.smtp_nome || null,
-          email_usuario: updatedFormData.email_usuario || null,
-          signature_image: updatedFormData.signature_image || null,
-          // Explicitly preserve existing SMTP settings by not including them in the update
-        })
-        .eq('user_id', user.id);
+        .upsert(
+          { 
+            user_id: user.id,
+            ...updateData 
+          },
+          { 
+            onConflict: 'user_id'
+          }
+        );
 
       if (error) {
         console.error('Erro ao salvar perfil:', error);

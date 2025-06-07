@@ -18,6 +18,8 @@ export function useTemplates() {
         throw new Error('Usuário não autenticado');
       }
       
+      console.log('useTemplates: Fetching templates for user', user.id);
+      
       const { data, error } = await supabase
         .from('templates')
         .select('*')
@@ -25,19 +27,20 @@ export function useTemplates() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      console.log('Templates carregados:', data);
+      console.log('useTemplates: Templates fetched successfully', data);
       
       // Transform the fetched data to ensure it has all required properties for Template type
       const formattedTemplates: Template[] = data?.map(template => ({
         ...template,
-        status: 'ativo', // Always provide a default status since it's required now
+        status: template.status || 'ativo', // Always provide a default status since it's required now
         conteudo: template.conteudo || '' // Garante que conteudo nunca seja null
       })) || [];
       
+      console.log('useTemplates: Formatted templates', formattedTemplates.length);
       setTemplates(formattedTemplates);
       return formattedTemplates;
     } catch (error: any) {
-      console.error('Erro ao carregar templates:', error);
+      console.error('useTemplates: Error loading templates:', error);
       toast.error('Erro ao carregar templates: ' + (error.message || 'Falha na conexão com o servidor'));
       throw error; // Re-throw to allow caller to handle
     } finally {
@@ -52,13 +55,13 @@ export function useTemplates() {
     }
 
     try {
+      console.log('useTemplates: Creating template with form data', formData);
+      
       // Set default value for email
       const templateData = {
         ...formData,
         canal: 'email', // Always set to email since it's the only option now
-        user_id: user.id,
-        // FIXED: Remove template_file reference, keep only template_file_url and template_file_name
-        template_file: undefined // Remove this property completely
+        user_id: user.id
       };
       
       // Update default welcome template content - NEW CONTENT
@@ -84,10 +87,11 @@ Equipe RocketMail`;
         // Se já for uma string, manter como está
       }
       
-      console.log('Criando template com dados:', {
+      console.log('useTemplates: Final template data for creation:', {
         ...templateData,
         attachments: templateData.attachments ? 'presente' : 'ausente',
-        signature_image: templateData.signature_image ? 'presente' : 'ausente'
+        signature_image: templateData.signature_image ? 'presente' : 'ausente',
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -95,11 +99,12 @@ Equipe RocketMail`;
         .insert([templateData]);
 
       if (error) throw error;
+      console.log('useTemplates: Template created successfully');
       toast.success('Template criado com sucesso!');
       await fetchTemplates();
       return true;
     } catch (error: any) {
-      console.error('Erro ao criar template:', error);
+      console.error('useTemplates: Error creating template:', error);
       toast.error('Erro ao criar template: ' + error.message);
       return false;
     }
@@ -107,12 +112,12 @@ Equipe RocketMail`;
 
   const updateTemplate = async (id: string, formData: TemplateFormData) => {
     try {
+      console.log('useTemplates: Updating template', id, 'with form data', formData);
+      
       // Always set to 'email' for backwards compatibility
       const templateData = {
         ...formData, 
-        canal: 'email',
-        // FIXED: Remove template_file reference, keep only template_file_url and template_file_name
-        template_file: undefined // Remove this property completely
+        canal: 'email'
       };
       
       // Update default welcome template content - NEW CONTENT
@@ -138,10 +143,11 @@ Equipe RocketMail`;
         // Se já for uma string, manter como está
       }
       
-      console.log('Atualizando template com dados:', {
+      console.log('useTemplates: Final template data for update:', {
         ...templateData,
         attachments: templateData.attachments ? 'presente' : 'ausente',
-        signature_image: templateData.signature_image ? 'presente' : 'ausente'
+        signature_image: templateData.signature_image ? 'presente' : 'ausente',
+        template_file_url: templateData.template_file_url ? 'presente' : 'ausente'
       });
       
       const { error } = await supabase
@@ -150,11 +156,12 @@ Equipe RocketMail`;
         .eq('id', id);
 
       if (error) throw error;
+      console.log('useTemplates: Template updated successfully');
       toast.success('Template atualizado com sucesso!');
       await fetchTemplates();
       return true;
     } catch (error: any) {
-      console.error('Erro ao atualizar template:', error);
+      console.error('useTemplates: Error updating template:', error);
       toast.error('Erro ao atualizar template: ' + error.message);
       return false;
     }
@@ -219,7 +226,7 @@ Equipe RocketMail`;
 
   const sendTestEmail = async (templateId: string, email: string) => {
     // Email sending functionality has been removed
-    console.log("Email sending functionality has been disabled");
+    console.log("useTemplates: Email sending functionality has been disabled");
     toast.error('Funcionalidade de envio de email foi removida do sistema. Use apenas para visualizar templates.');
     return false;
   };
