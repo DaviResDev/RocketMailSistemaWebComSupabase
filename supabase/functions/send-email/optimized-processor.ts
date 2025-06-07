@@ -1,5 +1,4 @@
 
-
 // Processador otimizado para envio em lote com SMTP real do usuário
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import nodemailer from 'npm:nodemailer';
@@ -19,10 +18,11 @@ export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Envio real via SMTP do usuário
+// Envio real via SMTP do usuário - CORRIGIDO
 async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
   try {
-    const transporter = nodemailer.createTransporter({
+    // CORREÇÃO: createTransport em vez de createTransporter
+    const transporter = nodemailer.createTransport({
       host: smtp.host,
       port: smtp.port,
       secure: smtp.port === 465,
@@ -51,11 +51,6 @@ async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
     console.error(`❌ Erro ao enviar email via SMTP para ${email.to}:`, error);
     return false;
   }
-}
-
-// Substitui a simulação por envio real
-async function simulateEmailSend(email: any): Promise<boolean> {
-  return await enviarEmailSMTP(email, email.smtp_settings);
 }
 
 // Novo: Processamento de envio único
@@ -277,8 +272,22 @@ export async function processOptimizedBatch(data: any): Promise<any> {
   };
 }
 
+// CORREÇÃO: Registro no histórico com validação completa
 async function registerInHistory(email: any, status: 'enviado' | 'erro', errorMessage?: string | null) {
   try {
+    // Garantir que todos os campos obrigatórios estão presentes
+    const user_id = email.contact?.user_id || email.user_id;
+    if (!user_id) {
+      console.error('❌ user_id é obrigatório para registrar histórico');
+      return;
+    }
+
+    // Validar status
+    if (!['enviado', 'erro'].includes(status)) {
+      console.error('❌ Status inválido para histórico:', status);
+      return;
+    }
+
     const historyRecord = {
       template_id: email.template_id || null,
       contato_id: email.contato_id || null,
@@ -288,11 +297,18 @@ async function registerInHistory(email: any, status: 'enviado' | 'erro', errorMe
       destinatario_email: email.to,
       status: status,
       template_nome: email.subject || 'Email',
-      tipo_envio: 'imediato' as const,
+      tipo_envio: 'imediato', // CORREÇÃO: valor válido garantido
       mensagem_erro: errorMessage,
-      user_id: email.contact?.user_id || email.user_id || '',
+      user_id: user_id, // CORREÇÃO: garantindo que user_id não é vazio
       data_envio: new Date().toISOString()
     };
+
+    console.log('📝 Registrando histórico:', {
+      user_id: historyRecord.user_id,
+      status: historyRecord.status,
+      tipo_envio: historyRecord.tipo_envio,
+      email: historyRecord.destinatario_email
+    });
 
     const { error } = await supabase
       .from('envios_historico')
@@ -307,4 +323,3 @@ async function registerInHistory(email: any, status: 'enviado' | 'erro', errorMe
     console.error('Erro crítico ao registrar histórico:', error);
   }
 }
-

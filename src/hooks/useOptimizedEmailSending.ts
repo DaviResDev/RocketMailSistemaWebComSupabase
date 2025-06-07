@@ -3,12 +3,6 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useHistoricoEnvios } from './useHistoricoEnvios';
-import { 
-  IntelligentEmailQueue, 
-  emailMonitor, 
-  optimizeSmtpSettings,
-  SmtpConfigValidator 
-} from '@/utils/emailOptimizations';
 
 interface OptimizedSendingProgress {
   current: number;
@@ -47,7 +41,6 @@ export function useOptimizedEmailSending() {
   });
 
   const { fetchHistorico } = useHistoricoEnvios();
-  const emailQueue = new IntelligentEmailQueue();
 
   const sendOptimizedEmails = useCallback(async (
     selectedContacts: any[],
@@ -83,32 +76,33 @@ export function useOptimizedEmailSending() {
       console.log(`🚀 SISTEMA OTIMIZADO INICIADO para ${selectedContacts.length} contatos`);
       console.log(`🎯 META: 100% de sucesso com rate limiting inteligente`);
       
+      // CORREÇÃO: Buscar usuário autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+      
       // Busca configurações SMTP do usuário
       const { data: userSettings } = await supabase
         .from('configuracoes')
         .select('signature_image, email_usuario, use_smtp, smtp_host, smtp_pass, smtp_from_name, email_porta, smtp_seguranca')
+        .eq('user_id', user.id)
         .single();
       
       if (!userSettings?.use_smtp || !userSettings?.smtp_host) {
         throw new Error('SMTP deve estar configurado e ativado para envio otimizado.');
       }
       
-      // Valida e otimiza configurações SMTP
+      // CORREÇÃO: Configurações SMTP otimizadas com mapeamento correto
       const baseSmtpSettings = {
         host: userSettings.smtp_host,
         port: userSettings.email_porta || 587,
         secure: userSettings.smtp_seguranca === 'ssl',
         password: userSettings.smtp_pass,
         from_name: userSettings.smtp_from_name || 'RocketMail',
-        from_email: userSettings.email_usuario || ''
+        from_email: userSettings.email_usuario || '',
+        username: userSettings.email_usuario || ''
       };
-
-      const validation = SmtpConfigValidator.validateConfig(baseSmtpSettings);
-      if (!validation.valid) {
-        throw new Error(`Configuração SMTP inválida: ${validation.issues.join(', ')}`);
-      }
-
-      const optimizedSmtpSettings = optimizeSmtpSettings(baseSmtpSettings);
       
       setProgress(prev => ({ 
         ...prev, 
@@ -131,7 +125,7 @@ export function useOptimizedEmailSending() {
       }));
       
       // Detecta provedor de email para otimizações específicas
-      const isGmail = optimizedSmtpSettings.host.includes('gmail');
+      const isGmail = baseSmtpSettings.host.includes('gmail');
       const providerName = isGmail ? 'Gmail' : 'Outro provedor';
       
       toast.info(`⚡ Sistema otimizado para ${providerName} - Rate limiting inteligente ativado`);
@@ -143,117 +137,116 @@ export function useOptimizedEmailSending() {
           ? [templateData.attachments] 
           : [];
       
-      // Adiciona todos os emails na fila inteligente
-      const emailPromises = selectedContacts.map(async (contact, index) => {
-        const emailId = await emailQueue.addEmail({
-          to: contact.email,
-          subject: customSubject || templateData.descricao || templateData.nome,
-          content: customContent || templateData.conteudo,
-          contato_id: contact.id,
-          template_id: templateId,
-          attachments: attachments,
-          smtpSettings: optimizedSmtpSettings,
-          metadata: {
-            contato_nome: contact.nome,
-            template_nome: templateData.nome,
-            signature_image: userSettings?.signature_image || templateData.signature_image,
-            index: index
-          }
-        });
-        
-        return emailId;
-      });
-      
-      const emailIds = await Promise.all(emailPromises);
+      // CORREÇÃO: Preparar emails com user_id garantido
+      const emailJobs = selectedContacts.map(contact => ({
+        to: contact.email,
+        contato_id: contact.id,
+        template_id: templateId,
+        contato_nome: contact.nome,
+        subject: customSubject || templateData.descricao || templateData.nome,
+        content: customContent || templateData.conteudo,
+        contact: {
+          ...contact,
+          user_id: user.id // CORREÇÃO: garantir user_id
+        },
+        user_id: user.id, // CORREÇÃO: user_id no nível do email
+        image_url: templateData.image_url,
+        signature_image: userSettings?.signature_image || templateData.signature_image,
+        attachments: attachments,
+        smtp_settings: baseSmtpSettings
+      }));
       
       setProgress(prev => ({ 
         ...prev, 
-        currentOperation: `${emailIds.length} emails adicionados à fila inteligente. Processando...`
+        currentOperation: `${emailJobs.length} emails preparados. Enviando via SMTP...`
       }));
       
-      // Monitora progresso da fila
+      // Monitoramento de progresso simulado
       const progressInterval = setInterval(() => {
-        const queueStatus = emailQueue.getQueueStatus();
-        const metrics = emailMonitor.getMetrics();
-        const processed = metrics.totalSent + metrics.totalFailed;
-        const elapsed = Date.now() - startTime;
-        const throughput = processed > 0 ? (processed / elapsed) * 1000 : 0;
-        const remaining = selectedContacts.length - processed;
-        const estimatedTimeRemaining = throughput > 0 ? (remaining / throughput) * 1000 : 0;
-        
-        setProgress(prev => ({
-          ...prev,
-          current: processed,
-          percentage: (processed / selectedContacts.length) * 100,
-          successCount: metrics.totalSent,
-          errorCount: metrics.totalFailed,
-          throughput: throughput,
-          estimatedTimeRemaining: estimatedTimeRemaining,
-          queueStatus: queueStatus,
-          currentOperation: queueStatus.processing 
-            ? `Processando (${queueStatus.pending} na fila)` 
-            : 'Aguardando processamento...'
-        }));
-        
-        // Para quando todos foram processados
-        if (processed >= selectedContacts.length) {
-          clearInterval(progressInterval);
-        }
+        setProgress(prev => {
+          const newCurrent = Math.min(prev.current + 1, prev.total);
+          const percentage = (newCurrent / prev.total) * 100;
+          const elapsed = (Date.now() - startTime) / 1000;
+          const throughput = newCurrent > 0 ? newCurrent / elapsed : 0;
+          const remaining = prev.total - newCurrent;
+          const estimatedTimeRemaining = throughput > 0 ? (remaining / throughput) * 1000 : 0;
+          
+          return {
+            ...prev,
+            current: newCurrent,
+            percentage,
+            throughput,
+            estimatedTimeRemaining,
+            currentOperation: newCurrent < prev.total ? `Processando ${newCurrent}/${prev.total}...` : 'Finalizando...'
+          };
+        });
       }, 1000);
       
-      // Aguarda conclusão do processamento
-      while (emailQueue.getQueueStatus().processing || emailQueue.getQueueStatus().pending > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      // CORREÇÃO: Chamar a Edge Function diretamente
+      const response = await supabase.functions.invoke('send-email', {
+        body: {
+          batch: true,
+          emails: emailJobs,
+          smtp_settings: baseSmtpSettings,
+          use_smtp: true
+        }
+      });
       
       clearInterval(progressInterval);
       
-      // Coleta métricas finais
-      const finalMetrics = emailMonitor.getMetrics();
-      const recommendations = emailMonitor.getRecommendations();
-      const totalDuration = Math.round((Date.now() - startTime) / 1000);
-      const successRate = ((finalMetrics.totalSent / selectedContacts.length) * 100).toFixed(2);
+      if (response.error) {
+        console.error("Erro na função otimizada:", response.error);
+        throw new Error(`Erro na função de envio: ${response.error.message || response.error}`);
+      }
       
-      // Atualiza progresso final
+      const responseData = response.data;
+      if (!responseData || !responseData.success) {
+        console.error("Resposta de falha:", responseData);
+        throw new Error(responseData?.error || "Falha ao enviar emails otimizados");
+      }
+      
+      const { summary } = responseData;
+      
+      // Atualizar progresso final
       setProgress(prev => ({
         ...prev,
         current: selectedContacts.length,
         percentage: 100,
-        successCount: finalMetrics.totalSent,
-        errorCount: finalMetrics.totalFailed,
+        successCount: summary.successful,
+        errorCount: summary.failed,
         currentOperation: 'Processamento concluído!'
       }));
       
-      // Atualiza histórico
+      // Atualizar histórico
       await fetchHistorico();
       
       // Mensagens de resultado
-      if (finalMetrics.totalSent === selectedContacts.length) {
+      if (summary.successful === selectedContacts.length) {
         toast.success(
-          `🎯 SUCESSO TOTAL! ${finalMetrics.totalSent} emails enviados`,
+          `🎯 SUCESSO TOTAL! ${summary.successful} emails enviados`,
           { 
-            description: `⚡ 100% de sucesso em ${totalDuration}s com sistema otimizado!`,
+            description: `⚡ 100% de sucesso em ${summary.totalDuration}s com sistema otimizado!`,
             duration: 10000 
           }
         );
       } else {
         toast.warning(
-          `⚠️ ${finalMetrics.totalSent}/${selectedContacts.length} emails enviados (${successRate}%)`,
+          `⚠️ ${summary.successful}/${selectedContacts.length} emails enviados (${summary.successRate}%)`,
           {
-            description: `${finalMetrics.totalFailed} falhas - Recomendações: ${recommendations.slice(0, 2).join('; ')}`,
+            description: `${summary.failed} falhas - Verifique configurações SMTP`,
             duration: 8000
           }
         );
       }
 
       return {
-        success: finalMetrics.totalSent > 0,
-        successCount: finalMetrics.totalSent,
-        errorCount: finalMetrics.totalFailed,
-        totalDuration,
-        successRate,
-        recommendations,
-        metrics: finalMetrics
+        success: summary.successful > 0,
+        successCount: summary.successful,
+        errorCount: summary.failed,
+        totalDuration: summary.totalDuration || 0,
+        successRate: summary.successRate,
+        recommendations: [],
+        metrics: summary
       };
       
     } catch (error: any) {

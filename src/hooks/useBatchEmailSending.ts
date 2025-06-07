@@ -34,12 +34,13 @@ export function useBatchEmailSending() {
     try {
       console.log(`🚀 Iniciando envio em lote otimizado para ${selectedContacts.length} contatos`);
       
-      // Obter configurações SMTP do usuário logado
+      // CORREÇÃO: Obter usuário autenticado
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('Usuário não autenticado');
       }
       
+      // CORREÇÃO: Buscar configurações SMTP do usuário logado
       const { data: userSettings, error: settingsError } = await supabase
         .from('configuracoes')
         .select('*')
@@ -64,14 +65,15 @@ export function useBatchEmailSending() {
       if (templateError) throw new Error(`Erro ao carregar template: ${templateError.message}`);
       if (!templateData) throw new Error('Template não encontrado');
       
-      // Configurações SMTP otimizadas
+      // CORREÇÃO: Configurações SMTP com mapeamento correto
       const smtpSettings = {
         host: userSettings.smtp_host,
         port: userSettings.email_porta || 587,
         secure: userSettings.smtp_seguranca === 'ssl',
         password: userSettings.smtp_pass,
         from_name: userSettings.smtp_from_name || 'RocketMail',
-        from_email: userSettings.email_usuario || ''
+        from_email: userSettings.email_usuario || '',
+        username: userSettings.email_usuario || '' // CORREÇÃO: campo adicional
       };
       
       // Detectar provedor e aplicar otimizações específicas
@@ -88,7 +90,7 @@ export function useBatchEmailSending() {
         intelligent_queuing: true
       };
       
-      // Preparar emails com dados completos
+      // CORREÇÃO: Preparar emails com dados completos incluindo user_id
       const emailJobs = selectedContacts.map(contact => ({
         to: contact.email,
         contato_id: contact.id,
@@ -98,9 +100,9 @@ export function useBatchEmailSending() {
         content: customContent || templateData.conteudo,
         contact: {
           ...contact,
-          user_id: user.id
+          user_id: user.id // CORREÇÃO: garantir user_id no contact
         },
-        user_id: user.id,
+        user_id: user.id, // CORREÇÃO: user_id no nível do email
         image_url: templateData.image_url,
         signature_image: userSettings?.signature_image || templateData.signature_image,
         attachments: Array.isArray(templateData.attachments) ? templateData.attachments : [],
@@ -120,10 +122,11 @@ export function useBatchEmailSending() {
         provider: isGmail ? 'Gmail' : isOutlook ? 'Outlook' : 'Outro',
         max_concurrent: optimization_config.max_concurrent,
         delay_ms: optimization_config.delay_between_emails,
-        smtp_host: smtpSettings.host
+        smtp_host: smtpSettings.host,
+        user_id: user.id
       });
       
-      // Fazer requisição para a Edge Function com retry
+      // CORREÇÃO: Fazer requisição para a Edge Function com retry
       let response;
       let attempt = 0;
       const maxAttempts = 3;

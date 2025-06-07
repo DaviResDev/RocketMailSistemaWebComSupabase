@@ -64,18 +64,26 @@ export function useHistoricoEnvios() {
   }, [user]);
 
   const createHistoricoEnvio = useCallback(async (data: CreateHistoricoEnvio) => {
-    if (!user) return;
+    if (!user) {
+      console.error('❌ Usuário não autenticado para criar histórico');
+      return;
+    }
 
     try {
-      // Garantir status válido
-      const validStatus = data.status && ['pendente', 'enviado', 'erro', 'cancelado', 'agendado'].includes(data.status) 
+      // CORREÇÃO: Validação rigorosa de campos obrigatórios
+      const validStatus = ['pendente', 'enviado', 'erro', 'cancelado', 'agendado'].includes(data.status) 
         ? data.status 
         : 'enviado';
       
-      // Garantir tipo_envio válido
-      const validTipoEnvio = data.tipo_envio && ['imediato', 'agendado'].includes(data.tipo_envio)
+      const validTipoEnvio = ['imediato', 'agendado'].includes(data.tipo_envio)
         ? data.tipo_envio
         : 'imediato';
+      
+      // Verificar campos obrigatórios
+      if (!data.remetente_nome || !data.remetente_email || !data.destinatario_nome || !data.destinatario_email) {
+        console.error('❌ Campos obrigatórios ausentes:', data);
+        return;
+      }
       
       const { error } = await supabase
         .from('envios_historico')
@@ -96,27 +104,40 @@ export function useHistoricoEnvios() {
   }, [user, fetchHistorico]);
 
   const createBatchHistorico = useCallback(async (records: CreateHistoricoEnvio[]) => {
-    if (!user || records.length === 0) return;
+    if (!user || records.length === 0) {
+      console.error('❌ Usuário não autenticado ou records vazios');
+      return;
+    }
 
     try {
-      const recordsWithUserId = records.map(record => {
-        // Garantir status válido
-        const validStatus = record.status && ['pendente', 'enviado', 'erro', 'cancelado', 'agendado'].includes(record.status) 
-          ? record.status 
-          : 'enviado';
-        
-        // Garantir tipo_envio válido
-        const validTipoEnvio = record.tipo_envio && ['imediato', 'agendado'].includes(record.tipo_envio)
-          ? record.tipo_envio
-          : 'imediato';
-        
-        return {
-          ...record,
-          status: validStatus,
-          tipo_envio: validTipoEnvio,
-          user_id: user.id
-        };
-      });
+      // CORREÇÃO: Validação rigorosa para cada record
+      const recordsWithUserId = records
+        .filter(record => {
+          // Filtrar records com campos obrigatórios
+          return record.remetente_nome && record.remetente_email && 
+                 record.destinatario_nome && record.destinatario_email;
+        })
+        .map(record => {
+          const validStatus = ['pendente', 'enviado', 'erro', 'cancelado', 'agendado'].includes(record.status) 
+            ? record.status 
+            : 'enviado';
+          
+          const validTipoEnvio = ['imediato', 'agendado'].includes(record.tipo_envio)
+            ? record.tipo_envio
+            : 'imediato';
+          
+          return {
+            ...record,
+            status: validStatus,
+            tipo_envio: validTipoEnvio,
+            user_id: user.id
+          };
+        });
+
+      if (recordsWithUserId.length === 0) {
+        console.error('❌ Nenhum record válido para inserir');
+        return;
+      }
 
       const { error } = await supabase
         .from('envios_historico')
