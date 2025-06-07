@@ -16,11 +16,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 export default function Configuracoes() {
   const { fetchSettings, settings, loading, error } = useSettings();
 
-  useEffect(() => {
-    console.log("Configuracoes page - Fetching settings");
-    fetchSettings();
-  }, [fetchSettings]);
-
   // Retry loading if there was an error
   const handleRetry = () => {
     toast.info('Recarregando configurações...');
@@ -53,7 +48,7 @@ export default function Configuracoes() {
     );
   }
 
-  if (loading && !settings) {
+  if (loading) {
     return (
       <div className="space-y-6 animate-fade-in">
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, XCircle, Clock, Mail, Users, Zap } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Mail, Users, Zap, Server } from 'lucide-react';
 
 interface EnvioStatusAlertProps {
   tipo: 'individual' | 'lote';
@@ -16,6 +16,8 @@ interface EnvioStatusAlertProps {
     duracao?: number;
     provider?: string;
     taxaSucesso?: string;
+    method?: string;
+    host?: string;
   };
   onClose?: () => void;
 }
@@ -58,22 +60,31 @@ export function EnvioStatusAlert({ tipo, status, detalhes, onClose }: EnvioStatu
     if (tipo === 'individual') {
       switch (status) {
         case 'sucesso':
-          return '✅ Email Enviado com Sucesso!';
+          return '✅ Email enviado com sucesso via SMTP!';
         case 'falha':
-          return '❌ Falha no Envio do Email';
+          return '❌ Falha no envio do Email via SMTP';
         case 'processando':
-          return '📤 Enviando Email...';
+          return '📤 Enviando Email via SMTP...';
       }
     } else {
       switch (status) {
         case 'sucesso':
-          return '🎯 Envio em Lote Concluído!';
+          return '🎯 Envio em Lote via SMTP Concluído!';
         case 'falha':
-          return '⚠️ Envio em Lote com Problemas';
+          return '⚠️ Envio em Lote via SMTP com Problemas';
         case 'processando':
-          return '🚀 Processando Envio em Lote...';
+          return '🚀 Processando Envio em Lote via SMTP...';
       }
     }
+  };
+
+  const getProviderDisplay = () => {
+    if (detalhes.method === 'SMTP' || detalhes.provider) {
+      const providerName = detalhes.provider || 'SMTP';
+      const hostDisplay = detalhes.host ? ` (${detalhes.host})` : '';
+      return `Via SMTP${hostDisplay}`;
+    }
+    return 'Via Sistema';
   };
 
   return (
@@ -150,11 +161,10 @@ export function EnvioStatusAlert({ tipo, status, detalhes, onClose }: EnvioStatu
 
                 {/* Provider e informações adicionais */}
                 <div className="flex items-center gap-2 mt-3">
-                  {detalhes.provider && (
-                    <Badge variant="outline" className="bg-white/80">
-                      Via {detalhes.provider}
-                    </Badge>
-                  )}
+                  <Badge variant="outline" className="bg-white/80">
+                    <Server className="h-3 w-3 mr-1" />
+                    {getProviderDisplay()}
+                  </Badge>
                   <Badge variant="outline" className="bg-white/80">
                     {tipo === 'individual' ? 'Envio Individual' : 'Envio em Lote'}
                   </Badge>

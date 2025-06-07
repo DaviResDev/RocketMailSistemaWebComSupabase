@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -56,12 +57,17 @@ export function useSettings() {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
-  const fetchSettings = async () => {
-    if (!user) return;
+  const fetchSettings = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
+      console.log('⚙️ Fetching settings for user:', user.id);
+      
       const { data, error } = await supabase
         .from('configuracoes')
         .select('*')
@@ -81,9 +87,9 @@ export function useSettings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const saveSettings = async (newSettings: Partial<UserSettings>) => {
+  const saveSettings = useCallback(async (newSettings: Partial<UserSettings>) => {
     if (!user) {
       toast.error('Você precisa estar logado');
       return false;
@@ -128,9 +134,9 @@ export function useSettings() {
       toast.error('Erro ao salvar configurações: ' + error.message);
       return false;
     }
-  };
+  }, [user]);
 
-  const testSmtpConnection = async (smtpData: SMTPSettings) => {
+  const testSmtpConnection = useCallback(async (smtpData: SMTPSettings) => {
     try {
       console.log('🔍 Testing SMTP connection...');
       
@@ -160,11 +166,11 @@ export function useSettings() {
       toast.error('Erro ao testar SMTP: ' + error.message);
       return { success: false, message: error.message };
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSettings();
-  }, [user]);
+  }, [fetchSettings]);
 
   return {
     settings,
