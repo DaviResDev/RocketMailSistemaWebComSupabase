@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,25 +96,7 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
       return;
     }
 
-    // Validação adicional para anexos
-    if (formData.attachments && formData.attachments.length > 0) {
-      console.log('TemplateForm: Validando anexos antes do envio', formData.attachments);
-      
-      // Verificar se os anexos têm as propriedades necessárias
-      const invalidAttachments = formData.attachments.filter(att => 
-        !att.name && !att.filename && !att.file_name
-      );
-      
-      if (invalidAttachments.length > 0) {
-        toast.warning('Alguns anexos podem não ter nomes válidos. Verifique os arquivos.');
-        console.warn('Anexos com nomes inválidos:', invalidAttachments);
-      }
-    }
-
-    console.log('TemplateForm: Submitting form data', {
-      ...formData,
-      attachments: formData.attachments ? `${formData.attachments.length} anexos` : 'sem anexos'
-    });
+    console.log('TemplateForm: Submitting form data', formData);
 
     setIsSubmitting(true);
     try {
@@ -135,21 +116,11 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
       return;
     }
 
-    // Verificar se há anexos no template atual
-    const attachmentsCount = formData.attachments ? formData.attachments.length : 0;
-    if (attachmentsCount > 0) {
-      console.log(`TemplateForm: Enviando teste com ${attachmentsCount} anexo(s)`);
-      toast.info(`Enviando email de teste com ${attachmentsCount} anexo(s)...`);
-    }
-
     setIsSendingTest(true);
     try {
       const success = await onSendTest(template.id);
       if (success) {
-        toast.success(attachmentsCount > 0 
-          ? `Email de teste enviado com sucesso! (${attachmentsCount} anexo(s) incluído(s))`
-          : 'Email de teste enviado com sucesso!'
-        );
+        toast.success('Email de teste enviado com sucesso!');
       } else {
         toast.error('Erro ao enviar email de teste');
       }
@@ -166,19 +137,6 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
       ...formData, 
       conteudo: formData.conteudo + ' ' + variable 
     });
-  };
-
-  // Handler atualizado para upload de arquivos
-  const handleAttachmentsChange = (newAttachments: any[]) => {
-    console.log('TemplateForm: Anexos atualizados:', newAttachments);
-    setFormData({
-      ...formData,
-      attachments: newAttachments
-    });
-    
-    if (newAttachments.length > 0) {
-      toast.success(`${newAttachments.length} anexo(s) adicionado(s) ao template`);
-    }
   };
 
   if (showPreview) {
@@ -275,15 +233,17 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
                     fontSize={formData.font_size_px}
                   />
                   <div className="text-xs text-muted-foreground">
-                    Use as variáveis acima para personalizar o conteúdo. 
-                    Imagens inseridas via URL serão preservadas no email final.
+                    Use as variáveis acima para personalizar o conteúdo
                   </div>
                 </div>
               </div>
 
               <TemplateFileUpload
                 attachments={formData.attachments || []}
-                onChange={handleAttachmentsChange}
+                onChange={(newAttachments) => setFormData({
+                  ...formData,
+                  attachments: newAttachments
+                })}
                 onFileUploaded={(fileUrl, fileName) => {
                   console.log('TemplateForm: File uploaded', { fileUrl, fileName });
                   setFormData({
@@ -293,13 +253,6 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
                   });
                 }}
               />
-
-              {/* Mostrar contagem de anexos */}
-              {formData.attachments && formData.attachments.length > 0 && (
-                <div className="text-sm text-green-600 bg-green-50 p-2 rounded-md">
-                  ✅ {formData.attachments.length} arquivo(s) anexado(s) - serão incluídos nos emails enviados
-                </div>
-              )}
 
               <div className="space-y-2">
                 <Label htmlFor="assinatura">Assinatura</Label>
@@ -335,11 +288,6 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
               <CardTitle className="text-lg">Preview ao Vivo</CardTitle>
               <CardDescription>
                 Visualização em tempo real do seu template
-                {formData.attachments && formData.attachments.length > 0 && (
-                  <div className="text-xs text-green-600 mt-1">
-                    📎 {formData.attachments.length} anexo(s)
-                  </div>
-                )}
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -59,130 +59,60 @@ function substituirVariaveis(conteudo: string, contato: any): string {
   return conteudoProcessado;
 }
 
-// Função para buscar anexos do template no banco de dados
-async function buscarAnexosTemplate(templateId: string): Promise<any[]> {
-  if (!templateId) {
-    console.log('📎 Nenhum template_id fornecido para buscar anexos');
-    return [];
-  }
-
-  try {
-    console.log(`📎 Buscando anexos para template ${templateId}`);
-    
-    const { data: template, error } = await supabase
-      .from('templates')
-      .select('attachments')
-      .eq('id', templateId)
-      .single();
-
-    if (error) {
-      console.error('❌ Erro ao buscar template:', error);
-      return [];
-    }
-
-    if (!template || !template.attachments) {
-      console.log('📎 Template sem anexos encontrado');
-      return [];
-    }
-
-    // Parse dos anexos do template
-    let anexosTemplate = [];
-    if (typeof template.attachments === 'string') {
-      try {
-        anexosTemplate = JSON.parse(template.attachments);
-      } catch (e) {
-        console.error('❌ Erro ao fazer parse dos anexos do template:', e);
-        return [];
-      }
-    } else if (Array.isArray(template.attachments)) {
-      anexosTemplate = template.attachments;
-    } else if (typeof template.attachments === 'object') {
-      anexosTemplate = [template.attachments];
-    }
-
-    console.log(`📎 ${anexosTemplate.length} anexos encontrados no template`);
-    return anexosTemplate;
-  } catch (error) {
-    console.error('❌ Erro crítico ao buscar anexos do template:', error);
-    return [];
-  }
-}
-
 // Função para processar anexos do template para formato do nodemailer
-function processAttachments(templateAttachments: any, emailAttachments?: any): any[] {
-  let allAttachments = [];
-  
-  // Processar anexos do template
-  if (templateAttachments) {
-    console.log('📎 Processando anexos do template:', templateAttachments);
-    
-    let attachments = [];
-    
-    // Se for um array
-    if (Array.isArray(templateAttachments)) {
-      attachments = templateAttachments;
-    } 
-    // Se for um objeto único
-    else if (typeof templateAttachments === 'object') {
-      attachments = [templateAttachments];
-    }
-    // Se for uma string (possivelmente JSON)
-    else if (typeof templateAttachments === 'string') {
-      try {
-        const parsed = JSON.parse(templateAttachments);
-        if (Array.isArray(parsed)) {
-          attachments = parsed;
-        } else {
-          attachments = [parsed];
-        }
-      } catch (error) {
-        console.error('❌ Erro ao fazer parse dos anexos do template:', error);
-        attachments = [];
-      }
-    }
-
-    allAttachments.push(...attachments);
-  }
-
-  // Processar anexos específicos do email (se houver)
-  if (emailAttachments) {
-    console.log('📎 Processando anexos específicos do email:', emailAttachments);
-    
-    let emailAttach = [];
-    if (Array.isArray(emailAttachments)) {
-      emailAttach = emailAttachments;
-    } else if (typeof emailAttachments === 'object') {
-      emailAttach = [emailAttachments];
-    }
-    
-    allAttachments.push(...emailAttach);
-  }
-
-  if (allAttachments.length === 0) {
-    console.log('📎 Nenhum anexo encontrado');
+function processAttachments(templateAttachments: any): any[] {
+  if (!templateAttachments) {
+    console.log('📎 Nenhum anexo encontrado no template');
     return [];
+  }
+
+  console.log('📎 Processando anexos do template:', templateAttachments);
+  
+  let attachments = [];
+  
+  // Se for um array
+  if (Array.isArray(templateAttachments)) {
+    attachments = templateAttachments;
+  } 
+  // Se for um objeto único
+  else if (typeof templateAttachments === 'object') {
+    attachments = [templateAttachments];
+  }
+  // Se for uma string (possivelmente JSON)
+  else if (typeof templateAttachments === 'string') {
+    try {
+      const parsed = JSON.parse(templateAttachments);
+      if (Array.isArray(parsed)) {
+        attachments = parsed;
+      } else {
+        attachments = [parsed];
+      }
+    } catch (error) {
+      console.error('❌ Erro ao fazer parse dos anexos:', error);
+      return [];
+    }
   }
 
   // Converter para formato do nodemailer
-  const nodemailerAttachments = allAttachments.map((attachment: any, index: number) => {
+  const nodemailerAttachments = attachments.map((attachment: any, index: number) => {
     console.log(`📎 Convertendo anexo ${index + 1}:`, attachment);
     
     // Formato esperado pelo nodemailer: { filename, path, contentType? }
     let converted: any = {};
     
     // Tentar diferentes formatos de dados
-    if (attachment.filename && (attachment.path || attachment.url)) {
-      // Formato padrão com filename e path/url
+    if (attachment.filename && attachment.path) {
+      // Já está no formato correto
       converted = {
         filename: attachment.filename,
-        path: attachment.path || attachment.url,
-        contentType: attachment.contentType || attachment.content_type || attachment.type
+        path: attachment.path,
+        contentType: attachment.contentType || attachment.content_type
       };
-    } else if (attachment.name && (attachment.url || attachment.path)) {
+    } else if (attachment.name && attachment.url) {
       // Formato alternativo comum
       converted = {
         filename: attachment.name,
-        path: attachment.url || attachment.path,
+        path: attachment.url,
         contentType: attachment.contentType || attachment.content_type || attachment.type
       };
     } else if (attachment.file_name && attachment.file_url) {
@@ -223,8 +153,6 @@ function processAttachments(templateAttachments: any, emailAttachments?: any): a
         'jpeg': 'image/jpeg',
         'png': 'image/png',
         'gif': 'image/gif',
-        'webp': 'image/webp',
-        'svg': 'image/svg+xml',
         'txt': 'text/plain',
         'csv': 'text/csv',
         'zip': 'application/zip',
@@ -241,44 +169,10 @@ function processAttachments(templateAttachments: any, emailAttachments?: any): a
   return nodemailerAttachments;
 }
 
-// Função para limpar e validar HTML do email
-function processEmailHTML(htmlContent: string): string {
-  if (!htmlContent) return '';
-  
-  // Garantir que imagens tenham atributos corretos
-  let processedHTML = htmlContent;
-  
-  // Corrigir tags de imagem para garantir que tenham style adequado
-  processedHTML = processedHTML.replace(
-    /<img([^>]*?)src=["']([^"']+)["']([^>]*?)>/gi,
-    (match, beforeSrc, src, afterSrc) => {
-      // Verificar se já tem style max-width
-      if (!afterSrc.includes('max-width') && !beforeSrc.includes('max-width')) {
-        // Adicionar style se não existir
-        if (afterSrc.includes('style="')) {
-          afterSrc = afterSrc.replace('style="', 'style="max-width: 100%; ');
-        } else {
-          afterSrc = ` style="max-width: 100%;"${afterSrc}`;
-        }
-      }
-      
-      // Garantir alt se não existir
-      if (!afterSrc.includes('alt=') && !beforeSrc.includes('alt=')) {
-        afterSrc = ` alt="Imagem"${afterSrc}`;
-      }
-      
-      return `<img${beforeSrc}src="${src}"${afterSrc}>`;
-    }
-  );
-  
-  console.log('📧 HTML do email processado e validado');
-  return processedHTML;
-}
-
-// Envio real via SMTP do usuário - ATUALIZADO com busca de anexos do template
+// Envio real via SMTP do usuário - CORRIGIDO com processamento de anexos
 async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
   try {
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: smtp.host,
       port: smtp.port,
       secure: smtp.port === 465,
@@ -302,25 +196,14 @@ async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
       processedSubject = substituirVariaveis(processedSubject, email.contact);
     }
     
-    // Processar e limpar HTML
-    processedContent = processEmailHTML(processedContent);
-    
-    // CORREÇÃO PRINCIPAL: Buscar anexos do template no banco de dados
-    let templateAttachments = [];
-    if (email.template_id) {
-      templateAttachments = await buscarAnexosTemplate(email.template_id);
-    }
-    
-    // Processar anexos: combinar anexos do template + anexos específicos do email
+    // Processar anexos se existirem
     let processedAttachments: any[] = [];
-    if (templateAttachments.length > 0 || email.attachments) {
-      console.log('📎 Processando anexos:', {
-        templateAttachments: templateAttachments.length,
-        emailAttachments: email.attachments ? 'presente' : 'ausente'
-      });
-      processedAttachments = processAttachments(templateAttachments, email.attachments);
+    if (email.attachments) {
+      console.log('📎 Anexos brutos recebidos:', email.attachments);
+      processedAttachments = processAttachments(email.attachments);
+      console.log('📎 Anexos processados para nodemailer:', processedAttachments);
     } else {
-      console.log('📎 Nenhum anexo encontrado');
+      console.log('📎 Nenhum anexo encontrado no email');
     }
     
     const mailOptions = {
@@ -334,8 +217,6 @@ async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
     console.log('📧 Configurações do email:', {
       to: mailOptions.to,
       subject: mailOptions.subject,
-      html_length: processedContent.length,
-      has_images: processedContent.includes('<img'),
       attachments_count: processedAttachments.length,
       attachments_details: processedAttachments.map(att => ({
         filename: att.filename,
@@ -483,8 +364,8 @@ export async function processOptimizedBatch(data: any): Promise<any> {
         console.log(`📧 [${emailIndex + 1}/${emails.length}] Enviando via SMTP para ${email.to}`);
         
         // Log de anexos se existirem
-        if (email.attachments || email.template_id) {
-          console.log(`📎 [${emailIndex + 1}/${emails.length}] Email com template_id: ${email.template_id} - verificando anexos`);
+        if (email.attachments) {
+          console.log(`📎 [${emailIndex + 1}/${emails.length}] Email tem anexos:`, email.attachments);
         }
         
         // Adicionar configurações SMTP ao email
