@@ -1,4 +1,3 @@
-
 // Processador otimizado para envio em lote com SMTP real do usuário
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import nodemailer from 'npm:nodemailer';
@@ -60,10 +59,119 @@ function substituirVariaveis(conteudo: string, contato: any): string {
   return conteudoProcessado;
 }
 
-// Envio real via SMTP do usuário - CORRIGIDO
+// Função para processar anexos do template para formato do nodemailer
+function processAttachments(templateAttachments: any): any[] {
+  if (!templateAttachments) {
+    console.log('📎 Nenhum anexo encontrado no template');
+    return [];
+  }
+
+  console.log('📎 Processando anexos do template:', templateAttachments);
+  
+  let attachments = [];
+  
+  // Se for um array
+  if (Array.isArray(templateAttachments)) {
+    attachments = templateAttachments;
+  } 
+  // Se for um objeto único
+  else if (typeof templateAttachments === 'object') {
+    attachments = [templateAttachments];
+  }
+  // Se for uma string (possivelmente JSON)
+  else if (typeof templateAttachments === 'string') {
+    try {
+      const parsed = JSON.parse(templateAttachments);
+      if (Array.isArray(parsed)) {
+        attachments = parsed;
+      } else {
+        attachments = [parsed];
+      }
+    } catch (error) {
+      console.error('❌ Erro ao fazer parse dos anexos:', error);
+      return [];
+    }
+  }
+
+  // Converter para formato do nodemailer
+  const nodemailerAttachments = attachments.map((attachment: any, index: number) => {
+    console.log(`📎 Convertendo anexo ${index + 1}:`, attachment);
+    
+    // Formato esperado pelo nodemailer: { filename, path, contentType? }
+    let converted: any = {};
+    
+    // Tentar diferentes formatos de dados
+    if (attachment.filename && attachment.path) {
+      // Já está no formato correto
+      converted = {
+        filename: attachment.filename,
+        path: attachment.path,
+        contentType: attachment.contentType || attachment.content_type
+      };
+    } else if (attachment.name && attachment.url) {
+      // Formato alternativo comum
+      converted = {
+        filename: attachment.name,
+        path: attachment.url,
+        contentType: attachment.contentType || attachment.content_type || attachment.type
+      };
+    } else if (attachment.file_name && attachment.file_url) {
+      // Outro formato possível
+      converted = {
+        filename: attachment.file_name,
+        path: attachment.file_url,
+        contentType: attachment.content_type || attachment.type
+      };
+    } else if (typeof attachment === 'string') {
+      // Se for apenas uma URL
+      const filename = attachment.split('/').pop() || `attachment_${index + 1}`;
+      converted = {
+        filename: filename,
+        path: attachment
+      };
+    } else {
+      console.warn(`⚠️ Formato de anexo não reconhecido para anexo ${index + 1}:`, attachment);
+      return null;
+    }
+
+    // Validar se temos os campos obrigatórios
+    if (!converted.filename || !converted.path) {
+      console.error(`❌ Anexo ${index + 1} inválido - faltando filename ou path:`, converted);
+      return null;
+    }
+
+    // Determinar contentType se não estiver definido
+    if (!converted.contentType && converted.filename) {
+      const extension = converted.filename.split('.').pop()?.toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        'pdf': 'application/pdf',
+        'doc': 'application/msword',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls': 'application/vnd.ms-excel',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'txt': 'text/plain',
+        'csv': 'text/csv',
+        'zip': 'application/zip',
+        'rar': 'application/x-rar-compressed'
+      };
+      converted.contentType = mimeTypes[extension] || 'application/octet-stream';
+    }
+
+    console.log(`✅ Anexo ${index + 1} convertido:`, converted);
+    return converted;
+  }).filter(Boolean); // Remove anexos nulos
+
+  console.log(`📎 Total de anexos processados: ${nodemailerAttachments.length}`);
+  return nodemailerAttachments;
+}
+
+// Envio real via SMTP do usuário - CORRIGIDO com processamento de anexos
 async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
   try {
-    // CORREÇÃO: createTransport em vez de createTransporter
     const transporter = nodemailer.createTransport({
       host: smtp.host,
       port: smtp.port,
@@ -88,18 +196,47 @@ async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
       processedSubject = substituirVariaveis(processedSubject, email.contact);
     }
     
-    const info = await transporter.sendMail({
+    // Processar anexos se existirem
+    let processedAttachments: any[] = [];
+    if (email.attachments) {
+      console.log('📎 Anexos brutos recebidos:', email.attachments);
+      processedAttachments = processAttachments(email.attachments);
+      console.log('📎 Anexos processados para nodemailer:', processedAttachments);
+    } else {
+      console.log('📎 Nenhum anexo encontrado no email');
+    }
+    
+    const mailOptions = {
       from: `"${smtp.from_name}" <${smtp.from_email}>`,
       to: email.to,
       subject: processedSubject,
       html: processedContent,
-      attachments: email.attachments || []
+      attachments: processedAttachments
+    };
+
+    console.log('📧 Configurações do email:', {
+      to: mailOptions.to,
+      subject: mailOptions.subject,
+      attachments_count: processedAttachments.length,
+      attachments_details: processedAttachments.map(att => ({
+        filename: att.filename,
+        contentType: att.contentType,
+        hasPath: !!att.path
+      }))
     });
 
+    const info = await transporter.sendMail(mailOptions);
+
     console.log(`✅ Email enviado com sucesso para ${email.to}:`, info.messageId);
+    if (processedAttachments.length > 0) {
+      console.log(`📎 ${processedAttachments.length} anexo(s) enviado(s) com sucesso`);
+    }
     return info.accepted && info.accepted.length > 0;
   } catch (error: any) {
     console.error(`❌ Erro ao enviar email via SMTP para ${email.to}:`, error);
+    if (error.message?.includes('attachment')) {
+      console.error('❌ Erro específico de anexo:', error.message);
+    }
     return false;
   }
 }
@@ -225,6 +362,11 @@ export async function processOptimizedBatch(data: any): Promise<any> {
       const emailIndex = i + index;
       try {
         console.log(`📧 [${emailIndex + 1}/${emails.length}] Enviando via SMTP para ${email.to}`);
+        
+        // Log de anexos se existirem
+        if (email.attachments) {
+          console.log(`📎 [${emailIndex + 1}/${emails.length}] Email tem anexos:`, email.attachments);
+        }
         
         // Adicionar configurações SMTP ao email
         const emailWithSmtp = {
