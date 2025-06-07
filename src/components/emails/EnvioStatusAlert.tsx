@@ -79,10 +79,15 @@ export function EnvioStatusAlert({ tipo, status, detalhes, onClose }: EnvioStatu
   };
 
   const getProviderDisplay = () => {
-    if (detalhes.method === 'SMTP' || detalhes.provider) {
-      const providerName = detalhes.provider || 'SMTP';
+    // Priorizar o método SMTP se disponível
+    if (detalhes.method === 'SMTP' || detalhes.provider === 'smtp') {
       const hostDisplay = detalhes.host ? ` (${detalhes.host})` : '';
       return `Via SMTP${hostDisplay}`;
+    }
+    // Fallback para outras informações
+    if (detalhes.provider) {
+      const hostDisplay = detalhes.host ? ` (${detalhes.host})` : '';
+      return `Via ${detalhes.provider}${hostDisplay}`;
     }
     return 'Via Sistema';
   };

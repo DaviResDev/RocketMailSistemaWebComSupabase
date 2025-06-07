@@ -18,6 +18,48 @@ export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Função para obter data atual no formato brasileiro
+function getDataHoje(): string {
+  const hoje = new Date();
+  return hoje.toLocaleDateString('pt-BR');
+}
+
+// Função para obter hora atual no formato brasileiro
+function getHoraAtual(): string {
+  const agora = new Date();
+  return agora.toLocaleTimeString('pt-BR');
+}
+
+// Função para substituir variáveis no conteúdo do template
+function substituirVariaveis(conteudo: string, contato: any): string {
+  if (!conteudo) return '';
+  
+  // Mapeamento das variáveis para os valores dos contatos
+  const variaveis: Record<string, string> = {
+    '{{nome}}': contato?.nome || '',
+    '{{email}}': contato?.email || '',
+    '{{telefone}}': contato?.telefone || '',
+    '{{razao_social}}': contato?.razao_social || '',
+    '{{cliente}}': contato?.cliente || contato?.nome || '',
+    '{{empresa}}': contato?.razao_social || contato?.empresa || 'Empresa',
+    '{{cargo}}': contato?.cargo || '',
+    '{{produto}}': contato?.produto || '',
+    '{{valor}}': contato?.valor || '',
+    '{{vencimento}}': contato?.vencimento || '',
+    '{{data}}': getDataHoje(),
+    '{{hora}}': getHoraAtual()
+  };
+  
+  let conteudoProcessado = conteudo;
+  
+  // Substituir cada variável pelo valor correspondente
+  Object.entries(variaveis).forEach(([variavel, valor]) => {
+    conteudoProcessado = conteudoProcessado.split(variavel).join(valor);
+  });
+  
+  return conteudoProcessado;
+}
+
 // Envio real via SMTP do usuário - CORRIGIDO
 async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
   try {
@@ -37,11 +79,20 @@ async function enviarEmailSMTP(email: any, smtp: any): Promise<boolean> {
 
     console.log(`📧 Enviando email real via SMTP para ${email.to}`);
     
+    // Processar o conteúdo do email com substituição de variáveis
+    let processedContent = email.content || email.html || '';
+    let processedSubject = email.subject || '';
+    
+    if (email.contact) {
+      processedContent = substituirVariaveis(processedContent, email.contact);
+      processedSubject = substituirVariaveis(processedSubject, email.contact);
+    }
+    
     const info = await transporter.sendMail({
       from: `"${smtp.from_name}" <${smtp.from_email}>`,
       to: email.to,
-      subject: email.subject,
-      html: email.content || email.html,
+      subject: processedSubject,
+      html: processedContent,
       attachments: email.attachments || []
     });
 
@@ -69,7 +120,8 @@ export async function processSingleSend(email: any, smtp_settings: any): Promise
       await registerInHistory(emailWithSmtp, 'enviado', null);
       return { 
         success: true,
-        message: `Email enviado com sucesso para ${email.to}`
+        message: `Email enviado com sucesso para ${email.to}`,
+        method: 'SMTP'
       };
     } else {
       await registerInHistory(emailWithSmtp, 'erro', 'Falha no envio SMTP');

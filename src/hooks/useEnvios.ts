@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -207,7 +206,7 @@ export function useEnvios() {
         
         // Enhanced success message based on delivery method
         let successMessage = `Email enviado com sucesso para ${contatoNome || contatoEmail}`;
-        if (responseData.provider === 'smtp') {
+        if (responseData.provider === 'smtp' || responseData.method === 'SMTP') {
           successMessage += ` via SMTP! ✅`;
         } else if (responseData.fallback) {
           successMessage += ` via Resend (fallback)! ⚠️`;
@@ -363,14 +362,12 @@ export function useEnvios() {
         // Enhanced results display with delivery method information
         if (summary.successful > 0) {
           let successMessage = `${summary.successful} emails enviados com sucesso!`;
-          if (summary.smtp > 0) {
-            successMessage += ` (${summary.smtp} via SMTP)`;
-          }
-          if (summary.resend > 0) {
-            successMessage += ` (${summary.resend} via Resend)`;
-          }
-          if (summary.fallback > 0) {
+          if (summary.method === 'SMTP') {
+            successMessage += ` via SMTP ✅`;
+          } else if (summary.fallback > 0) {
             successMessage += ` ⚠️ ${summary.fallback} usaram fallback`;
+          } else {
+            successMessage += ` via Resend 📨`;
           }
           toast.success(successMessage);
         }
