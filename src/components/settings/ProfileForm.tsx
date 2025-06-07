@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useSettings, SettingsFormData } from '@/hooks/useSettings';
+import { useSettings } from '@/hooks/useSettings';
 import { Loader2, Save, Upload } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,11 +21,11 @@ interface ProfileFormProps {
 }
 
 export function ProfileForm({ onSave }: ProfileFormProps) {
-  const { settings, loading, saveSettings, uploadProfilePhoto } = useSettings();
+  const { settings, loading, fetchSettings } = useSettings();
   const { uploadSignatureImage } = useEmailSignature();
   const { user } = useAuth();
   
-  const [formData, setFormData] = useState<Partial<SettingsFormData>>({
+  const [formData, setFormData] = useState({
     area_negocio: '',
     foto_perfil: '',
     smtp_nome: '',
@@ -46,8 +47,6 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
         smtp_nome: settings.smtp_nome || '',
         email_usuario: settings.email_usuario || '',
         signature_image: settings.signature_image || '',
-        // Make sure we include the use_smtp field to fix the type error
-        use_smtp: settings.use_smtp
       });
     }
   }, [settings]);
@@ -62,11 +61,13 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
     
     setUploading(true);
     try {
+      let updatedFormData = { ...formData };
+      
       // Upload photo if selected
       if (photoFile) {
         const photoUrl = await uploadProfilePhoto(photoFile);
         if (photoUrl) {
-          setFormData({...formData, foto_perfil: photoUrl});
+          updatedFormData.foto_perfil = photoUrl;
         }
       }
       
@@ -74,36 +75,67 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
       if (signatureFile) {
         const signatureUrl = await uploadSignatureImage(signatureFile);
         if (signatureUrl) {
-          setFormData({ ...formData, signature_image: signatureUrl });
+          updatedFormData.signature_image = signatureUrl;
         }
       }
+
+      // Update only the profile-specific fields in the database
+      const { error } = await supabase
+        .from('configuracoes')
+        .update({
+          area_negocio: updatedFormData.area_negocio || null,
+          foto_perfil: updatedFormData.foto_perfil || null,
+          smtp_nome: updatedFormData.smtp_nome || null,
+          email_usuario: updatedFormData.email_usuario || null,
+          signature_image: updatedFormData.signature_image || null,
+        })
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Erro ao salvar perfil:', error);
+        toast.error('Erro ao salvar perfil: ' + error.message);
+        return;
+      }
+
+      // Update local state
+      setFormData(updatedFormData);
+      
+      // Refresh settings to get updated data
+      await fetchSettings();
+      
+      toast.success('Perfil atualizado com sucesso!');
+      
+      if (onSave) {
+        onSave();
+      }
+    } catch (error: any) {
+      console.error('Erro ao salvar perfil:', error);
+      toast.error('Erro ao salvar perfil: ' + error.message);
     } finally {
       setUploading(false);
       setPhotoFile(null);
       setSignatureFile(null);
     }
-    
-    // Include all required fields in the saveSettings call including the new SMTP fields
-    const completeFormData: SettingsFormData = {
-      email_smtp: settings?.email_smtp || '',
-      email_porta: settings?.email_porta,
-      email_usuario: formData.email_usuario || '',
-      email_senha: settings?.email_senha || '',
-      area_negocio: formData.area_negocio || null,
-      foto_perfil: formData.foto_perfil || null,
-      smtp_seguranca: settings?.smtp_seguranca || 'tls',
-      smtp_nome: formData.smtp_nome || null,
-      signature_image: formData.signature_image || null,
-      two_factor_enabled: settings?.two_factor_enabled || false,
-      use_smtp: settings?.use_smtp || false,
-      smtp_host: settings?.smtp_host || null,
-      smtp_pass: settings?.smtp_pass || null,
-      smtp_from_name: settings?.smtp_from_name || null
-    };
-    
-    const success = await saveSettings(completeFormData);
-    if (success && onSave) {
-      onSave();
+  };
+
+  const uploadProfilePhoto = async (file: File): Promise<string | null> => {
+    try {
+      const filePath = `profile-photos/${user!.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error: any) {
+      console.error('Erro ao fazer upload da foto:', error);
+      toast.error('Erro ao fazer upload da foto: ' + error.message);
+      return null;
     }
   };
 

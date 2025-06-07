@@ -32,6 +32,12 @@ export function useSettings() {
       
       const settingsData = await fetchUserSettings(user.id);
       console.log("Settings loaded:", settingsData);
+      
+      // Ensure use_smtp is always true since Resend is removed
+      if (settingsData) {
+        settingsData.use_smtp = true;
+      }
+      
       setSettings(settingsData);
     } catch (error: any) {
       console.error('Erro ao carregar configurações:', error.message);
@@ -54,6 +60,9 @@ export function useSettings() {
       if (!user) {
         throw new Error('Você precisa estar logado para salvar configurações');
       }
+      
+      // Force use_smtp to true since Resend is removed
+      values.use_smtp = true;
       
       // Validar e corrigir configuração SSL/TLS com base na porta
       const porta = values.email_porta || 587;

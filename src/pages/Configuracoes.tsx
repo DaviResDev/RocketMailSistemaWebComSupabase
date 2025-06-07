@@ -73,35 +73,36 @@ export default function Configuracoes() {
       <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
       
       <SmtpStatusIndicator 
-        useSmtp={settings?.use_smtp || false}
+        useSmtp={true}
         hasSmtpSettings={!!hasSmtpSettings}
-        hasResendConfig={true}
       />
       
       <Tabs defaultValue="profile">
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Perfil</TabsTrigger>
-          <TabsTrigger value="smtp">SMTP Avançado</TabsTrigger>
+          <TabsTrigger value="smtp">SMTP</TabsTrigger>
+          <TabsTrigger value="smtp-advanced">SMTP Avançado</TabsTrigger>
           <TabsTrigger value="security">Segurança</TabsTrigger>
           <TabsTrigger value="account">Conta</TabsTrigger>
         </TabsList>
         
         <TabsContent value="profile">
-          <div className="grid gap-6">
-            <SettingsForm
-              onSave={() => {
-                toast.success('Configurações atualizadas com sucesso!');
-              }}
-            />
-            <ProfileForm
-              onSave={() => {
-                toast.success('Perfil atualizado com sucesso!');
-              }}
-            />
-          </div>
+          <ProfileForm
+            onSave={() => {
+              toast.success('Perfil atualizado com sucesso!');
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="smtp">
+          <SettingsForm
+            onSave={() => {
+              toast.success('Configurações SMTP atualizadas com sucesso!');
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="smtp-advanced">
           <SmtpConfiguracaoForm />
         </TabsContent>
         

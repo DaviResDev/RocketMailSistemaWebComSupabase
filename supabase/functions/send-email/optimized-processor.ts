@@ -272,13 +272,44 @@ export async function processOptimizedBatch(data: any): Promise<any> {
   };
 }
 
-// CORREÇÃO: Registro no histórico com validação completa
+// CORREÇÃO: Registro no histórico com validação completa e fallback para user_id
 async function registerInHistory(email: any, status: 'enviado' | 'erro', errorMessage?: string | null) {
   try {
-    // Garantir que todos os campos obrigatórios estão presentes
-    const user_id = email.contact?.user_id || email.user_id;
+    // Buscar user_id através de múltiplas fontes
+    let user_id = email.contact?.user_id || email.user_id;
+    
+    // Se não conseguiu user_id do email, tentar buscar via contato_id
+    if (!user_id && email.contato_id) {
+      console.log('🔍 Buscando user_id via contato_id:', email.contato_id);
+      const { data: contato } = await supabase
+        .from('contatos')
+        .select('user_id')
+        .eq('id', email.contato_id)
+        .single();
+      
+      if (contato) {
+        user_id = contato.user_id;
+        console.log('✅ user_id encontrado via contato:', user_id);
+      }
+    }
+    
+    // Se ainda não tem user_id, tentar buscar via template_id
+    if (!user_id && email.template_id) {
+      console.log('🔍 Buscando user_id via template_id:', email.template_id);
+      const { data: template } = await supabase
+        .from('templates')
+        .select('user_id')
+        .eq('id', email.template_id)
+        .single();
+      
+      if (template) {
+        user_id = template.user_id;
+        console.log('✅ user_id encontrado via template:', user_id);
+      }
+    }
+    
     if (!user_id) {
-      console.error('❌ user_id é obrigatório para registrar histórico');
+      console.error('❌ Não foi possível determinar user_id para registrar histórico');
       return;
     }
 
@@ -297,9 +328,9 @@ async function registerInHistory(email: any, status: 'enviado' | 'erro', errorMe
       destinatario_email: email.to,
       status: status,
       template_nome: email.subject || 'Email',
-      tipo_envio: 'imediato', // CORREÇÃO: valor válido garantido
+      tipo_envio: 'imediato',
       mensagem_erro: errorMessage,
-      user_id: user_id, // CORREÇÃO: garantindo que user_id não é vazio
+      user_id: user_id,
       data_envio: new Date().toISOString()
     };
 
