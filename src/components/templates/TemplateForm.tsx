@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +13,27 @@ import { VariableInserter } from '@/components/templates/VariableInserter';
 import { Template, TemplateFormData } from '@/types/template';
 import { TemplateFormProps } from './TemplateFormProps';
 import { toast } from 'sonner';
+
+// Helper function to safely parse attachments
+const parseAttachments = (attachments: any): any[] => {
+  if (!attachments) return [];
+  
+  if (Array.isArray(attachments)) {
+    return attachments;
+  }
+  
+  if (typeof attachments === 'string') {
+    try {
+      const parsed = JSON.parse(attachments);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('Error parsing attachments:', e);
+      return [];
+    }
+  }
+  
+  return [];
+};
 
 export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest }: TemplateFormProps) {
   const [formData, setFormData] = useState<TemplateFormData>({
@@ -38,6 +58,9 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
   useEffect(() => {
     console.log('TemplateForm: Loading template data', { template, isEditing });
     if (template && isEditing) {
+      // Parse attachments safely to ensure it's always an array
+      const parsedAttachments = parseAttachments(template.attachments);
+      
       const templateData = {
         nome: template.nome || '',
         conteudo: template.conteudo || '',
@@ -45,14 +68,17 @@ export function TemplateForm({ template, isEditing, onSave, onCancel, onSendTest
         assinatura: template.assinatura || '',
         signature_image: template.signature_image || null,
         status: template.status || 'ativo',
-        attachments: template.attachments || [],
+        attachments: parsedAttachments,
         descricao: template.descricao || '',
         template_file_url: template.template_file_url || null,
         template_file_name: template.template_file_name || null,
         image_url: template.image_url || null,
         font_size_px: template.font_size_px || '16px'
       };
-      console.log('TemplateForm: Setting form data', templateData);
+      console.log('TemplateForm: Setting form data', {
+        ...templateData,
+        attachments: `Array with ${parsedAttachments.length} items`
+      });
       setFormData(templateData);
     }
   }, [template, isEditing]);
