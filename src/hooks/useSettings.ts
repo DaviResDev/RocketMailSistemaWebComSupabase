@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -31,6 +30,7 @@ export interface UserSettings {
   smtp_nome?: string | null;
   email_usuario?: string | null;
   email_senha?: string | null;
+  whatsapp_token?: string | null;
 }
 
 export interface SettingsFormData {
